@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Performance Intelligence</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+
+body{
+margin:0;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+background:linear-gradient(180deg,#0f172a,#020617);
+color:#f8fafc;
+}
+
+.container{
+max-width:640px;
+margin:auto;
+padding:20px;
+}
+
+.header{
+text-align:center;
+margin-bottom:25px;
+}
+
+.header h1{
+margin:0;
+font-size:24px;
+}
+
+.card{
+background:#1e293b;
+border-radius:18px;
+padding:20px;
+margin-bottom:18px;
+box-shadow:0 8px 24px rgba(0,0,0,0.35);
+}
+
+.section-title{
+font-size:15px;
+font-weight:600;
+margin-bottom:10px;
+}
+
+.big-number{
+font-size:40px;
+font-weight:700;
+margin:8px 0;
+}
+
+.metric{
+display:flex;
+justify-content:space-between;
+margin:6px 0;
+font-size:14px;
+}
+
+.metric-label{
+color:#94a3b8;
+}
+
+.metric-value{
+font-weight:600;
+}
+
+.progress{
+height:8px;
+background:#334155;
+border-radius:8px;
+margin-top:8px;
+overflow:hidden;
+}
+
+.progress-bar{
+height:100%;
+background:linear-gradient(90deg,#22c55e,#3b82f6);
+}
+
+.tag{
+display:inline-block;
+padding:4px 10px;
+border-radius:10px;
+font-size:12px;
+background:#334155;
+color:#cbd5f5;
+margin-top:8px;
+}
+
+.training-box{
+font-size:18px;
+font-weight:600;
+margin-top:8px;
+}
+
+.footer{
+text-align:center;
+font-size:12px;
+color:#64748b;
+margin-top:30px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<h1>🏃 Performance Intelligence</h1>
+<p>Goal-Driven Training Analytics</p>
+</div>
+
+<div class="card">
+
+<div class="section-title">Race Goal</div>
+
+<div class="metric">
+<div class="metric-label">Event</div>
+<div class="metric-value">{{goal.event_name}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Distance</div>
+<div class="metric-value">{{goal.distance_km}} km</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Goal Time</div>
+<div class="metric-value">{{goal.goal_time}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Days Remaining</div>
+<div class="metric-value">{{goal.days_remaining}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Target Pace</div>
+<div class="metric-value">{{goal.target_pace}}</div>
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="section-title">Current Achievable</div>
+
+<div class="big-number">{{intel.current_projection}}</div>
+
+<div class="metric">
+<div class="metric-label">Elevation Adjusted</div>
+<div class="metric-value">{{intel.current_adjusted}}</div>
+</div>
+
+<div class="tag">Based on recent training load</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="section-title">Race Day Potential</div>
+
+<div class="big-number">{{intel.race_projection}}</div>
+
+<div class="metric">
+<div class="metric-label">Elevation Adjusted</div>
+<div class="metric-value">{{intel.race_adjusted}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Goal Probability</div>
+<div class="metric-value">{{intel.probability}}%</div>
+</div>
+
+<div class="progress">
+<div class="progress-bar" style="width:{{intel.probability}}%"></div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Gap to Goal (Flat)</div>
+<div class="metric-value">{{intel.flat_gap}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Gap to Goal (Adjusted)</div>
+<div class="metric-value">{{intel.adjusted_gap}}</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Training Load (CTL)</div>
+<div class="metric-value">{{intel.current_ctl}} / {{intel.target_ctl}}</div>
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="section-title">Next Training Milestone</div>
+
+<div class="metric">
+<div class="metric-label">Longest Run</div>
+<div class="metric-value">{{milestone.current_long}} km</div>
+</div>
+
+<div class="metric">
+<div class="metric-label">Next Target</div>
+<div class="metric-value">{{milestone.next_target}} km</div>
+</div>
+
+<div class="progress">
+<div class="progress-bar" style="width:{{milestone.progress}}%"></div>
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="section-title">Next Training Recommendation</div>
+
+<div class="training-box">
+{{recommendation}}
+</div>
+
+<div class="tag">
+Auto-generated from training load and recovery
+</div>
+
+</div>
+
+<div class="footer">
+Performance Intelligence Engine
+</div>
+
+</div>
+
+</body>
+</html>

@@ -1,3 +1,9 @@
-ppi.db
+﻿ppi.db
 __pycache__/
 .env
+activities.csv
+
+.venv/
+.vendor/
+.pytest_cache/
+*.pyc
