@@ -16,9 +16,12 @@ from .services.analytics_service import (
     build_goal_context,
     estimate_race_projection,
     get_recent_activity_summaries,
+    goal_snapshot,
     live_training_state,
     milestone_progress,
+    next_few_weeks_plan,
     rule_based_recommendation,
+    today_focus,
     tomorrow_activity,
 )
 from .services.strava_oauth_service import (
@@ -94,6 +97,9 @@ def dashboard():
         recommendation=recommendation,
         fallback_reco=fallback_reco,
         tomorrow_plan=tomorrow_plan,
+        today_message=today_focus(live_state, intel),
+        goal_snapshot=goal_snapshot(goal_context, intel, milestone),
+        next_weeks_plan=next_few_weeks_plan(intel),
         last_three_activities=last_three_activities,
         today_date=date.today().isoformat(),
         sync_info=sync_info,

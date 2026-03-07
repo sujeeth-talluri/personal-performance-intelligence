@@ -63,7 +63,7 @@ def test_setup_then_dashboard_renders(client):
 
     dashboard_response = client.get(f"/?athlete_id={athlete_id}", follow_redirects=False)
     assert dashboard_response.status_code == 200
-    assert b"Performance Intelligence Platform" in dashboard_response.data
+    assert b"StrideIQ" in dashboard_response.data
 
 
 def test_oauth_login_redirect_contains_strava_authorize(app, client):
@@ -89,4 +89,4 @@ def test_dashboard_with_existing_goal_and_no_metrics_still_renders(client):
 
     response = client.get(f"/?athlete_id={athlete_id}", follow_redirects=False)
     assert response.status_code == 200
-    assert b"No metrics available yet" in response.data
+    assert b"Sync a few runs first" in response.data

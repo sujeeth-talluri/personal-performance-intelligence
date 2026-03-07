@@ -182,6 +182,7 @@ def estimate_race_projection(athlete_id, goal_context):
         "probability": probability,
         "current_ctl": round(current_ctl, 1),
         "target_ctl": target_ctl,
+        "race_projection_seconds": int(race_projection),
     }
 
 
@@ -233,11 +234,16 @@ def get_recent_activity_summaries(athlete_id, limit=3):
 def live_training_state(athlete_id):
     rows = fetch_all_metrics(athlete_id)
     if not rows:
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6)
         return {
             "weekly_km": 0.0,
             "weekly_stress": 0.0,
             "readiness": 0,
             "activity_done_today": False,
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
         }
 
     today = date.today()
@@ -262,7 +268,89 @@ def live_training_state(athlete_id):
         "weekly_stress": round(weekly_stress, 1),
         "readiness": int(float(latest["readiness"] or 0)),
         "activity_done_today": activity_done_today,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
     }
+
+
+def goal_snapshot(goal_context, intel, milestone):
+    if not goal_context:
+        return {
+            "headline": "Set your race goal to get started.",
+            "progress": 0,
+            "status": "No goal found.",
+        }
+
+    if not intel:
+        return {
+            "headline": f"You are training for {goal_context['event_name']}",
+            "progress": milestone["progress"],
+            "status": "Sync more runs to unlock prediction.",
+        }
+
+    target_seconds = goal_context["goal_seconds"]
+    projected_seconds = intel["race_projection_seconds"]
+    if projected_seconds <= target_seconds:
+        progress = 92
+        status = "You are on pace for your goal. Stay consistent."
+    else:
+        delta_ratio = min(1.0, (projected_seconds - target_seconds) / target_seconds)
+        progress = max(35, int(90 - (delta_ratio * 60)))
+        minutes_off = int((projected_seconds - target_seconds) / 60)
+        status = f"You are about {minutes_off} min away from goal pace right now."
+
+    return {
+        "headline": f"Goal: {goal_context['event_name']} in {goal_context['goal_time']}",
+        "progress": progress,
+        "status": status,
+    }
+
+
+def today_focus(live_state, intel):
+    if live_state["activity_done_today"]:
+        return "You have already trained today. Focus on recovery: hydration, mobility, and sleep."
+
+    if not intel:
+        return "Do an easy 30-40 min run today to start building consistency."
+
+    probability = intel["probability"]
+    if probability < 50:
+        return "Today: easy aerobic run, 8-10 km at comfortable pace."
+    if probability < 75:
+        return "Today: steady run with 20 min comfortably hard effort."
+    return "Today: race-specific session with controlled pace blocks."
+
+
+def next_few_weeks_plan(intel):
+    if not intel:
+        return [
+            "Week 1: Run 4 days, mostly easy.",
+            "Week 2: Add one slightly longer run.",
+            "Week 3: Keep consistency, do not skip easy days.",
+            "Week 4: Repeat with slightly more distance.",
+        ]
+
+    probability = intel["probability"]
+    if probability < 50:
+        return [
+            "Week 1: Build routine with 4 runs and 1 long easy run.",
+            "Week 2: Increase long run by 2 km.",
+            "Week 3: Add one short tempo segment.",
+            "Week 4: Repeat volume, avoid sudden jumps.",
+        ]
+    if probability < 75:
+        return [
+            "Week 1: Keep 1 long run and 1 tempo workout.",
+            "Week 2: Add marathon-pace blocks in long run.",
+            "Week 3: Maintain volume, keep easy days easy.",
+            "Week 4: Slightly reduce load for freshness.",
+        ]
+    return [
+        "Week 1: One race-specific long workout.",
+        "Week 2: Maintain volume with quality over quantity.",
+        "Week 3: Reduce fatigue, keep legs fresh.",
+        "Week 4: Taper and sharpen for race day.",
+    ]
 
 
 def rule_based_recommendation(intel):
@@ -281,7 +369,7 @@ def rule_based_recommendation(intel):
 
 def tomorrow_activity(intel, activity_done_today):
     if not intel:
-        return "Easy aerobic run for 30-40 minutes to restart consistency."
+        return "Tomorrow: Easy aerobic run for 30-40 minutes to restart consistency."
 
     probability = intel["probability"]
     if activity_done_today:

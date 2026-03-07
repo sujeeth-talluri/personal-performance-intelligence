@@ -3,35 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Performance Intelligence Dashboard</title>
+  <meta name="theme-color" content="#ff5f45" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <title>StrideIQ | Your Running Goal Partner</title>
   <style>
     :root {
-      --bg: #f4f7fb;
-      --text: #13233a;
-      --muted: #5d6b82;
+      --bg-1: #fff3ec;
+      --bg-2: #f3fbff;
+      --ink: #1f2533;
+      --muted: #63748a;
+      --accent: #ff5f45;
+      --accent-2: #ff9f45;
+      --green: #18a562;
+      --amber: #cc8a00;
       --card: #ffffff;
-      --line: #e3e8f1;
-      --accent: #0b7fab;
-      --accent-soft: #d9f2fb;
-      --good: #1e9b63;
-      --warn: #b27000;
-      --danger: #b6343d;
-      --radius: 14px;
+      --line: #e8edf4;
+      --radius: 18px;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      color: var(--text);
-      background: linear-gradient(160deg, #edf3fb 0%, #f8fbff 40%, #f1f6fb 100%);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(255, 95, 69, 0.2), transparent 35%),
+        radial-gradient(circle at 90% 20%, rgba(255, 159, 69, 0.22), transparent 30%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
       min-height: 100vh;
     }
 
-    .container {
-      max-width: 980px;
+    .wrap {
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 16px;
+      padding: 18px;
       display: grid;
       gap: 14px;
     }
@@ -41,22 +47,39 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 16px;
-      box-shadow: 0 10px 24px rgba(15, 30, 52, 0.06);
+      box-shadow: 0 14px 30px rgba(0, 18, 45, 0.07);
     }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+    .hero {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 14px;
+      align-items: stretch;
     }
 
-    h1 { margin: 0; font-size: 1.35rem; }
-    h2 { margin: 0 0 10px 0; font-size: 1rem; }
-    .muted { color: var(--muted); font-size: 0.92rem; }
+    .headline {
+      margin: 0;
+      font-size: 1.55rem;
+      line-height: 1.2;
+    }
 
-    .grid {
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #ffe9e3;
+      color: #9e2e1f;
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
+    .grid2 {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
@@ -65,47 +88,49 @@
     .metric {
       display: flex;
       justify-content: space-between;
-      gap: 10px;
-      padding: 6px 0;
-      border-bottom: 1px solid #f1f4f8;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f2f5fa;
       font-size: 0.95rem;
     }
 
     .metric:last-child { border-bottom: none; }
 
+    .label { color: var(--muted); }
+    .value { font-weight: 650; }
+
     .big {
       font-size: 2rem;
-      line-height: 1;
-      margin: 4px 0 8px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+      margin: 2px 0 8px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
     }
 
-    .pill {
-      display: inline-block;
-      font-size: 0.8rem;
-      padding: 4px 9px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      border: 1px solid #bee8f7;
-      margin-top: 8px;
-    }
-
-    .bar {
-      height: 8px;
-      width: 100%;
-      background: #eef2f7;
+    .progress {
+      height: 10px;
+      background: #edf1f7;
       border-radius: 999px;
       overflow: hidden;
       margin-top: 8px;
     }
 
-    .bar > span {
+    .progress > span {
       display: block;
       height: 100%;
-      background: linear-gradient(90deg, #22b07d, #2f86d1);
+      background: linear-gradient(90deg, #ff5f45, #ffa445);
     }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 650;
+    }
+
+    .ok { background: #e5f7ee; color: var(--green); }
+    .warn { background: #fff4dc; color: var(--amber); }
 
     form.inline {
       display: flex;
@@ -116,126 +141,176 @@
 
     input, select, button, a.btn {
       font: inherit;
-      border-radius: 8px;
-      border: 1px solid #ccd7e6;
-      padding: 8px 10px;
+      border: 1px solid #d5deea;
+      border-radius: 10px;
+      padding: 9px 11px;
       background: #fff;
       text-decoration: none;
     }
 
     button, a.btn.primary {
+      background: #12253d;
+      border-color: #12253d;
+      color: #fff;
       cursor: pointer;
-      border-color: #0a739d;
-      background: #0b7fab;
-      color: white;
     }
 
-    .status-ok { color: var(--good); }
-    .status-warn { color: var(--warn); }
-    .status-danger { color: var(--danger); }
+    ul.plan {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #33455e;
+    }
 
-    @media (max-width: 760px) {
-      .grid { grid-template-columns: 1fr; }
-      .big { font-size: 1.75rem; }
+    ul.plan li { margin: 7px 0; }
+
+    .activity-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 9px 0;
+      border-bottom: 1px solid #f1f4f8;
+    }
+
+    .activity-row:last-child { border-bottom: none; }
+
+    .tiny { color: var(--muted); font-size: 0.86rem; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+      .big { font-size: 1.7rem; }
     }
   </style>
 </head>
 <body>
-  <main class="container">
-    <section class="card header">
-      <div>
-        <h1>Performance Intelligence Platform</h1>
-        <div class="muted">Multi-athlete analytics with automatic Strava sync</div>
-        <div class="muted">Today: {{ today_date }}</div>
-      </div>
-      <form class="inline" method="get" action="/">
-        <label for="athlete_id" class="muted">Athlete</label>
-        <select id="athlete_id" name="athlete_id" onchange="this.form.submit()">
-          {% for athlete in athletes %}
-            <option value="{{ athlete.athlete_id }}" {% if athlete.athlete_id == athlete_id %}selected{% endif %}>{{ athlete.name }}</option>
-          {% endfor %}
-        </select>
-      </form>
-    </section>
-
-    <section class="card">
-      <h2>Integrations</h2>
-      <a class="btn primary" href="/auth/strava/login?athlete_id={{ athlete_id }}">Connect Strava OAuth</a>
-      {% if sync_error %}
-        <div class="status-danger" style="margin-top:8px;">Strava sync failed: {{ sync_error }}</div>
-      {% elif sync_info and sync_info.status == "ok" %}
-        <div class="status-ok" style="margin-top:8px;">Synced {{ sync_info.new_activities }} new activities.</div>
-      {% elif sync_info and sync_info.status == "skipped" %}
-        <div class="status-warn" style="margin-top:8px;">Sync skipped: {{ sync_info.reason }}</div>
-      {% endif %}
-    </section>
-
-    <section class="grid">
+  <main class="wrap">
+    <section class="hero">
       <article class="card">
-        <h2>Race Goal</h2>
-        <div class="metric"><span class="muted">Event</span><strong>{{ goal.event_name }}</strong></div>
-        <div class="metric"><span class="muted">Distance</span><strong>{{ goal.distance_km }} km</strong></div>
-        <div class="metric"><span class="muted">Goal Time</span><strong>{{ goal.goal_time }}</strong></div>
-        <div class="metric"><span class="muted">Race Date</span><strong>{{ goal.race_date }}</strong></div>
-        <div class="metric"><span class="muted">Days Remaining</span><strong>{{ goal.days_remaining }}</strong></div>
-        <div class="metric"><span class="muted">Target Pace</span><strong>{{ goal.target_pace }}</strong></div>
+        <h1 class="headline">{{ goal_snapshot.headline }}</h1>
+        <div class="sub">Today is {{ today_date }}. You have {{ goal.days_remaining }} days left for {{ goal.event_name }}.</div>
+        <div class="badge">Target pace: {{ goal.target_pace }}</div>
+
+        <div style="margin-top:14px;" class="metric">
+          <span class="label">How close you are right now</span>
+          <span class="value">{{ goal_snapshot.progress }}%</span>
+        </div>
+        <div class="progress"><span style="width: {{ goal_snapshot.progress }}%"></span></div>
+        <div class="sub" style="margin-top:8px;">{{ goal_snapshot.status }}</div>
       </article>
 
       <article class="card">
-        <h2>Race Projection</h2>
+        <div class="metric" style="padding-top:0;">
+          <span class="label">Athlete</span>
+          <form class="inline" method="get" action="/">
+            <select id="athlete_id" name="athlete_id" onchange="this.form.submit()">
+              {% for athlete in athletes %}
+                <option value="{{ athlete.athlete_id }}" {% if athlete.athlete_id == athlete_id %}selected{% endif %}>{{ athlete.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+
+        {% if live_state.activity_done_today %}
+          <div class="pill ok">Done: You have trained today</div>
+        {% else %}
+          <div class="pill warn">Pending: No activity yet today</div>
+        {% endif %}
+
+        <div class="metric" style="margin-top:10px;">
+          <span class="label">Weekly distance</span>
+          <span class="value">{{ live_state.weekly_km }} km</span>
+        </div>
+        <div class="tiny">Week window: {{ live_state.week_start }} to {{ live_state.week_end }} (Mon-Sun)</div>
+
+        <div style="margin-top:12px;">
+          <a class="btn primary" href="/auth/strava/login?athlete_id={{ athlete_id }}">Connect Strava</a>
+        </div>
+        {% if sync_info and sync_info.status == "ok" %}
+          <div class="tiny" style="margin-top:8px; color:#0f7d48;">Synced {{ sync_info.new_activities }} new activities.</div>
+        {% elif sync_info and sync_info.status == "skipped" %}
+          <div class="tiny" style="margin-top:8px; color:#9b6a00;">Sync skipped: {{ sync_info.reason }}</div>
+        {% elif sync_error %}
+          <div class="tiny" style="margin-top:8px; color:#b6343d;">Sync failed: {{ sync_error }}</div>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class="grid2">
+      <article class="card">
+        <h2>Where You Are Now</h2>
         {% if intel %}
           <div class="big">{{ intel.race_projection }}</div>
-          <div class="metric"><span class="muted">Elevation Adjusted</span><strong>{{ intel.race_adjusted }}</strong></div>
-          <div class="metric"><span class="muted">Current Projection</span><strong>{{ intel.current_projection }}</strong></div>
-          <div class="metric"><span class="muted">Current Adjusted</span><strong>{{ intel.current_adjusted }}</strong></div>
-          <div class="metric"><span class="muted">Gap (Flat)</span><strong>{{ intel.flat_gap }}</strong></div>
-          <div class="metric"><span class="muted">Gap (Adjusted)</span><strong>{{ intel.adjusted_gap }}</strong></div>
-          <div class="metric"><span class="muted">CTL</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
-          <div class="metric"><span class="muted">Anchor Run</span><strong>{{ intel.anchor_distance }} km</strong></div>
-          <div class="pill">Goal Probability {{ intel.probability }}%</div>
-          <div class="bar"><span style="width: {{ intel.probability }}%"></span></div>
+          <div class="tiny">Estimated finish if race was today</div>
+          <div class="metric"><span class="label">Goal time</span><span class="value">{{ goal.goal_time }}</span></div>
+          <div class="metric"><span class="label">Difference from goal</span><span class="value">{{ intel.flat_gap }}</span></div>
+          <div class="metric"><span class="label">Goal chance today</span><span class="value">{{ intel.probability }}%</span></div>
         {% else %}
-          <div class="muted">No metrics available yet.</div>
+          <div class="sub">Sync a few runs first. Then we will estimate your race finish clearly.</div>
         {% endif %}
       </article>
 
       <article class="card">
-        <h2>Live Training State</h2>
-        <div class="metric"><span class="muted">Weekly Distance (Mon-Sun)</span><strong>{{ live_state.weekly_km }} km</strong></div>
-        <div class="metric"><span class="muted">Weekly Stress (Mon-Sun)</span><strong>{{ live_state.weekly_stress }}</strong></div>
-        <div class="metric"><span class="muted">Readiness</span><strong>{{ live_state.readiness }}</strong></div>
-        <div class="metric"><span class="muted">Activity Done Today?</span><strong>{% if live_state.activity_done_today %}Yes{% else %}No{% endif %}</strong></div>
-        <div class="metric"><span class="muted">Longest Run</span><strong>{{ milestone.current_long }} km{% if milestone.current_long_date %} on {{ milestone.current_long_date }}{% endif %}</strong></div>
-        <div class="metric"><span class="muted">Next Milestone</span><strong>{{ milestone.next_target }} km</strong></div>
-        <div class="bar"><span style="width: {{ milestone.progress }}%"></span></div>
+        <h2>Your Key Run Progress</h2>
+        <div class="metric"><span class="label">Longest run</span><span class="value">{{ milestone.current_long }} km</span></div>
+        <div class="metric"><span class="label">Date of longest run</span><span class="value">{{ milestone.current_long_date or 'Not available yet' }}</span></div>
+        <div class="metric"><span class="label">Next long run target</span><span class="value">{{ milestone.next_target }} km</span></div>
+        <div class="progress"><span style="width: {{ milestone.progress }}%"></span></div>
       </article>
 
       <article class="card">
-        <h2>AI Coach Recommendation</h2>
-        <div class="big" style="font-size:1.2rem; line-height:1.35;">{{ recommendation }}</div>
-        <div class="muted" style="margin-top:10px;">Rule-based backup: {{ fallback_reco }}</div>
-        <div class="metric" style="margin-top:10px;"><span class="muted">Tomorrow</span><strong>{{ tomorrow_plan }}</strong></div>
+        <h2>What To Do Today</h2>
+        <div class="sub" style="margin-top:0; color:#22334b;">{{ today_message }}</div>
+        <div class="metric" style="margin-top:10px;"><span class="label">Tomorrow</span><span class="value">{{ tomorrow_plan }}</span></div>
+      </article>
+
+      <article class="card">
+        <h2>Next 4 Weeks Plan</h2>
+        <ul class="plan">
+          {% for line in next_weeks_plan %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Last 3 Activities</h2>
+        {% if last_three_activities %}
+          {% for activity in last_three_activities %}
+            <div class="activity-row">
+              <div>
+                <div class="value">{{ activity.distance_km }} km</div>
+                <div class="tiny">{{ activity.date }} | {{ activity.duration }}{% if activity.avg_hr %} | HR {{ activity.avg_hr }}{% endif %}</div>
+              </div>
+              <div class="tiny">Synced</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="sub">No activities synced yet.</div>
+        {% endif %}
+      </article>
+
+      <article class="card">
+        <h2>Coach Message</h2>
+        <div class="sub" style="margin-top:0; color:#22334b;">{{ recommendation }}</div>
+        <div class="tiny" style="margin-top:8px;">Backup guidance: {{ fallback_reco }}</div>
       </article>
     </section>
 
     <section class="card">
-      <h2>Last 3 Activities (from Strava sync)</h2>
-      {% if last_three_activities %}
-        {% for activity in last_three_activities %}
-          <div class="metric"><span class="muted">{{ activity.date }}</span><strong>{{ activity.distance_km }} km | {{ activity.duration }}{% if activity.avg_hr %} | HR {{ activity.avg_hr }}{% endif %}</strong></div>
-        {% endfor %}
-      {% else %}
-        <div class="muted">No activities synced yet.</div>
-      {% endif %}
-    </section>
-
-    <section class="card">
-      <h2>Add Athlete</h2>
+      <h2>Add Another Runner</h2>
       <form class="inline" method="post" action="/athletes">
-        <input name="name" placeholder="Athlete name" required />
-        <button type="submit">Create Athlete</button>
+        <input name="name" placeholder="Runner name" required />
+        <button type="submit">Create Profile</button>
       </form>
     </section>
   </main>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
