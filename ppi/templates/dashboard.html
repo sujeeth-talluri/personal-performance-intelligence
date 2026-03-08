@@ -26,13 +26,13 @@
     <section class='grid2'>
       <article class='card'>
         <h2>Current Capability (Flat Course)</h2>
-        <div class='big'>{{ intel.current_projection if intel.current_projection else 'Not enough data yet' }}</div>
-        <div class='sub'>Based on recent training load and long-run performance.</div>
+        <div class='big'>{{ intel.current_projection }}</div>
+        <div class='sub'>{{ intel.prediction_note }}</div>
       </article>
 
       <article class='card'>
         <h2>{{ goal.projection_label }}</h2>
-        <div class='big'>{{ intel.race_day_projection if intel.race_day_projection else 'Not enough data yet' }}</div>
+        <div class='big'>{{ intel.race_day_projection }}</div>
         <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
         <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
         <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
@@ -62,11 +62,12 @@
 
       <article class='card'>
         <h2>Endurance Balance</h2>
-        <div class='metric'><span>Long Run Ratio (LRR)</span><strong>{{ endurance.lrr }}</strong></div>
+        <div class='metric'><span>Long Run Ratio (LRR)</span><strong>{{ endurance.lrr if endurance.lrr is not none else 'INSUFFICIENT DATA' }}</strong></div>
         <div class='sub'>{{ endurance.lrr_band }}</div>
-        <div class='metric'><span>Aerobic Durability (ADI)</span><strong>{{ endurance.adi if endurance.adi is not none else 'N/A' }}</strong></div>
+        {% if endurance.lrr_warning %}<div class='sub' style='color: var(--warn);'>{{ endurance.lrr_warning }}</div>{% endif %}
+        <div class='metric'><span>Aerobic Durability (ADI)</span><strong>{{ endurance.adi if endurance.adi is not none else 'INSUFFICIENT DATA' }}</strong></div>
         <div class='sub'>{{ endurance.adi_band }}</div>
-        <div class='metric'><span>Fatigue Resistance (FRI)</span><strong>{{ endurance.fri if endurance.fri is not none else 'N/A' }}</strong></div>
+        <div class='metric'><span>Fatigue Resistance (FRI)</span><strong>{{ endurance.fri if endurance.fri is not none else 'INSUFFICIENT DATA' }}</strong></div>
         <div class='sub'>{{ endurance.fri_band }}</div>
       </article>
 
@@ -99,4 +100,3 @@
   </main>
 </body>
 </html>
-
