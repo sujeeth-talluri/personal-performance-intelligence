@@ -11,6 +11,7 @@
   --warn: #f6c667;
   --danger: #ff7a8a;
   --ok: #69e3a5;
+  --grey: #9aa6b2;
 }
 
 * { box-sizing: border-box; }
@@ -46,12 +47,17 @@ body {
 .spread { justify-content: space-between; align-items: center; }
 h1, h2, h3 { margin: 0 0 8px; }
 .sub { color: var(--muted); font-size: 0.94rem; }
-.big { font-size: 2.3rem; font-weight: 760; letter-spacing: -0.02em; }
-.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.12); gap: 10px; }
 .metric:last-child { border-bottom: none; }
 .progress { height: 10px; background: rgba(255,255,255,.15); border-radius: 99px; overflow: hidden; margin: 8px 0; }
 .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
+.performance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.performance { min-height: 190px; }
+.performance-number { font-size: 3rem; font-weight: 800; letter-spacing: -0.03em; margin: 6px 0 8px; }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.coaching { border-color: rgba(110,241,166,.5); box-shadow: 0 0 0 1px rgba(110,241,166,.25), 0 14px 32px rgba(0,0,0,.24); }
 
 input, select, button, a.btn {
   width: 100%;
@@ -78,21 +84,16 @@ button, .btn {
 a { color: var(--accent); }
 .row { display: grid; gap: 8px; margin-bottom: 10px; }
 .inline { display:flex; gap: 10px; flex-wrap: wrap; }
-.badge {
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(37, 224, 255, .18);
-  border: 1px solid rgba(37, 224, 255, .36);
-  font-size: .85rem;
-}
 
+.status-green { color: var(--ok); }
+.status-orange { color: var(--warn); }
+.status-red { color: var(--danger); }
+.status-grey { color: var(--grey); }
 .risk-green { color: var(--ok); }
 .risk-yellow { color: var(--warn); }
 .risk-red { color: var(--danger); }
 
 @media (max-width: 840px) {
-  .grid2 { grid-template-columns: 1fr; }
-  .big { font-size: 1.75rem; }
+  .grid2, .performance-grid { grid-template-columns: 1fr; }
+  .performance-number { font-size: 2.2rem; }
 }
-

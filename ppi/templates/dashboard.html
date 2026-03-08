@@ -14,7 +14,6 @@
           <h1>{{ user.name }} | {{ goal.race_name }} ({{ goal.elevation_type|title }} Course)</h1>
           <div class='sub'>{{ goal.distance_km }} km | Goal {{ goal.goal_time }} | {{ goal.days_remaining }} days remaining</div>
           <div class='sub'>Target pace: {{ goal.target_pace }} | Today: {{ today_date }}</div>
-          <div class='sub'>Strava sync: {{ sync_info.reason }}</div>
         </div>
         <div class='inline'>
           <a class='btn' href='/settings'>Settings</a>
@@ -23,80 +22,114 @@
       </div>
     </section>
 
+    <section class='performance-grid'>
+      <article class='card performance'>
+        <h2>Current Capability (Flat Course)</h2>
+        <div class='performance-number'>{{ intel.current_projection }}</div>
+        <div class='sub'>Flat course estimate</div>
+      </article>
+      <article class='card performance'>
+        <h2>{{ goal.race_name }} Projection</h2>
+        <div class='performance-number'>{{ intel.race_day_projection }}</div>
+        <div class='sub'>{{ goal.elevation_type|title }} course estimate</div>
+        <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
+        <div class='metric'><span>Gap to goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
+      </article>
+    </section>
+
+    <section class='card'>
+      <h2>Goal Progress Gauge</h2>
+      <div class='metric'><span>Goal</span><strong>{{ goal.goal_time }}</strong></div>
+      <div class='metric'><span>Predicted</span><strong>{{ intel.race_day_projection }}</strong></div>
+      <div class='metric'><span>Gap</span><strong>{{ intel.gap_to_goal }}</strong></div>
+      <div class='progress'><span style='width:{{ intel.goal_progress_pct }}%'></span></div>
+    </section>
+
     <section class='grid2'>
       <article class='card'>
-        <h2>Current Capability (Flat Course)</h2>
-        <div class='big'>{{ intel.current_projection }}</div>
-        <div class='sub'>{{ intel.prediction_note }}</div>
-      </article>
-
-      <article class='card'>
-        <h2>{{ goal.projection_label }}</h2>
-        <div class='big'>{{ intel.race_day_projection }}</div>
-        <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
-        <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
-        <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
-        <div class='metric'><span>CTL (Chronic Training Load)</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
-        <div class='sub'>{{ intel.ctl_description }}</div>
-      </article>
-
-      <article class='card'>
-        <h2>Weekly Training</h2>
+        <h2>Weekly Training Goal</h2>
         <div class='metric'><span>Weekly goal</span><strong>{{ weekly_goal.weekly_goal_km }} km</strong></div>
         <div class='metric'><span>Completed</span><strong>{{ weekly_goal.completed_km }} km</strong></div>
         <div class='metric'><span>Remaining</span><strong>{{ weekly_goal.remaining_km }} km</strong></div>
         <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
-        <div class='metric'><span>Runs remaining</span><strong>{{ weekly_goal.runs_remaining }}</strong></div>
-        <div class='metric'><span>Average distance needed</span><strong>{{ weekly_goal.avg_run_needed }} km</strong></div>
-        <div class='metric'><span>CTL trend</span><strong>{{ weekly_summary.ctl_trend }}</strong></div>
-        <div class='metric'><span>Load risk</span><strong class='risk-{{ weekly_summary.load_risk|lower }}'>{{ weekly_summary.load_risk }}</strong></div>
+        <div class='metric'><span>Suggested runs remaining</span><strong>{{ weekly_goal.runs_remaining }}</strong></div>
+        <div class='metric'><span>Avg distance needed / run</span><strong>{{ weekly_goal.avg_run_needed }} km</strong></div>
+      </article>
+
+      <article class='card'>
+        <h2>Prediction Readiness</h2>
+        {% for item in intel.prediction_readiness["items"] %}
+          <div class='metric'>
+            <span>{% if item.ready %}✔{% else %}✖{% endif %} {{ item.label }}</span>
+            <strong>{{ item.current }} / {{ item.target }}</strong>
+          </div>
+          {% if item.message %}<div class='sub'>{{ item.message }}</div>{% endif %}
+        {% endfor %}
+        {% if intel.prediction_readiness.ready %}
+          <div class='sub status-green'>Prediction Ready</div>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class='grid2'>
+      <article class='card'>
+        <h2>Endurance Readiness</h2>
+        <div class='metric'>
+          <span>LRR</span>
+          <strong>{{ endurance.lrr if endurance.lrr is not none else 'INSUFFICIENT DATA' }}</strong>
+        </div>
+        <div class='sub status-{{ endurance.lrr_color }}'>{{ endurance.lrr_status }}</div>
+        {% if endurance.lrr_warning %}<div class='sub status-orange'>{{ endurance.lrr_warning }}</div>{% endif %}
+
+        <div class='metric'>
+          <span>ADI</span>
+          <strong>{{ endurance.adi if endurance.adi is not none else 'INSUFFICIENT DATA' }}</strong>
+        </div>
+        <div class='sub status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</div>
+
+        <div class='metric'>
+          <span>FRI</span>
+          <strong>{{ endurance.fri if endurance.fri is not none else 'INSUFFICIENT DATA' }}</strong>
+        </div>
+        <div class='sub status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</div>
       </article>
 
       <article class='card'>
         <h2>Long Run Progression</h2>
-        <div class='metric'><span>Longest run (last 8 weeks)</span><strong>{{ long_run.longest_km }} km</strong></div>
+        <div class='metric'><span>Longest run (8 weeks)</span><strong>{{ long_run.longest_km }} km</strong></div>
         <div class='metric'><span>Date</span><strong>{{ long_run.longest_date or 'N/A' }}</strong></div>
         <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone_km }} km</strong></div>
+        <div class='sub'>Milestones: 24 km -> 28 km -> 32 km</div>
         <div class='progress'><span style='width:{{ long_run.progress }}%'></span></div>
       </article>
+    </section>
 
-      <article class='card'>
-        <h2>Endurance Balance</h2>
-        <div class='metric'><span>Long Run Ratio (LRR)</span><strong>{{ endurance.lrr if endurance.lrr is not none else 'INSUFFICIENT DATA' }}</strong></div>
-        <div class='sub'>{{ endurance.lrr_band }}</div>
-        {% if endurance.lrr_warning %}<div class='sub' style='color: var(--warn);'>{{ endurance.lrr_warning }}</div>{% endif %}
-        <div class='metric'><span>Aerobic Durability (ADI)</span><strong>{{ endurance.adi if endurance.adi is not none else 'INSUFFICIENT DATA' }}</strong></div>
-        <div class='sub'>{{ endurance.adi_band }}</div>
-        <div class='metric'><span>Fatigue Resistance (FRI)</span><strong>{{ endurance.fri if endurance.fri is not none else 'INSUFFICIENT DATA' }}</strong></div>
-        <div class='sub'>{{ endurance.fri_band }}</div>
-      </article>
+    <section class='card coaching'>
+      <h2>Today's Training</h2>
+      {% if show_today_plan %}
+        <div class='performance-number'>{{ today_plan.title }}</div>
+        <div class='metric'><span>Session</span><strong>{{ today_plan.details }}</strong></div>
+        <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
+      {% else %}
+        <div class='performance-number'>Recovery Day</div>
+        <div class='sub'>You already trained today. Focus on hydration and sleep.</div>
+      {% endif %}
+    </section>
 
-      <article class='card'>
-        <h2>Today's Training</h2>
-        {% if show_today_plan %}
-          <div class='big'>{{ today_plan.title }}</div>
-          <div class='metric'><span>Session</span><strong>{{ today_plan.details }}</strong></div>
-          <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
-        {% else %}
-          <div class='big'>Done for today</div>
-          <div class='sub'>You already logged an activity today. Focus on recovery and sleep.</div>
-        {% endif %}
-      </article>
-
-      <article class='card'>
-        <h2>Recent Runs</h2>
-        {% if runs %}
-          {% for run in runs %}
-            <div class='metric'>
-              <span>{{ run.date }} | {{ run.distance }} km | {{ run.time }} | {{ run.pace }}</span>
-              <strong>{% if run.hr %}HR {{ run.hr }}{% else %}HR --{% endif %}</strong>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class='sub'>No synced runs yet.</p>
-        {% endif %}
-      </article>
+    <section class='card'>
+      <h2>Recent Runs</h2>
+      {% if runs %}
+        {% for run in runs %}
+          <div class='metric'>
+            <span>{{ run.date }} | {{ run.distance }} km | {{ run.time }} | {{ run.pace }}</span>
+            <strong>{% if run.hr %}HR {{ run.hr }}{% else %}HR --{% endif %}</strong>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class='sub'>No synced runs yet.</p>
+      {% endif %}
     </section>
   </main>
 </body>
 </html>
+

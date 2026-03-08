@@ -9,6 +9,8 @@
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: DATABASE_URL
+        sync: false
       - key: STRAVA_FETCH_PAGES
         value: "3"
       - key: CLIENT_ID

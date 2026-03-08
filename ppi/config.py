@@ -13,7 +13,7 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
 
     DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
-    SQLALCHEMY_DATABASE_URI = DATABASE_URL or "sqlite:///ppi.db"
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     STRAVA_CLIENT_ID = os.getenv("CLIENT_ID")
@@ -30,4 +30,3 @@ class Config:
     SMTP_USER = os.getenv("SMTP_USER")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
     SMTP_FROM = os.getenv("SMTP_FROM", "noreply@strideiq.app")
-

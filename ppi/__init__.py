@@ -13,6 +13,9 @@ def create_app(config_object=Config):
     )
     app.config.from_object(config_object)
 
+    if not app.config.get("SQLALCHEMY_DATABASE_URI"):
+        raise RuntimeError("DATABASE_URL is required. Configure a persistent PostgreSQL connection.")
+
     db.init_app(app)
 
     with app.app_context():
