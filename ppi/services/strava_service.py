@@ -1,24 +1,24 @@
-﻿import time
-from datetime import datetime
+﻿from datetime import datetime
 
 import requests
 
-from ..repositories import fetch_all_metrics, fetch_latest_metric, save_metrics
-from .analytics_service import calculate_readiness, compute_stress, update_training_load
+from ..repositories import (
+    commit_all,
+    fetch_activities,
+    upsert_activity,
+    upsert_metric,
+)
+from .analytics_service import activity_stress
 from .strava_oauth_service import refresh_access_token
 
 
-def fetch_activities(access_token, pages=3, after_timestamp=None):
+def fetch_activities_from_strava(access_token, pages=3):
     activities = []
     for page in range(1, pages + 1):
-        params = {"per_page": 30, "page": page}
-        if after_timestamp:
-            params["after"] = after_timestamp
-
         response = requests.get(
             "https://www.strava.com/api/v3/athlete/activities",
             headers={"Authorization": f"Bearer {access_token}"},
-            params=params,
+            params={"per_page": 50, "page": page},
             timeout=20,
         )
         response.raise_for_status()
@@ -31,37 +31,56 @@ def fetch_activities(access_token, pages=3, after_timestamp=None):
     return activities
 
 
-def _starting_load(user_id):
-    rows = fetch_all_metrics(user_id)
-    if not rows:
-        return 0.0, 0.0
-
-    latest = rows[-1]
-    return float(latest["atl"] or 0), float(latest["ctl"] or 0)
-
-
-def _is_training_run(activity):
-    distance_km = (activity.get("distance") or 0) / 1000
-    if distance_km >= 42.2:
-        return False
-
+def _normalize_type(activity):
     sport_type = str(activity.get("sport_type") or "").lower()
-    act_type = str(activity.get("type") or "").lower()
+    primary = str(activity.get("type") or "").lower()
+
+    if sport_type in {"run", "walk", "ride", "swim", "yoga"}:
+        return sport_type
+    if sport_type in {"weighttraining", "workout"}:
+        return "strength"
+
+    if primary in {"run", "walk", "ride", "swim", "yoga"}:
+        return primary
+    if primary in {"weighttraining", "workout"}:
+        return "strength"
+
+    return primary or "cross_training"
+
+
+def _is_race_event(activity):
     name = str(activity.get("name") or "").lower()
     workout_type = activity.get("workout_type")
+    return workout_type == 1 or "race" in name
 
-    if sport_type and sport_type != "run":
-        return False
-    if act_type in {"walk", "hike", "weighttraining", "workout"}:
-        return False
-    if "walk" in name or "strength" in name or "gym" in name:
-        return False
-    if "race" in name:
-        return False
-    if workout_type == 1:  # Strava race workout marker
-        return False
 
-    return True
+def _load_metrics(user_id):
+    all_activities = fetch_activities(user_id)
+    if not all_activities:
+        return
+
+    by_day = {}
+    for a in all_activities:
+        day = a.date.date()
+        stress = activity_stress(a.activity_type, a.moving_time, a.avg_hr)
+        by_day[day] = by_day.get(day, 0.0) + stress
+
+    atl = 0.0
+    ctl = 0.0
+    ordered_days = sorted(by_day.items(), key=lambda x: x[0])
+
+    for metric_day, stress in ordered_days:
+        atl = atl + (stress - atl) * (1.0 / 7.0)
+        ctl = ctl + (stress - ctl) * (1.0 / 42.0)
+        tsb = ctl - atl
+        upsert_metric(
+            user_id=user_id,
+            metric_date=metric_day,
+            stress=round(stress, 2),
+            atl=round(atl, 2),
+            ctl=round(ctl, 2),
+            tsb=round(tsb, 2),
+        )
 
 
 def sync_strava_data(user_id, pages=3):
@@ -69,49 +88,36 @@ def sync_strava_data(user_id, pages=3):
     if not access_token:
         return {"status": "skipped", "reason": "not_connected", "new_activities": 0}
 
-    latest = fetch_latest_metric(user_id)
-    after_timestamp = None
-    if latest:
-        latest_dt = datetime.strptime(latest["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
-        after_timestamp = int(time.mktime(latest_dt.timetuple())) + 1
-
-    fetched = fetch_activities(access_token, pages=pages, after_timestamp=after_timestamp)
-    filtered = [a for a in fetched if _is_training_run(a)]
-
-    if not filtered:
+    fetched = fetch_activities_from_strava(access_token, pages=pages)
+    if not fetched:
         return {"status": "ok", "reason": "up_to_date", "new_activities": 0}
 
-    filtered.sort(key=lambda item: item["start_date"])
+    new_count = 0
+    for activity in fetched:
+        start_date = activity.get("start_date")
+        if not start_date:
+            continue
 
-    stress_by_date = {}
-    activity_enriched = []
+        date_utc = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ")
+        strava_id = activity.get("id")
+        if not strava_id:
+            continue
 
-    for activity in filtered:
-        run_date = datetime.strptime(activity["start_date"], "%Y-%m-%dT%H:%M:%SZ").date()
-        stress = compute_stress(activity)
-        stress_by_date[run_date] = stress_by_date.get(run_date, 0.0) + stress
-        activity_enriched.append((activity, run_date, stress))
-
-    starting_atl, starting_ctl = _starting_load(user_id)
-    load_by_date = update_training_load(stress_by_date, starting_atl, starting_ctl)
-
-    for activity, run_date, stress in activity_enriched:
-        load = load_by_date[run_date]
-        readiness = calculate_readiness(load["tsb"])
-
-        save_metrics(
+        upsert_activity(
             user_id=user_id,
-            activity_id=activity["id"],
-            timestamp=activity["start_date"],
-            distance_km=(activity.get("distance") or 0) / 1000,
-            moving_time_sec=float(activity.get("moving_time") or 0),
+            strava_activity_id=int(strava_id),
+            date_utc=date_utc,
+            activity_type=_normalize_type(activity),
+            distance_km=(activity.get("distance") or 0) / 1000.0,
+            moving_time=float(activity.get("moving_time") or 0.0),
             avg_hr=activity.get("average_heartrate"),
-            elevation_gain_m=float(activity.get("total_elevation_gain") or 0),
-            stress=stress,
-            atl=load["atl"],
-            ctl=load["ctl"],
-            tsb=load["tsb"],
-            readiness=readiness,
+            elevation_gain=float(activity.get("total_elevation_gain") or 0.0),
+            is_race=_is_race_event(activity),
         )
+        new_count += 1
 
-    return {"status": "ok", "reason": "synced", "new_activities": len(filtered)}
+    _load_metrics(user_id)
+    commit_all()
+
+    return {"status": "ok", "reason": "synced", "new_activities": new_count}
+

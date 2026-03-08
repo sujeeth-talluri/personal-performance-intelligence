@@ -4,7 +4,7 @@ import time
 import requests
 from flask import current_app
 
-from ..repositories import get_user_by_id, save_strava_tokens
+from ..repositories import get_strava_token, save_strava_tokens
 
 
 def generate_oauth_state():
@@ -45,7 +45,7 @@ def link_oauth_identity(user_id, oauth_payload):
     athlete_data = oauth_payload.get("athlete") or {}
     save_strava_tokens(
         user_id=user_id,
-        strava_athlete_id=athlete_data.get("id"),
+        athlete_id=athlete_data.get("id"),
         access_token=oauth_payload["access_token"],
         refresh_token=oauth_payload["refresh_token"],
         expires_at=oauth_payload["expires_at"],
@@ -53,17 +53,13 @@ def link_oauth_identity(user_id, oauth_payload):
 
 
 def refresh_access_token(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
+    token = get_strava_token(user_id)
+    if not token:
         return None
 
     now = int(time.time())
-    if user["strava_access_token"] and user["strava_access_expires_at"] and user["strava_access_expires_at"] > now + 60:
-        return user["strava_access_token"]
-
-    refresh_token = user["strava_refresh_token"]
-    if not refresh_token:
-        return None
+    if token.access_token and token.expires_at and token.expires_at > now + 60:
+        return token.access_token
 
     cfg = current_app.config
     response = requests.post(
@@ -72,7 +68,7 @@ def refresh_access_token(user_id):
             "client_id": cfg["STRAVA_CLIENT_ID"],
             "client_secret": cfg["STRAVA_CLIENT_SECRET"],
             "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
+            "refresh_token": token.refresh_token,
         },
         timeout=20,
     )
@@ -81,9 +77,10 @@ def refresh_access_token(user_id):
 
     save_strava_tokens(
         user_id=user_id,
-        strava_athlete_id=payload.get("athlete", {}).get("id") or user["strava_athlete_id"],
+        athlete_id=payload.get("athlete", {}).get("id") or token.athlete_id,
         access_token=payload["access_token"],
         refresh_token=payload["refresh_token"],
         expires_at=payload["expires_at"],
     )
+
     return payload["access_token"]

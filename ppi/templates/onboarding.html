@@ -19,20 +19,20 @@
           <div class='row'><label>Race date</label><input type='date' name='race_date' value='{{ goal.race_date if goal else "" }}' required></div>
           <div class='row'>
             <label>Race distance (km)</label>
-            <input name='race_distance' list='race-distance-options' inputmode='decimal' placeholder='Try 5, 10, 21.1, 42.2 or type custom' value='{{ goal.race_distance if goal else "" }}' required>
+            <input name='race_distance' list='race-distance-options' inputmode='decimal' placeholder='5, 10, 21.1, 42.2 or custom' value='{{ goal.race_distance if goal else "" }}' required>
             <div class='sub'>Quick picks: 5K, 10K, Half Marathon, Full Marathon</div>
           </div>
           <div class='row'><label>Goal time (HH:MM:SS)</label><input name='goal_time' value='{{ goal.goal_time if goal else "" }}' required></div>
           <div class='row'>
             <label>Elevation type</label>
             <select name='elevation_type'>
-              <option value='flat'>Flat</option>
-              <option value='moderate'>Moderate</option>
-              <option value='hilly'>Hilly</option>
-              <option value='mountain'>Mountain</option>
+              <option value='flat' {% if goal and goal.elevation_type=='flat' %}selected{% endif %}>Flat</option>
+              <option value='moderate' {% if not goal or goal.elevation_type=='moderate' %}selected{% endif %}>Moderate</option>
+              <option value='hilly' {% if goal and goal.elevation_type=='hilly' %}selected{% endif %}>Hilly</option>
+              <option value='mountain' {% if goal and goal.elevation_type=='mountain' %}selected{% endif %}>Mountain</option>
             </select>
           </div>
-          <div class='row'><label>Current PB (optional)</label><input name='current_pb' value='{{ goal.current_pb if goal else "" }}'></div>
+          <div class='row'><label>Current PB (optional)</label><input name='current_pb' value='{{ goal.personal_best if goal else "" }}'></div>
         </div>
         <datalist id='race-distance-options'>
           <option value='5'>5K</option>
@@ -46,3 +46,4 @@
   </main>
 </body>
 </html>
+

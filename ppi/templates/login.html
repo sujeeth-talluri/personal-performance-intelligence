@@ -10,7 +10,7 @@
   <main class='wrap' style='max-width:560px;'>
     <section class='card'>
       <h1>Welcome back to StrideIQ</h1>
-      <p class='sub'>Login to view your running progress and race readiness.</p>
+      <p class='sub'>Login to view your training and race projection.</p>
       {% if error %}<p style='color:var(--danger);'>{{ error }}</p>{% endif %}
       <form method='post'>
         <div class='row'>
@@ -23,8 +23,10 @@
         </div>
         <button type='submit'>Login</button>
       </form>
-      <p class='sub' style='margin-top:10px;'>No account? <a class='btn' href='/register'>Create one</a></p>
+      <p class='sub' style='margin-top:10px;'><a href='/forgot-password'>Forgot password?</a></p>
+      <p class='sub'>No account? <a href='/register'>Create one</a></p>
     </section>
   </main>
 </body>
 </html>
+

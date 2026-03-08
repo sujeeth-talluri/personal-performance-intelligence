@@ -8,12 +8,13 @@
 </head>
 <body>
   <main class='wrap'>
-    <section class='card'>
-      <div class='inline' style='justify-content:space-between; align-items:center;'>
+    <section class='card hero'>
+      <div class='inline spread'>
         <div>
-          <h1>{{ user.name }} | {{ goal.event_name }}</h1>
+          <h1>{{ user.name }} | {{ goal.race_name }} ({{ goal.elevation_type|title }} Course)</h1>
           <div class='sub'>{{ goal.distance_km }} km | Goal {{ goal.goal_time }} | {{ goal.days_remaining }} days remaining</div>
-          <div class='sub'>Target pace: {{ goal.target_pace }}</div>
+          <div class='sub'>Target pace: {{ goal.target_pace }} | Today: {{ today_date }}</div>
+          <div class='sub'>Strava sync: {{ sync_info.reason }}</div>
         </div>
         <div class='inline'>
           <a class='btn' href='/settings'>Settings</a>
@@ -25,29 +26,48 @@
     <section class='grid2'>
       <article class='card'>
         <h2>Current Capability (Flat Course)</h2>
-        <div class='big'>{{ intel.current_projection if intel else 'No data yet' }}</div>
+        <div class='big'>{{ intel.current_projection if intel.current_projection else 'Not enough data yet' }}</div>
         <div class='sub'>Based on recent training load and long-run performance.</div>
       </article>
 
       <article class='card'>
-        <h2>{{ goal.race_projection_label }}</h2>
-        <div class='big'>{{ intel.race_day_projection if intel else 'No data yet' }}</div>
-        {% if intel %}
-          <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
-          <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
-          <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
-          <div class='metric'><span>CTL (Chronic Training Load)</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
-          <div class='sub'>{{ intel.ctl_description }}</div>
-        {% endif %}
+        <h2>{{ goal.projection_label }}</h2>
+        <div class='big'>{{ intel.race_day_projection if intel.race_day_projection else 'Not enough data yet' }}</div>
+        <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
+        <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
+        <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
+        <div class='metric'><span>CTL (Chronic Training Load)</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
+        <div class='sub'>{{ intel.ctl_description }}</div>
+      </article>
+
+      <article class='card'>
+        <h2>Weekly Training</h2>
+        <div class='metric'><span>Weekly goal</span><strong>{{ weekly_goal.weekly_goal_km }} km</strong></div>
+        <div class='metric'><span>Completed</span><strong>{{ weekly_goal.completed_km }} km</strong></div>
+        <div class='metric'><span>Remaining</span><strong>{{ weekly_goal.remaining_km }} km</strong></div>
+        <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
+        <div class='metric'><span>Runs remaining</span><strong>{{ weekly_goal.runs_remaining }}</strong></div>
+        <div class='metric'><span>Average distance needed</span><strong>{{ weekly_goal.avg_run_needed }} km</strong></div>
+        <div class='metric'><span>CTL trend</span><strong>{{ weekly_summary.ctl_trend }}</strong></div>
+        <div class='metric'><span>Load risk</span><strong class='risk-{{ weekly_summary.load_risk|lower }}'>{{ weekly_summary.load_risk }}</strong></div>
       </article>
 
       <article class='card'>
         <h2>Long Run Progression</h2>
-        <div class='sub'>Recent window: 8 weeks | Durability window: 16 weeks</div>
-        <div class='metric'><span>Longest run</span><strong>{{ long_run.longest_run_km }} km</strong></div>
-        <div class='metric'><span>Date</span><strong>{{ long_run.longest_run_date or 'N/A' }}</strong></div>
-        <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone }} km</strong></div>
-        <div class='progress'><span style='width:{{ long_run.progress_pct }}%'></span></div>
+        <div class='metric'><span>Longest run (last 8 weeks)</span><strong>{{ long_run.longest_km }} km</strong></div>
+        <div class='metric'><span>Date</span><strong>{{ long_run.longest_date or 'N/A' }}</strong></div>
+        <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone_km }} km</strong></div>
+        <div class='progress'><span style='width:{{ long_run.progress }}%'></span></div>
+      </article>
+
+      <article class='card'>
+        <h2>Endurance Balance</h2>
+        <div class='metric'><span>Long Run Ratio (LRR)</span><strong>{{ endurance.lrr }}</strong></div>
+        <div class='sub'>{{ endurance.lrr_band }}</div>
+        <div class='metric'><span>Aerobic Durability (ADI)</span><strong>{{ endurance.adi if endurance.adi is not none else 'N/A' }}</strong></div>
+        <div class='sub'>{{ endurance.adi_band }}</div>
+        <div class='metric'><span>Fatigue Resistance (FRI)</span><strong>{{ endurance.fri if endurance.fri is not none else 'N/A' }}</strong></div>
+        <div class='sub'>{{ endurance.fri_band }}</div>
       </article>
 
       <article class='card'>
@@ -58,16 +78,8 @@
           <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
         {% else %}
           <div class='big'>Done for today</div>
-          <div class='sub'>You already logged an activity today. Focus on recovery, hydration, and sleep.</div>
+          <div class='sub'>You already logged an activity today. Focus on recovery and sleep.</div>
         {% endif %}
-      </article>
-
-      <article class='card'>
-        <h2>Weekly Training</h2>
-        <div class='sub'>{{ weekly.week_label }}</div>
-        <div class='metric'><span>Weekly distance</span><strong>{{ weekly.weekly_distance }} km</strong></div>
-        <div class='metric'><span>CTL trend</span><strong>{{ weekly.ctl_trend }}</strong></div>
-        <div class='metric'><span>Load risk</span><strong>{{ weekly.load_risk }}</strong></div>
       </article>
 
       <article class='card'>
@@ -75,8 +87,8 @@
         {% if runs %}
           {% for run in runs %}
             <div class='metric'>
-              <span>{{ run.date }} | {{ run.distance }} km | {{ run.time }}</span>
-              <strong>{% if run.hr %}HR {{ run.hr }}{% else %}--{% endif %}</strong>
+              <span>{{ run.date }} | {{ run.distance }} km | {{ run.time }} | {{ run.pace }}</span>
+              <strong>{% if run.hr %}HR {{ run.hr }}{% else %}HR --{% endif %}</strong>
             </div>
           {% endfor %}
         {% else %}
@@ -87,3 +99,4 @@
   </main>
 </body>
 </html>
+

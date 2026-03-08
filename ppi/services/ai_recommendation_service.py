@@ -6,13 +6,14 @@ from flask import current_app
 
 def _heuristic_recommendation(goal, intel, milestone, recent_metrics):
     if not intel:
-        return "No enough training data yet. Sync Strava and complete 3+ runs to unlock AI recommendations."
+        return "Not enough training data yet. Sync Strava and complete 3+ runs to unlock AI recommendations."
 
     probability = intel.get("probability", 0)
     ctl = intel.get("current_ctl", 0)
     tsb = 0
     if recent_metrics:
-        tsb = float(recent_metrics[0]["tsb"] or 0)
+        latest = recent_metrics[0]
+        tsb = float(getattr(latest, "tsb", 0) or 0)
 
     if tsb < -15:
         recovery_note = "You are carrying fatigue, so prioritize an easy day."
@@ -30,7 +31,7 @@ def _heuristic_recommendation(goal, intel, milestone, recent_metrics):
 
     return (
         f"AI Coach (fallback): {core} "
-        f"Current CTL {ctl}, milestone {milestone['current_long']} km, target race {goal['event_name']}. "
+        f"Current CTL {ctl}, longest run {milestone.get('longest_km', 0)} km, target race {goal.get('race_name', 'Goal race')}. "
         f"{recovery_note}"
     )
 
@@ -46,12 +47,10 @@ def generate_ai_recommendation(goal, intel, milestone, recent_metrics):
         "milestone": milestone,
         "recent_metrics": [
             {
-                "timestamp": row["timestamp"],
-                "distance_km": row["distance_km"],
-                "stress": row["stress"],
-                "ctl": row["ctl"],
-                "tsb": row["tsb"],
-                "readiness": row["readiness"],
+                "date": getattr(row, "date", None).isoformat() if getattr(row, "date", None) else None,
+                "stress": getattr(row, "stress", None),
+                "ctl": getattr(row, "ctl", None),
+                "tsb": getattr(row, "tsb", None),
             }
             for row in recent_metrics[:14]
         ],

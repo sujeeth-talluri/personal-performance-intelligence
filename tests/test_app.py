@@ -6,21 +6,20 @@ from ppi import create_app
 class TestConfig:
     TESTING = True
     SECRET_KEY = "test-secret"
-    DATABASE_PATH = ""
     STRAVA_CLIENT_ID = "12345"
     STRAVA_CLIENT_SECRET = "secret"
-    STRAVA_REFRESH_TOKEN = None
     STRAVA_FETCH_PAGES = 1
     STRAVA_SCOPES = "activity:read_all,profile:read_all"
     STRAVA_REDIRECT_URI = "http://localhost:5000/auth/strava/callback"
     OPENAI_API_KEY = None
     OPENAI_MODEL = "gpt-4.1-mini"
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
 @pytest.fixture()
 def app(tmp_path):
     class Cfg(TestConfig):
-        DATABASE_PATH = str(tmp_path / "test_ppi.db")
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{tmp_path / 'test_ppi.db'}"
 
     return create_app(Cfg)
 
@@ -80,7 +79,7 @@ def test_onboarding_then_dashboard(client):
 
     dash = client.get("/", follow_redirects=False)
     assert dash.status_code == 200
-    assert b"Race Day Projection" in dash.data
+    assert b"Current Capability (Flat Course)" in dash.data
 
 
 def test_oauth_login_redirect(client):
@@ -93,6 +92,12 @@ def test_oauth_login_redirect(client):
     assert "https://www.strava.com/oauth/authorize" in response.headers["Location"]
 
 
+def test_forgot_password_page(client):
+    response = client.get("/forgot-password", follow_redirects=False)
+    assert response.status_code == 200
+    assert b"Reset your password" in response.data
+
+
 def test_settings_page(client):
     client.post(
         "/register",
@@ -101,3 +106,4 @@ def test_settings_page(client):
     settings = client.get("/settings", follow_redirects=False)
     assert settings.status_code == 200
     assert b"Settings" in settings.data
+

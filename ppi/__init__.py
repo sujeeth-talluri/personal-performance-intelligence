@@ -1,7 +1,7 @@
 ﻿from flask import Flask
 
 from .config import Config
-from .db import initialize_database, close_db
+from .extensions import db
 from .routes import web
 
 
@@ -13,9 +13,13 @@ def create_app(config_object=Config):
     )
     app.config.from_object(config_object)
 
-    initialize_database(app.config["DATABASE_PATH"])
+    db.init_app(app)
 
-    app.teardown_appcontext(close_db)
+    with app.app_context():
+        from . import models  # noqa: F401
+
+        db.create_all()
+
     app.register_blueprint(web)
 
     return app

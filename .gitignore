@@ -4,6 +4,8 @@ __pycache__/
 activities.csv
 
 .venv/
+.venv312/
 .vendor/
+vendor_pkgs/
 .pytest_cache/
 *.pyc
