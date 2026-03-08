@@ -54,6 +54,8 @@
         <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
         <div class='metric'><span>Suggested runs remaining</span><strong>{{ weekly_goal.runs_remaining }}</strong></div>
         <div class='metric'><span>Avg distance needed / run</span><strong>{{ weekly_goal.avg_run_needed }} km</strong></div>
+        <div class='metric'><span>Max safe run distance</span><strong>{{ weekly_goal.max_safe_run }} km</strong></div>
+        {% if weekly_goal.guidance %}<div class='sub status-green'>{{ weekly_goal.guidance }}</div>{% endif %}
       </article>
 
       <article class='card'>
@@ -132,4 +134,5 @@
   </main>
 </body>
 </html>
+
 
