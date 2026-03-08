@@ -1,0 +1,72 @@
+﻿:root {
+  --bg1: #0f2027;
+  --bg2: #203a43;
+  --bg3: #2c5364;
+  --glass: rgba(255, 255, 255, 0.12);
+  --line: rgba(255, 255, 255, 0.22);
+  --text: #e8f2f8;
+  --muted: #b7c9d6;
+  --ok: #2ecc71;
+  --warn: #f39c12;
+  --danger: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: linear-gradient(160deg, var(--bg1), var(--bg2), var(--bg3));
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(8px);
+}
+
+h1, h2, h3 { margin: 0 0 8px; }
+.sub { color: var(--muted); font-size: 0.95rem; }
+.big { font-size: 2.2rem; font-weight: 700; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.14); }
+.metric:last-child { border-bottom: none; }
+.progress { height: 10px; background: rgba(255,255,255,.15); border-radius: 99px; overflow: hidden; }
+.progress > span { display:block; height:100%; background: linear-gradient(90deg,#2ecc71,#f1c40f); }
+
+input, select, button, a.btn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.09);
+  color: var(--text);
+}
+
+button, .btn {
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  background: rgba(255,255,255,.2);
+}
+
+.row { display: grid; gap: 8px; margin-bottom: 10px; }
+.inline { display:flex; gap: 10px; flex-wrap: wrap; }
+.badge { padding: 4px 10px; border-radius: 999px; background: rgba(46, 204, 113, .18); border:1px solid rgba(46,204,113,.35); }
+
+@media (max-width: 840px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .big { font-size: 1.7rem; }
+}

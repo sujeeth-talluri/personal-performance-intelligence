@@ -31,8 +31,8 @@ def fetch_activities(access_token, pages=3, after_timestamp=None):
     return activities
 
 
-def _starting_load(athlete_id):
-    rows = fetch_all_metrics(athlete_id)
+def _starting_load(user_id):
+    rows = fetch_all_metrics(user_id)
     if not rows:
         return 0.0, 0.0
 
@@ -40,12 +40,12 @@ def _starting_load(athlete_id):
     return float(latest["atl"] or 0), float(latest["ctl"] or 0)
 
 
-def sync_athlete_from_strava(athlete_id, pages=3):
-    access_token = refresh_access_token(athlete_id)
+def sync_strava_data(user_id, pages=3):
+    access_token = refresh_access_token(user_id)
     if not access_token:
         return {"status": "skipped", "reason": "not_connected", "new_activities": 0}
 
-    latest = fetch_latest_metric(athlete_id)
+    latest = fetch_latest_metric(user_id)
     after_timestamp = None
     if latest:
         latest_dt = datetime.strptime(latest["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
@@ -66,7 +66,7 @@ def sync_athlete_from_strava(athlete_id, pages=3):
         stress_by_date[run_date] = stress_by_date.get(run_date, 0.0) + stress
         activity_enriched.append((activity, run_date, stress))
 
-    starting_atl, starting_ctl = _starting_load(athlete_id)
+    starting_atl, starting_ctl = _starting_load(user_id)
     load_by_date = update_training_load(stress_by_date, starting_atl, starting_ctl)
 
     for activity, run_date, stress in activity_enriched:
@@ -74,7 +74,7 @@ def sync_athlete_from_strava(athlete_id, pages=3):
         readiness = calculate_readiness(load["tsb"])
 
         save_metrics(
-            athlete_id=athlete_id,
+            user_id=user_id,
             activity_id=activity["id"],
             timestamp=activity["start_date"],
             distance_km=(activity.get("distance") or 0) / 1000,

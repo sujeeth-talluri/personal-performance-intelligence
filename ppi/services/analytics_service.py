@@ -9,12 +9,12 @@ def _parse_timestamp(timestamp):
     return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
 
 
-def format_hms(total_seconds):
+def _fmt_hms(total_seconds):
     seconds = max(0, int(total_seconds))
     return f"{seconds // 3600}:{(seconds % 3600) // 60:02d}:{seconds % 60:02d}"
 
 
-def format_gap(total_seconds):
+def _fmt_gap(total_seconds):
     sign = "+" if total_seconds > 0 else "-"
     seconds = abs(int(total_seconds))
     return f"{sign}{seconds // 60}:{seconds % 60:02d}"
@@ -88,7 +88,7 @@ def build_goal_context(goal_row):
 
     h, m, s = map(int, goal_row["goal_time"].split(":"))
     goal_seconds = h * 3600 + m * 60 + s
-    pace_sec = goal_seconds / float(goal_row["distance_km"])
+    pace_sec = goal_seconds / float(goal_row["race_distance"])
 
     elevation_map = {
         "flat": 1.00,
@@ -98,8 +98,8 @@ def build_goal_context(goal_row):
     }
 
     return {
-        "event_name": goal_row["event_name"],
-        "distance_km": float(goal_row["distance_km"]),
+        "event_name": goal_row["race_name"],
+        "distance_km": float(goal_row["race_distance"]),
         "goal_time": goal_row["goal_time"],
         "goal_seconds": goal_seconds,
         "race_date": goal_row["race_date"],
@@ -109,18 +109,17 @@ def build_goal_context(goal_row):
     }
 
 
-def estimate_race_projection(athlete_id, goal_context):
+def performance_intelligence(user_id, goal_context):
     if not goal_context:
         return None
 
-    rows = fetch_all_metrics(athlete_id)
-    last_row = fetch_latest_metric(athlete_id)
+    rows = fetch_all_metrics(user_id)
+    last_row = fetch_latest_metric(user_id)
     if not rows or not last_row:
         return None
 
     goal_distance = goal_context["distance_km"]
     current_ctl = float(last_row["ctl"] or 0)
-    current_tsb = float(last_row["tsb"] or 0)
 
     candidates = []
     for row in rows:
@@ -135,10 +134,10 @@ def estimate_race_projection(athlete_id, goal_context):
     if not candidates:
         return None
 
-    candidates.sort(key=lambda entry: entry[0], reverse=True)
+    candidates.sort(key=lambda item: item[0], reverse=True)
     anchor_distance, anchor_duration = candidates[0]
 
-    raw_projection = anchor_duration * (goal_distance / anchor_distance) ** 1.06
+    current_projection_sec = anchor_duration * (goal_distance / anchor_distance) ** 1.06
 
     if goal_distance <= 10:
         target_ctl = 45
@@ -150,235 +149,123 @@ def estimate_race_projection(athlete_id, goal_context):
         target_ctl = 75
 
     ctl_ratio = min(1.25, max(0.4, current_ctl / target_ctl if target_ctl else 1.0))
-    load_factor = 1 + (1 - ctl_ratio) * 0.06
+    race_day_projection_sec = current_projection_sec * (1 + (1 - ctl_ratio) * 0.06)
+    adjusted_projection = race_day_projection_sec * goal_context["elevation_factor"]
 
-    if current_tsb < -15:
-        fatigue_factor = 1.03
-    elif current_tsb < -5:
-        fatigue_factor = 1.015
-    elif current_tsb > 10:
-        fatigue_factor = 0.99
-    else:
-        fatigue_factor = 1.0
+    flat_gap_sec = race_day_projection_sec - goal_context["goal_seconds"]
+    adjusted_gap_sec = adjusted_projection - goal_context["goal_seconds"]
 
-    race_projection = raw_projection * load_factor * fatigue_factor
-    race_adjusted = race_projection * goal_context["elevation_factor"]
-
-    flat_gap = race_projection - goal_context["goal_seconds"]
-    adjusted_gap = race_adjusted - goal_context["goal_seconds"]
-
-    probability = 85 - max(0, int(flat_gap / 60) * 2)
+    probability = 85 - max(0, int(flat_gap_sec / 60) * 2)
     probability += int((ctl_ratio - 1.0) * 20)
     probability = max(10, min(probability, 95))
 
     return {
-        "anchor_distance": round(anchor_distance, 1),
-        "current_projection": format_hms(raw_projection),
-        "current_adjusted": format_hms(raw_projection * goal_context["elevation_factor"]),
-        "race_projection": format_hms(race_projection),
-        "race_adjusted": format_hms(race_adjusted),
-        "flat_gap": format_gap(flat_gap),
-        "adjusted_gap": format_gap(adjusted_gap),
+        "current_projection": _fmt_hms(current_projection_sec),
+        "race_day_projection": _fmt_hms(race_day_projection_sec),
+        "elevation_adjusted": _fmt_hms(adjusted_projection),
         "probability": probability,
+        "flat_gap": _fmt_gap(flat_gap_sec),
+        "adjusted_gap": _fmt_gap(adjusted_gap_sec),
         "current_ctl": round(current_ctl, 1),
         "target_ctl": target_ctl,
-        "race_projection_seconds": int(race_projection),
     }
 
 
-def milestone_progress(athlete_id):
-    rows = fetch_all_metrics(athlete_id)
+def long_run_progress(user_id):
+    rows = fetch_all_metrics(user_id)
     max_dist = 0.0
     max_dist_date = None
 
     for row in rows:
         distance = float(row["distance_km"] or 0)
-        if distance < 40 and distance >= max_dist:
+        if distance >= max_dist:
             max_dist = distance
             max_dist_date = _parse_timestamp(row["timestamp"]).date().isoformat()
 
-    targets = [16, 18, 20, 22, 24, 26, 28, 30, 32]
-    next_target = 32
-    for target in targets:
+    next_target = 30
+    for target in [16, 18, 20, 22, 24, 26, 28, 30, 32]:
         if max_dist < target:
             next_target = target
             break
 
-    progress = int((max_dist / next_target) * 100) if next_target else 0
+    pct = int((max_dist / next_target) * 100) if next_target else 0
     return {
-        "current_long": round(max_dist, 1),
-        "current_long_date": max_dist_date,
-        "next_target": next_target,
-        "progress": min(progress, 100),
+        "longest_run_km": round(max_dist, 1),
+        "longest_run_date": max_dist_date,
+        "next_milestone": next_target,
+        "progress_pct": min(pct, 100),
     }
 
 
-def get_recent_activity_summaries(athlete_id, limit=3):
-    rows = fetch_recent_metrics(athlete_id, limit=limit)
-    activities = []
-
-    for row in rows:
-        ts = _parse_timestamp(row["timestamp"])
-        activities.append(
-            {
-                "date": ts.date().isoformat(),
-                "distance_km": round(float(row["distance_km"] or 0), 1),
-                "duration": format_hms(float(row["moving_time_sec"] or 0)),
-                "avg_hr": int(float(row["avg_hr"])) if row["avg_hr"] else None,
-            }
-        )
-
-    return activities
-
-
-def live_training_state(athlete_id):
-    rows = fetch_all_metrics(athlete_id)
-    if not rows:
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())
-        week_end = week_start + timedelta(days=6)
-        return {
-            "weekly_km": 0.0,
-            "weekly_stress": 0.0,
-            "readiness": 0,
-            "activity_done_today": False,
-            "week_start": week_start.isoformat(),
-            "week_end": week_end.isoformat(),
-        }
-
+def weekly_training(user_id):
+    rows = fetch_all_metrics(user_id)
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
-    weekly_rows = []
+    week_rows = []
     for row in rows:
-        run_date = _parse_timestamp(row["timestamp"]).date()
-        if week_start <= run_date <= week_end:
-            weekly_rows.append(row)
+        d = _parse_timestamp(row["timestamp"]).date()
+        if week_start <= d <= week_end:
+            week_rows.append(row)
 
-    weekly_km = sum(float(row["distance_km"] or 0) for row in weekly_rows)
-    weekly_stress = sum(float(row["stress"] or 0) for row in weekly_rows)
+    weekly_km = round(sum(float(row["distance_km"] or 0) for row in week_rows), 1)
 
-    latest = rows[-1]
-    latest_date = _parse_timestamp(latest["timestamp"]).date()
-    activity_done_today = latest_date == today
+    latest = rows[-1] if rows else None
+    latest_ctl = float(latest["ctl"] or 0) if latest else 0
 
-    return {
-        "weekly_km": round(weekly_km, 1),
-        "weekly_stress": round(weekly_stress, 1),
-        "readiness": int(float(latest["readiness"] or 0)),
-        "activity_done_today": activity_done_today,
-        "week_start": week_start.isoformat(),
-        "week_end": week_end.isoformat(),
-    }
+    ctl_7d_ago = latest_ctl
+    for row in rows:
+        d = _parse_timestamp(row["timestamp"]).date()
+        if d <= today - timedelta(days=7):
+            ctl_7d_ago = float(row["ctl"] or 0)
+    ctl_trend = round(latest_ctl - ctl_7d_ago, 1)
 
-
-def goal_snapshot(goal_context, intel, milestone):
-    if not goal_context:
-        return {
-            "headline": "Set your race goal to get started.",
-            "progress": 0,
-            "status": "No goal found.",
-        }
-
-    if not intel:
-        return {
-            "headline": f"You are training for {goal_context['event_name']}",
-            "progress": milestone["progress"],
-            "status": "Sync more runs to unlock prediction.",
-        }
-
-    target_seconds = goal_context["goal_seconds"]
-    projected_seconds = intel["race_projection_seconds"]
-    if projected_seconds <= target_seconds:
-        progress = 92
-        status = "You are on pace for your goal. Stay consistent."
+    latest_tsb = float(latest["tsb"] or 0) if latest else 0
+    if latest_tsb < -20:
+        load_risk = "High"
+    elif latest_tsb < -10:
+        load_risk = "Moderate"
     else:
-        delta_ratio = min(1.0, (projected_seconds - target_seconds) / target_seconds)
-        progress = max(35, int(90 - (delta_ratio * 60)))
-        minutes_off = int((projected_seconds - target_seconds) / 60)
-        status = f"You are about {minutes_off} min away from goal pace right now."
+        load_risk = "Low"
+
+    activity_done_today = False
+    if latest:
+        activity_done_today = _parse_timestamp(latest["timestamp"]).date() == today
 
     return {
-        "headline": f"Goal: {goal_context['event_name']} in {goal_context['goal_time']}",
-        "progress": progress,
-        "status": status,
+        "weekly_distance": weekly_km,
+        "ctl_trend": ctl_trend,
+        "load_risk": load_risk,
+        "activity_done_today": activity_done_today,
+        "week_label": f"{week_start.isoformat()} to {week_end.isoformat()}",
     }
 
 
-def today_focus(live_state, intel):
-    if live_state["activity_done_today"]:
-        return "You have already trained today. Focus on recovery: hydration, mobility, and sleep."
-
+def today_training(intel):
     if not intel:
-        return "Do an easy 30-40 min run today to start building consistency."
+        return {"title": "Easy Run", "details": "30-40 min easy", "purpose": "Build consistency"}
 
-    probability = intel["probability"]
-    if probability < 50:
-        return "Today: easy aerobic run, 8-10 km at comfortable pace."
-    if probability < 75:
-        return "Today: steady run with 20 min comfortably hard effort."
-    return "Today: race-specific session with controlled pace blocks."
-
-
-def next_few_weeks_plan(intel):
-    if not intel:
-        return [
-            "Week 1: Run 4 days, mostly easy.",
-            "Week 2: Add one slightly longer run.",
-            "Week 3: Keep consistency, do not skip easy days.",
-            "Week 4: Repeat with slightly more distance.",
-        ]
-
-    probability = intel["probability"]
-    if probability < 50:
-        return [
-            "Week 1: Build routine with 4 runs and 1 long easy run.",
-            "Week 2: Increase long run by 2 km.",
-            "Week 3: Add one short tempo segment.",
-            "Week 4: Repeat volume, avoid sudden jumps.",
-        ]
-    if probability < 75:
-        return [
-            "Week 1: Keep 1 long run and 1 tempo workout.",
-            "Week 2: Add marathon-pace blocks in long run.",
-            "Week 3: Maintain volume, keep easy days easy.",
-            "Week 4: Slightly reduce load for freshness.",
-        ]
-    return [
-        "Week 1: One race-specific long workout.",
-        "Week 2: Maintain volume with quality over quantity.",
-        "Week 3: Reduce fatigue, keep legs fresh.",
-        "Week 4: Taper and sharpen for race day.",
-    ]
+    p = intel["probability"]
+    if p < 40:
+        return {"title": "Aerobic Run", "details": "12-16 km easy", "purpose": "Build durability"}
+    if p < 60:
+        return {"title": "Long Run", "details": "18-24 km steady aerobic", "purpose": "Improve endurance"}
+    if p < 75:
+        return {"title": "Tempo Session", "details": "6-10 km threshold", "purpose": "Raise race pace"}
+    return {"title": "Race Specific", "details": "Marathon-pace intervals", "purpose": "Sharpen race form"}
 
 
-def rule_based_recommendation(intel):
-    if not intel:
-        return "Sync activities to generate a recommendation"
-
-    probability = intel["probability"]
-    if probability < 40:
-        return "Aerobic Base Run: 12-16 km easy"
-    if probability < 60:
-        return "Long Run: 18-24 km steady"
-    if probability < 75:
-        return "Tempo Session: 6-10 km at threshold"
-    return "Race Specific Workout"
-
-
-def tomorrow_activity(intel, activity_done_today):
-    if not intel:
-        return "Tomorrow: Easy aerobic run for 30-40 minutes to restart consistency."
-
-    probability = intel["probability"]
-    if activity_done_today:
-        if probability >= 70:
-            return "Tomorrow: Recovery run 6-8 km easy with light mobility."
-        return "Tomorrow: Easy run 8-10 km at conversational pace."
-
-    if probability < 50:
-        return "Tomorrow: Aerobic run 10-12 km easy with 4-6 strides."
-    if probability < 75:
-        return "Tomorrow: Tempo session 3 x 10 min threshold with easy recoveries."
-    return "Tomorrow: Race-specific workout with marathon-pace blocks."
+def recent_runs(user_id, limit=5):
+    rows = fetch_recent_metrics(user_id, limit=limit)
+    out = []
+    for row in rows:
+        out.append(
+            {
+                "date": _parse_timestamp(row["timestamp"]).date().isoformat(),
+                "distance": round(float(row["distance_km"] or 0), 1),
+                "time": _fmt_hms(float(row["moving_time_sec"] or 0)),
+                "hr": int(float(row["avg_hr"])) if row["avg_hr"] else None,
+            }
+        )
+    return out

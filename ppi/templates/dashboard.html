@@ -1,316 +1,86 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#ff5f45" />
-  <link rel="manifest" href="/static/manifest.json" />
-  <title>StrideIQ | Your Running Goal Partner</title>
-  <style>
-    :root {
-      --bg-1: #fff3ec;
-      --bg-2: #f3fbff;
-      --ink: #1f2533;
-      --muted: #63748a;
-      --accent: #ff5f45;
-      --accent-2: #ff9f45;
-      --green: #18a562;
-      --amber: #cc8a00;
-      --card: #ffffff;
-      --line: #e8edf4;
-      --radius: 18px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at 10% 10%, rgba(255, 95, 69, 0.2), transparent 35%),
-        radial-gradient(circle at 90% 20%, rgba(255, 159, 69, 0.22), transparent 30%),
-        linear-gradient(160deg, var(--bg-1), var(--bg-2));
-      min-height: 100vh;
-    }
-
-    .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 18px;
-      display: grid;
-      gap: 14px;
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 16px;
-      box-shadow: 0 14px 30px rgba(0, 18, 45, 0.07);
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 14px;
-      align-items: stretch;
-    }
-
-    .headline {
-      margin: 0;
-      font-size: 1.55rem;
-      line-height: 1.2;
-    }
-
-    .sub {
-      margin-top: 8px;
-      color: var(--muted);
-    }
-
-    .badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #ffe9e3;
-      color: #9e2e1f;
-      font-weight: 600;
-      font-size: 0.82rem;
-    }
-
-    .grid2 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .metric {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid #f2f5fa;
-      font-size: 0.95rem;
-    }
-
-    .metric:last-child { border-bottom: none; }
-
-    .label { color: var(--muted); }
-    .value { font-weight: 650; }
-
-    .big {
-      font-size: 2rem;
-      margin: 2px 0 8px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-
-    .progress {
-      height: 10px;
-      background: #edf1f7;
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 8px;
-    }
-
-    .progress > span {
-      display: block;
-      height: 100%;
-      background: linear-gradient(90deg, #ff5f45, #ffa445);
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 650;
-    }
-
-    .ok { background: #e5f7ee; color: var(--green); }
-    .warn { background: #fff4dc; color: var(--amber); }
-
-    form.inline {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    input, select, button, a.btn {
-      font: inherit;
-      border: 1px solid #d5deea;
-      border-radius: 10px;
-      padding: 9px 11px;
-      background: #fff;
-      text-decoration: none;
-    }
-
-    button, a.btn.primary {
-      background: #12253d;
-      border-color: #12253d;
-      color: #fff;
-      cursor: pointer;
-    }
-
-    ul.plan {
-      margin: 8px 0 0;
-      padding-left: 18px;
-      color: #33455e;
-    }
-
-    ul.plan li { margin: 7px 0; }
-
-    .activity-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      padding: 9px 0;
-      border-bottom: 1px solid #f1f4f8;
-    }
-
-    .activity-row:last-child { border-bottom: none; }
-
-    .tiny { color: var(--muted); font-size: 0.86rem; }
-
-    @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; }
-      .grid2 { grid-template-columns: 1fr; }
-      .big { font-size: 1.7rem; }
-    }
-  </style>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>StrideIQ Dashboard</title>
+  <link rel='stylesheet' href='/static/app.css'>
 </head>
 <body>
-  <main class="wrap">
-    <section class="hero">
-      <article class="card">
-        <h1 class="headline">{{ goal_snapshot.headline }}</h1>
-        <div class="sub">Today is {{ today_date }}. You have {{ goal.days_remaining }} days left for {{ goal.event_name }}.</div>
-        <div class="badge">Target pace: {{ goal.target_pace }}</div>
-
-        <div style="margin-top:14px;" class="metric">
-          <span class="label">How close you are right now</span>
-          <span class="value">{{ goal_snapshot.progress }}%</span>
+  <main class='wrap'>
+    <section class='card'>
+      <div class='inline' style='justify-content:space-between; align-items:center;'>
+        <div>
+          <h1>{{ user.name }} | {{ goal.event_name }}</h1>
+          <div class='sub'>{{ goal.distance_km }} km | Goal {{ goal.goal_time }} | {{ goal.days_remaining }} days remaining</div>
+          <div class='sub'>Target pace: {{ goal.target_pace }}</div>
         </div>
-        <div class="progress"><span style="width: {{ goal_snapshot.progress }}%"></span></div>
-        <div class="sub" style="margin-top:8px;">{{ goal_snapshot.status }}</div>
-      </article>
-
-      <article class="card">
-        <div class="metric" style="padding-top:0;">
-          <span class="label">Athlete</span>
-          <form class="inline" method="get" action="/">
-            <select id="athlete_id" name="athlete_id" onchange="this.form.submit()">
-              {% for athlete in athletes %}
-                <option value="{{ athlete.athlete_id }}" {% if athlete.athlete_id == athlete_id %}selected{% endif %}>{{ athlete.name }}</option>
-              {% endfor %}
-            </select>
-          </form>
+        <div class='inline'>
+          <a class='btn' href='/settings'>Settings</a>
+          <a class='btn' href='/logout'>Logout</a>
         </div>
-
-        {% if live_state.activity_done_today %}
-          <div class="pill ok">Done: You have trained today</div>
-        {% else %}
-          <div class="pill warn">Pending: No activity yet today</div>
-        {% endif %}
-
-        <div class="metric" style="margin-top:10px;">
-          <span class="label">Weekly distance</span>
-          <span class="value">{{ live_state.weekly_km }} km</span>
-        </div>
-        <div class="tiny">Week window: {{ live_state.week_start }} to {{ live_state.week_end }} (Mon-Sun)</div>
-
-        <div style="margin-top:12px;">
-          <a class="btn primary" href="/auth/strava/login?athlete_id={{ athlete_id }}">Connect Strava</a>
-        </div>
-        {% if sync_info and sync_info.status == "ok" %}
-          <div class="tiny" style="margin-top:8px; color:#0f7d48;">Synced {{ sync_info.new_activities }} new activities.</div>
-        {% elif sync_info and sync_info.status == "skipped" %}
-          <div class="tiny" style="margin-top:8px; color:#9b6a00;">Sync skipped: {{ sync_info.reason }}</div>
-        {% elif sync_error %}
-          <div class="tiny" style="margin-top:8px; color:#b6343d;">Sync failed: {{ sync_error }}</div>
-        {% endif %}
-      </article>
+      </div>
     </section>
 
-    <section class="grid2">
-      <article class="card">
-        <h2>Where You Are Now</h2>
+    <section class='grid2'>
+      <article class='card'>
+        <h2>Current Capability</h2>
+        <div class='big'>{{ intel.current_projection if intel else 'No data yet' }}</div>
+        <div class='sub'>Based on recent training load</div>
         {% if intel %}
-          <div class="big">{{ intel.race_projection }}</div>
-          <div class="tiny">Estimated finish if race was today</div>
-          <div class="metric"><span class="label">Goal time</span><span class="value">{{ goal.goal_time }}</span></div>
-          <div class="metric"><span class="label">Difference from goal</span><span class="value">{{ intel.flat_gap }}</span></div>
-          <div class="metric"><span class="label">Goal chance today</span><span class="value">{{ intel.probability }}%</span></div>
-        {% else %}
-          <div class="sub">Sync a few runs first. Then we will estimate your race finish clearly.</div>
+        <div class='metric'><span>Elevation adjusted</span><strong>{{ intel.elevation_adjusted }}</strong></div>
         {% endif %}
       </article>
 
-      <article class="card">
-        <h2>Your Key Run Progress</h2>
-        <div class="metric"><span class="label">Longest run</span><span class="value">{{ milestone.current_long }} km</span></div>
-        <div class="metric"><span class="label">Date of longest run</span><span class="value">{{ milestone.current_long_date or 'Not available yet' }}</span></div>
-        <div class="metric"><span class="label">Next long run target</span><span class="value">{{ milestone.next_target }} km</span></div>
-        <div class="progress"><span style="width: {{ milestone.progress }}%"></span></div>
+      <article class='card'>
+        <h2>Race Day Potential</h2>
+        <div class='big'>{{ intel.race_day_projection if intel else 'No data yet' }}</div>
+        {% if intel %}
+        <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
+        <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
+        <div class='metric'><span>Gap to goal (flat)</span><strong>{{ intel.flat_gap }}</strong></div>
+        <div class='metric'><span>Gap to goal (adjusted)</span><strong>{{ intel.adjusted_gap }}</strong></div>
+        <div class='metric'><span>CTL vs target</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
+        {% endif %}
       </article>
 
-      <article class="card">
-        <h2>What To Do Today</h2>
-        <div class="sub" style="margin-top:0; color:#22334b;">{{ today_message }}</div>
-        <div class="metric" style="margin-top:10px;"><span class="label">Tomorrow</span><span class="value">{{ tomorrow_plan }}</span></div>
+      <article class='card'>
+        <h2>Long Run Progression</h2>
+        <div class='metric'><span>Longest run</span><strong>{{ long_run.longest_run_km }} km</strong></div>
+        <div class='metric'><span>Date</span><strong>{{ long_run.longest_run_date or 'N/A' }}</strong></div>
+        <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone }} km</strong></div>
+        <div class='progress'><span style='width:{{ long_run.progress_pct }}%'></span></div>
       </article>
 
-      <article class="card">
-        <h2>Next 4 Weeks Plan</h2>
-        <ul class="plan">
-          {% for line in next_weeks_plan %}
-            <li>{{ line }}</li>
-          {% endfor %}
-        </ul>
+      <article class='card'>
+        <h2>Today's Training</h2>
+        <div class='big'>{{ today_plan.title }}</div>
+        <div class='metric'><span>Session</span><strong>{{ today_plan.details }}</strong></div>
+        <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
       </article>
 
-      <article class="card">
-        <h2>Last 3 Activities</h2>
-        {% if last_three_activities %}
-          {% for activity in last_three_activities %}
-            <div class="activity-row">
-              <div>
-                <div class="value">{{ activity.distance_km }} km</div>
-                <div class="tiny">{{ activity.date }} | {{ activity.duration }}{% if activity.avg_hr %} | HR {{ activity.avg_hr }}{% endif %}</div>
-              </div>
-              <div class="tiny">Synced</div>
+      <article class='card'>
+        <h2>Weekly Training</h2>
+        <div class='sub'>{{ weekly.week_label }}</div>
+        <div class='metric'><span>Weekly distance</span><strong>{{ weekly.weekly_distance }} km</strong></div>
+        <div class='metric'><span>CTL trend (7d)</span><strong>{{ weekly.ctl_trend }}</strong></div>
+        <div class='metric'><span>Load risk</span><strong>{{ weekly.load_risk }}</strong></div>
+      </article>
+
+      <article class='card'>
+        <h2>Recent Runs</h2>
+        {% if runs %}
+          {% for run in runs %}
+            <div class='metric'>
+              <span>{{ run.date }} | {{ run.distance }} km | {{ run.time }}</span>
+              <strong>{% if run.hr %}HR {{ run.hr }}{% else %}--{% endif %}</strong>
             </div>
           {% endfor %}
         {% else %}
-          <div class="sub">No activities synced yet.</div>
+          <p class='sub'>No synced runs yet.</p>
         {% endif %}
       </article>
-
-      <article class="card">
-        <h2>Coach Message</h2>
-        <div class="sub" style="margin-top:0; color:#22334b;">{{ recommendation }}</div>
-        <div class="tiny" style="margin-top:8px;">Backup guidance: {{ fallback_reco }}</div>
-      </article>
-    </section>
-
-    <section class="card">
-      <h2>Add Another Runner</h2>
-      <form class="inline" method="post" action="/athletes">
-        <input name="name" placeholder="Runner name" required />
-        <button type="submit">Create Profile</button>
-      </form>
     </section>
   </main>
-
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/static/sw.js").catch(() => {});
-      });
-    }
-  </script>
 </body>
 </html>

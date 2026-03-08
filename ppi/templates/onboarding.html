@@ -1,0 +1,38 @@
+﻿<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>StrideIQ Onboarding</title>
+  <link rel='stylesheet' href='/static/app.css'>
+</head>
+<body>
+  <main class='wrap' style='max-width:760px;'>
+    <section class='card'>
+      <h1>Set up your race plan</h1>
+      <p class='sub'>Do this once. You can edit anytime from settings.</p>
+      <p><a class='btn' href='/connect/strava'>Connect Strava</a></p>
+      <form method='post'>
+        <div class='grid2'>
+          <div class='row'><label>Runner name</label><input name='runner_name' value='{{ user.name if user else "" }}' required></div>
+          <div class='row'><label>Race name</label><input name='race_name' value='{{ goal.race_name if goal else "" }}' required></div>
+          <div class='row'><label>Race date</label><input type='date' name='race_date' value='{{ goal.race_date if goal else "" }}' required></div>
+          <div class='row'><label>Race distance (km)</label><input name='race_distance' type='number' step='0.1' value='{{ goal.race_distance if goal else "" }}' required></div>
+          <div class='row'><label>Goal time (HH:MM:SS)</label><input name='goal_time' value='{{ goal.goal_time if goal else "" }}' required></div>
+          <div class='row'>
+            <label>Elevation type</label>
+            <select name='elevation_type'>
+              <option value='flat'>Flat</option>
+              <option value='moderate'>Moderate</option>
+              <option value='hilly'>Hilly</option>
+              <option value='mountain'>Mountain</option>
+            </select>
+          </div>
+          <div class='row'><label>Current PB (optional)</label><input name='current_pb' value='{{ goal.current_pb if goal else "" }}'></div>
+        </div>
+        <button type='submit'>Save and continue</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

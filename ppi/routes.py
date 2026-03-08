@@ -1,28 +1,23 @@
-﻿from datetime import date
+﻿from functools import wraps
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from .repositories import (
-    create_athlete,
-    ensure_default_athlete,
-    fetch_active_goal,
-    fetch_all_athletes,
-    fetch_athlete,
-    fetch_recent_metrics,
-    insert_goal,
+    create_user,
+    get_goal,
+    get_user_by_email,
+    get_user_by_id,
+    save_goal,
+    update_user_name,
 )
-from .services.ai_recommendation_service import generate_ai_recommendation
 from .services.analytics_service import (
     build_goal_context,
-    estimate_race_projection,
-    get_recent_activity_summaries,
-    goal_snapshot,
-    live_training_state,
-    milestone_progress,
-    next_few_weeks_plan,
-    rule_based_recommendation,
-    today_focus,
-    tomorrow_activity,
+    long_run_progress,
+    performance_intelligence,
+    recent_runs,
+    today_training,
+    weekly_training,
 )
 from .services.strava_oauth_service import (
     exchange_code_for_token,
@@ -30,148 +25,193 @@ from .services.strava_oauth_service import (
     get_authorize_url,
     link_oauth_identity,
 )
-from .services.strava_service import sync_athlete_from_strava
+from .services.strava_service import sync_strava_data
 
 web = Blueprint("web", __name__)
 
 
-def _resolve_athlete_id(raw_id):
-    athletes = fetch_all_athletes()
-    if not athletes:
-        return ensure_default_athlete()
-
-    if raw_id:
-        try:
-            athlete_id = int(raw_id)
-            if fetch_athlete(athlete_id):
-                return athlete_id
-        except ValueError:
-            pass
-
-    return athletes[0]["athlete_id"]
+def _current_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    return get_user_by_id(user_id)
 
 
-@web.route("/", methods=["GET"])
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not _current_user():
+            return redirect(url_for("web.login"))
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+@web.route("/register", methods=["GET", "POST"])
+def register():
+    error = None
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        if not name or not email or len(password) < 6:
+            error = "Please enter valid details (password min 6 chars)."
+        elif get_user_by_email(email):
+            error = "Email already exists. Please login."
+        else:
+            user_id = create_user(name, email, generate_password_hash(password))
+            session["user_id"] = user_id
+            return redirect(url_for("web.onboarding"))
+
+    return render_template("register.html", error=error)
+
+
+@web.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        user = get_user_by_email(email)
+        if not user or not check_password_hash(user["password_hash"], password):
+            error = "Invalid email or password"
+        else:
+            session["user_id"] = user["id"]
+            return redirect(url_for("web.dashboard"))
+
+    return render_template("login.html", error=error)
+
+
+@web.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("web.login"))
+
+
+@web.route("/")
+@login_required
 def dashboard():
-    ensure_default_athlete()
-    athlete_id = _resolve_athlete_id(request.args.get("athlete_id"))
+    user = _current_user()
 
-    sync_info = None
-    sync_error = None
-    try:
-        sync_info = sync_athlete_from_strava(
-            athlete_id=athlete_id,
-            pages=current_app.config.get("STRAVA_FETCH_PAGES", 3),
-        )
-    except Exception as exc:
-        sync_error = str(exc)
+    sync_info = sync_strava_data(user_id=user["id"], pages=current_app.config.get("STRAVA_FETCH_PAGES", 3))
 
-    goal = fetch_active_goal(athlete_id)
+    goal = get_goal(user["id"])
     if not goal:
-        return redirect(url_for("web.setup", athlete_id=athlete_id))
+        return redirect(url_for("web.onboarding"))
 
     goal_context = build_goal_context(goal)
-    intel = estimate_race_projection(athlete_id, goal_context)
-    milestone = milestone_progress(athlete_id)
-    live_state = live_training_state(athlete_id)
-    recent_metrics = fetch_recent_metrics(athlete_id, limit=14)
-    last_three_activities = get_recent_activity_summaries(athlete_id, limit=3)
-
-    recommendation = generate_ai_recommendation(
-        goal=goal_context,
-        intel=intel,
-        milestone=milestone,
-        recent_metrics=recent_metrics,
-    )
-    fallback_reco = rule_based_recommendation(intel)
-    tomorrow_plan = tomorrow_activity(intel, live_state["activity_done_today"])
+    intel = performance_intelligence(user["id"], goal_context)
 
     return render_template(
         "dashboard.html",
-        athletes=fetch_all_athletes(),
-        athlete_id=athlete_id,
+        user=user,
         goal=goal_context,
         intel=intel,
-        milestone=milestone,
-        live_state=live_state,
-        recommendation=recommendation,
-        fallback_reco=fallback_reco,
-        tomorrow_plan=tomorrow_plan,
-        today_message=today_focus(live_state, intel),
-        goal_snapshot=goal_snapshot(goal_context, intel, milestone),
-        next_weeks_plan=next_few_weeks_plan(intel),
-        last_three_activities=last_three_activities,
-        today_date=date.today().isoformat(),
+        long_run=long_run_progress(user["id"]),
+        today_plan=today_training(intel),
+        weekly=weekly_training(user["id"]),
+        runs=recent_runs(user["id"], limit=5),
         sync_info=sync_info,
-        sync_error=sync_error,
     )
 
 
-@web.route("/athletes", methods=["POST"])
-def add_athlete():
-    name = request.form.get("name", "").strip()
-    if not name:
-        return redirect(url_for("web.dashboard"))
+@web.route("/onboarding", methods=["GET", "POST"])
+@login_required
+def onboarding():
+    user = _current_user()
 
-    athlete_id = create_athlete(name)
-    return redirect(url_for("web.setup", athlete_id=athlete_id))
+    if request.method == "POST":
+        runner_name = request.form.get("runner_name", "").strip()
+        race_name = request.form.get("race_name", "").strip()
+        race_date = request.form.get("race_date", "").strip()
+        goal_time = request.form.get("goal_time", "").strip()
+        elevation_type = request.form.get("elevation_type", "flat").strip()
+        current_pb = request.form.get("current_pb", "").strip()
+
+        try:
+            race_distance = float(request.form.get("race_distance", "0"))
+        except ValueError:
+            race_distance = 0
+
+        if runner_name and race_name and race_date and goal_time and race_distance > 0:
+            update_user_name(user["id"], runner_name)
+            save_goal(
+                user_id=user["id"],
+                race_name=race_name,
+                race_distance=race_distance,
+                goal_time=goal_time,
+                race_date=race_date,
+                elevation_type=elevation_type,
+                current_pb=current_pb,
+            )
+            return redirect(url_for("web.dashboard"))
+
+    return render_template("onboarding.html", user=user, goal=get_goal(user["id"]))
 
 
-@web.route("/setup", methods=["GET", "POST"])
-def setup():
-    ensure_default_athlete()
-    athlete_id = _resolve_athlete_id(request.args.get("athlete_id"))
+@web.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    user = _current_user()
+    goal = get_goal(user["id"])
 
     if request.method == "POST":
         race_name = request.form.get("race_name", "").strip()
         race_date = request.form.get("race_date", "").strip()
         goal_time = request.form.get("goal_time", "").strip()
-        elevation = request.form.get("elevation", "flat").strip()
-
+        elevation_type = request.form.get("elevation_type", "flat").strip()
+        current_pb = request.form.get("current_pb", "").strip()
         try:
-            distance = float(request.form.get("distance", "0"))
+            race_distance = float(request.form.get("race_distance", "0"))
         except ValueError:
-            distance = 0
+            race_distance = 0
 
-        if race_name and race_date and goal_time and distance > 0:
-            insert_goal(
-                athlete_id=athlete_id,
-                event_name=race_name,
-                distance_km=distance,
+        if race_name and race_date and goal_time and race_distance > 0:
+            save_goal(
+                user_id=user["id"],
+                race_name=race_name,
+                race_distance=race_distance,
                 goal_time=goal_time,
                 race_date=race_date,
-                elevation_type=elevation,
+                elevation_type=elevation_type,
+                current_pb=current_pb,
             )
-            return redirect(url_for("web.dashboard", athlete_id=athlete_id))
+            return redirect(url_for("web.dashboard"))
 
-    return render_template("setup.html", athletes=fetch_all_athletes(), athlete_id=athlete_id)
+    return render_template("settings.html", user=user, goal=goal)
 
 
-@web.route("/auth/strava/login", methods=["GET"])
+@web.route("/connect/strava")
+@login_required
 def strava_login():
-    athlete_id = _resolve_athlete_id(request.args.get("athlete_id"))
+    user = _current_user()
     state = generate_oauth_state()
     session["strava_state"] = state
-    session["oauth_athlete_id"] = athlete_id
+    session["oauth_user_id"] = user["id"]
     return redirect(get_authorize_url(state))
 
 
-@web.route("/auth/strava/callback", methods=["GET"])
+@web.route("/auth/strava/callback")
 def strava_callback():
     expected = session.get("strava_state")
     received = request.args.get("state")
     if not expected or expected != received:
-        return redirect(url_for("web.dashboard"))
+        return redirect(url_for("web.login"))
 
+    user_id = session.get("oauth_user_id")
     code = request.args.get("code")
-    athlete_id = session.get("oauth_athlete_id")
-    if not code or not athlete_id:
-        return redirect(url_for("web.dashboard"))
+    if not user_id or not code:
+        return redirect(url_for("web.login"))
 
     payload = exchange_code_for_token(code)
-    link_oauth_identity(int(athlete_id), payload)
+    link_oauth_identity(user_id, payload)
 
+    session["user_id"] = user_id
     session.pop("strava_state", None)
-    session.pop("oauth_athlete_id", None)
+    session.pop("oauth_user_id", None)
 
-    return redirect(url_for("web.dashboard", athlete_id=athlete_id))
+    if not get_goal(user_id):
+        return redirect(url_for("web.onboarding"))
+    return redirect(url_for("web.dashboard"))
