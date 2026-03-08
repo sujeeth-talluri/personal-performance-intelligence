@@ -321,6 +321,11 @@ def _metrics_layer(user_id, goal_ctx):
         },
     ]
 
+    readiness_progress = int(
+        round((sum(min(float(i["done"]) / float(i["min"]), 1.0) for i in readiness_items) / len(readiness_items)) * 100)
+    )
+    next_requirement = next((i["line3"] for i in readiness_items if not i["ready"] and i.get("line3")), None)
+
     latest_metric = fetch_latest_metric(user_id)
     ctl_real = round(float(latest_metric.ctl), 1) if latest_metric else 0.0
 
@@ -332,6 +337,8 @@ def _metrics_layer(user_id, goal_ctx):
         "ctl_proxy": ctl_proxy,
         "ctl_real": ctl_real,
         "readiness": {"ready": all(i["ready"] for i in readiness_items), "items": readiness_items},
+        "readiness_progress_pct": readiness_progress,
+        "next_requirement": next_requirement,
         "weekly": {
             "weekly_goal_km": weekly_goal_km,
             "completed_km": completed_km,
@@ -468,9 +475,13 @@ def performance_intelligence(user_id):
 
     training_status = {
         "title": "Training Status",
-        "summary": "Prediction ready." if metrics["readiness"]["ready"] else "Prediction not unlocked yet.",
+        "summary": "Prediction unlocking soon" if not metrics["readiness"]["ready"] else "Prediction ready",
         "detail": prediction["note"],
+        "progress_pct": metrics["readiness_progress_pct"],
+        "next_requirement": metrics["next_requirement"],
     }
+
+    ctl_progress_pct = int(max(0, min(100, (metrics["ctl_real"] / max(1.0, target_ctl)) * 100)))
 
     return {
         "goal": goal_ctx,
@@ -483,6 +494,7 @@ def performance_intelligence(user_id):
         "insufficient_data": not prediction["valid"],
         "current_ctl": metrics["ctl_real"],
         "target_ctl": target_ctl,
+        "ctl_progress_pct": ctl_progress_pct,
         "weekly": weekly,
         "prediction_readiness": metrics["readiness"],
         "endurance": metrics["endurance"],
@@ -543,12 +555,15 @@ def recent_runs(user_id, limit=5):
     rows = fetch_recent_activities(user_id, limit=30)
     out = []
     for a in rows:
-        if (a.activity_type or "").lower() not in {"run", "trailrun"}:
+        t = (a.activity_type or "").lower()
+        if t not in {"run", "trailrun"}:
             continue
         pace = (a.moving_time / a.distance_km) if a.distance_km > 0 else 0
+        dt = a.date.date()
         out.append(
             {
-                "date": a.date.date().isoformat(),
+                "date": dt.isoformat(),
+                "date_label": f"{dt.strftime('%b')} {dt.day}",
                 "distance": round(float(a.distance_km), 1),
                 "time": _fmt_hms(a.moving_time),
                 "pace": f"{int(pace//60)}:{int(pace%60):02d}/km" if pace else "--",

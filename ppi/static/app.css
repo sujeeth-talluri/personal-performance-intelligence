@@ -88,11 +88,7 @@ h2 { margin: 0 0 8px; font-size: 1rem; }
   gap: 12px;
 }
 
-.icon-actions {
-  display: flex;
-  gap: 8px;
-}
-
+.icon-actions { display: flex; gap: 8px; }
 .icon-btn {
   width: 34px;
   height: 34px;
@@ -105,6 +101,31 @@ h2 { margin: 0 0 8px; font-size: 1rem; }
   text-decoration: none;
   color: var(--text);
 }
+
+.ladder-item {
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.ladder-item.done {
+  border-color: rgba(105,227,165,.5);
+  color: var(--ok);
+}
+.ladder-item.next {
+  border-color: rgba(246,198,103,.6);
+  color: var(--warn);
+}
+
+.run-item {
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.run-item:last-child { margin-bottom: 0; }
+.run-line { line-height: 1.3; }
 
 .coaching {
   border-color: rgba(110,241,166,.45);
