@@ -24,30 +24,26 @@
 
     <section class='grid2'>
       <article class='card'>
-        <h2>Current Capability</h2>
+        <h2>Current Capability (Flat Course)</h2>
         <div class='big'>{{ intel.current_projection if intel else 'No data yet' }}</div>
-        <div class='sub'>Based on your last 8 weeks of training runs (race-like efforts excluded)</div>
-        {% if intel %}
-          <div class='metric'><span>Elevation adjusted</span><strong>{{ intel.elevation_adjusted }}</strong></div>
-        {% endif %}
+        <div class='sub'>Based on recent training load and long-run performance.</div>
       </article>
 
       <article class='card'>
-        <h2>Race Day Potential</h2>
+        <h2>{{ goal.race_projection_label }}</h2>
         <div class='big'>{{ intel.race_day_projection if intel else 'No data yet' }}</div>
         {% if intel %}
           <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
           <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
-          <div class='metric'><span>Gap to goal (flat)</span><strong>{{ intel.flat_gap }}</strong></div>
-          <div class='metric'><span>Gap to goal (adjusted)</span><strong>{{ intel.adjusted_gap }}</strong></div>
-          <div class='metric'><span>CTL vs target</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
+          <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
+          <div class='metric'><span>CTL (Chronic Training Load)</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
           <div class='sub'>{{ intel.ctl_description }}</div>
         {% endif %}
       </article>
 
       <article class='card'>
         <h2>Long Run Progression</h2>
-        <div class='sub'>Only recent training window (last 8 weeks)</div>
+        <div class='sub'>Recent window: 8 weeks | Durability window: 16 weeks</div>
         <div class='metric'><span>Longest run</span><strong>{{ long_run.longest_run_km }} km</strong></div>
         <div class='metric'><span>Date</span><strong>{{ long_run.longest_run_date or 'N/A' }}</strong></div>
         <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone }} km</strong></div>
@@ -70,7 +66,7 @@
         <h2>Weekly Training</h2>
         <div class='sub'>{{ weekly.week_label }}</div>
         <div class='metric'><span>Weekly distance</span><strong>{{ weekly.weekly_distance }} km</strong></div>
-        <div class='metric'><span>CTL trend (7d)</span><strong>{{ weekly.ctl_trend }}</strong></div>
+        <div class='metric'><span>CTL trend</span><strong>{{ weekly.ctl_trend }}</strong></div>
         <div class='metric'><span>Load risk</span><strong>{{ weekly.load_risk }}</strong></div>
       </article>
 

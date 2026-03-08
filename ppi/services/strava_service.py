@@ -40,6 +40,30 @@ def _starting_load(user_id):
     return float(latest["atl"] or 0), float(latest["ctl"] or 0)
 
 
+def _is_training_run(activity):
+    distance_km = (activity.get("distance") or 0) / 1000
+    if distance_km >= 42.2:
+        return False
+
+    sport_type = str(activity.get("sport_type") or "").lower()
+    act_type = str(activity.get("type") or "").lower()
+    name = str(activity.get("name") or "").lower()
+    workout_type = activity.get("workout_type")
+
+    if sport_type and sport_type != "run":
+        return False
+    if act_type in {"walk", "hike", "weighttraining", "workout"}:
+        return False
+    if "walk" in name or "strength" in name or "gym" in name:
+        return False
+    if "race" in name:
+        return False
+    if workout_type == 1:  # Strava race workout marker
+        return False
+
+    return True
+
+
 def sync_strava_data(user_id, pages=3):
     access_token = refresh_access_token(user_id)
     if not access_token:
@@ -52,15 +76,17 @@ def sync_strava_data(user_id, pages=3):
         after_timestamp = int(time.mktime(latest_dt.timetuple())) + 1
 
     fetched = fetch_activities(access_token, pages=pages, after_timestamp=after_timestamp)
-    if not fetched:
+    filtered = [a for a in fetched if _is_training_run(a)]
+
+    if not filtered:
         return {"status": "ok", "reason": "up_to_date", "new_activities": 0}
 
-    fetched.sort(key=lambda item: item["start_date"])
+    filtered.sort(key=lambda item: item["start_date"])
 
     stress_by_date = {}
     activity_enriched = []
 
-    for activity in fetched:
+    for activity in filtered:
         run_date = datetime.strptime(activity["start_date"], "%Y-%m-%dT%H:%M:%SZ").date()
         stress = compute_stress(activity)
         stress_by_date[run_date] = stress_by_date.get(run_date, 0.0) + stress
@@ -88,4 +114,4 @@ def sync_strava_data(user_id, pages=3):
             readiness=readiness,
         )
 
-    return {"status": "ok", "reason": "synced", "new_activities": len(fetched)}
+    return {"status": "ok", "reason": "synced", "new_activities": len(filtered)}

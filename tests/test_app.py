@@ -1,7 +1,6 @@
 ﻿import pytest
 
 from ppi import create_app
-from ppi.repositories import create_user
 
 
 class TestConfig:
@@ -81,7 +80,7 @@ def test_onboarding_then_dashboard(client):
 
     dash = client.get("/", follow_redirects=False)
     assert dash.status_code == 200
-    assert b"Race Day Potential" in dash.data
+    assert b"Race Day Projection" in dash.data
 
 
 def test_oauth_login_redirect(client):

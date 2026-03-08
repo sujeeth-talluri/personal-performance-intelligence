@@ -92,10 +92,12 @@ def build_goal_context(goal_row):
 
     elevation_map = {
         "flat": 1.00,
-        "moderate": 1.02,
-        "hilly": 1.04,
-        "mountain": 1.08,
+        "moderate": 1.03,
+        "hilly": 1.06,
+        "mountain": 1.10,
     }
+
+    elevation_type = goal_row["elevation_type"]
 
     return {
         "event_name": goal_row["race_name"],
@@ -105,7 +107,9 @@ def build_goal_context(goal_row):
         "race_date": goal_row["race_date"],
         "days_remaining": days_remaining,
         "target_pace": f"{int(pace_sec // 60)}:{int(pace_sec % 60):02d} / km",
-        "elevation_factor": elevation_map.get(goal_row["elevation_type"], 1.0),
+        "elevation_factor": elevation_map.get(elevation_type, 1.02),
+        "elevation_type": elevation_type,
+        "race_projection_label": f"Race Day Projection ({goal_row['race_name']} Course)",
     }
 
 
@@ -126,27 +130,23 @@ def _recent_training_runs(rows, goal_distance, lookback_days=56):
 
         pace = duration / distance
 
-        # Remove race-like efforts/outliers: ultra long or near-race simulation runs.
+        # Keep only meaningful training runs and exclude likely race efforts/outliers.
+        if distance < 5 or distance >= 42.2:
+            continue
         if distance >= max(35, goal_distance * 0.8):
             continue
-        if distance >= min(goal_distance * 0.75, 32):
-            continue
-
-        # Keep only useful training runs for projection.
-        if distance < 6 or distance > min(32, goal_distance * 0.7):
-            continue
-
-        # Exclude very aggressive effort that likely reflects race day, not training baseline.
         if distance >= 10 and pace < 220:
             continue
 
-        runs.append({
-            "date": run_date,
-            "distance": distance,
-            "duration": duration,
-            "pace": pace,
-            "ctl": float(row["ctl"] or 0),
-        })
+        runs.append(
+            {
+                "date": run_date,
+                "distance": distance,
+                "duration": duration,
+                "pace": pace,
+                "ctl": float(row["ctl"] or 0),
+            }
+        )
 
     return runs
 
@@ -166,31 +166,32 @@ def performance_intelligence(user_id, goal_context):
 
     current_ctl = float(latest["ctl"] or 0)
 
-    training_runs = _recent_training_runs(rows, goal_distance, lookback_days=56)
-    if not training_runs:
+    recent_runs = _recent_training_runs(rows, goal_distance, lookback_days=56)
+    if len(recent_runs) < 2:
         return None
 
-    # Weighted by distance so a strong 18 km run matters more than an 8 km run.
-    training_runs.sort(key=lambda r: r["distance"], reverse=True)
-    anchors = training_runs[:6]
+    recent_runs.sort(key=lambda r: r["distance"], reverse=True)
 
-    weighted_distance = sum(r["distance"] for r in anchors)
-    weighted_pace = sum(r["pace"] * r["distance"] for r in anchors) / weighted_distance
-    longest_recent = max(r["distance"] for r in anchors)
+    long_run_candidates = [r for r in recent_runs if r["distance"] >= max(10, goal_distance * 0.35)]
+    long_run_pace = (
+        sum(r["pace"] for r in long_run_candidates[:3]) / len(long_run_candidates[:3])
+        if long_run_candidates
+        else sum(r["pace"] for r in recent_runs[:3]) / len(recent_runs[:3])
+    )
 
-    long_ratio = longest_recent / goal_distance if goal_distance else 0
-    if long_ratio < 0.4:
-        endurance_penalty = 0.18
-    elif long_ratio < 0.5:
-        endurance_penalty = 0.14
-    elif long_ratio < 0.6:
-        endurance_penalty = 0.10
-    elif long_ratio < 0.7:
-        endurance_penalty = 0.07
-    else:
-        endurance_penalty = 0.04
+    average_run_pace = sum(r["pace"] for r in recent_runs) / len(recent_runs)
 
-    current_projection_sec = weighted_pace * goal_distance * (1 + endurance_penalty)
+    tempo_candidates = [r for r in recent_runs if 8 <= r["distance"] <= 16]
+    tempo_estimate = (
+        sum(r["pace"] for r in tempo_candidates[:5]) / len(tempo_candidates[:5])
+        if tempo_candidates
+        else average_run_pace * 0.97
+    )
+
+    base_pace = (0.4 * long_run_pace) + (0.3 * average_run_pace) + (0.3 * tempo_estimate)
+
+    longest_recent = max(r["distance"] for r in recent_runs)
+    distance_readiness = min(1.0, longest_recent / max(goal_distance * 0.65, 12))
 
     if goal_distance <= 10:
         target_ctl = 45
@@ -201,57 +202,70 @@ def performance_intelligence(user_id, goal_context):
     else:
         target_ctl = 75
 
-    ctl_ratio = min(1.25, max(0.3, current_ctl / target_ctl if target_ctl else 1.0))
+    ctl_ratio = min(1.25, max(0.35, current_ctl / target_ctl if target_ctl else 1.0))
+
+    current_projection_flat_sec = base_pace * goal_distance * (1 + (1 - distance_readiness) * 0.08)
+
     weeks_remaining = days_remaining / 7.0
-    ctl_gap_ratio = max(0.0, (target_ctl - current_ctl) / target_ctl)
-
-    # Improvement can happen if weeks remain and training load can still build.
-    potential_improvement = min(0.12, (weeks_remaining * 0.008) + (ctl_gap_ratio * 0.05))
+    improvement = min(0.12, (weeks_remaining * 0.006) + (max(0.0, 1 - ctl_ratio) * 0.05))
     if weeks_remaining < 2:
-        potential_improvement *= 0.3
+        improvement *= 0.3
 
-    race_day_projection_sec = current_projection_sec * (1 - potential_improvement)
-    adjusted_projection = race_day_projection_sec * goal_context["elevation_factor"]
+    race_day_flat_sec = current_projection_flat_sec * (1 - improvement)
 
-    flat_gap_sec = race_day_projection_sec - goal_seconds
-    adjusted_gap_sec = adjusted_projection - goal_seconds
+    # Race-day projection must respect selected race course context.
+    race_day_course_sec = race_day_flat_sec * max(1.0, goal_context["elevation_factor"])
 
-    consistency = min(1.0, len(training_runs) / 16.0)
-    pace_score = max(0.0, 1.0 - max(0.0, flat_gap_sec) / (goal_seconds * 0.25))
+    # Monotonic course rule: flat <= moderate <= hilly
+    if race_day_course_sec < race_day_flat_sec:
+        race_day_course_sec = race_day_flat_sec
+
+    gap_sec = race_day_course_sec - goal_seconds
+
+    weekly_avg_km = 0.0
+    if recent_runs:
+        window_days = 56
+        total_km = sum(r["distance"] for r in recent_runs)
+        weekly_avg_km = (total_km / window_days) * 7
+
+    consistency = min(1.0, len(recent_runs) / 24.0)
+    pace_score = max(0.0, 1.0 - max(0.0, gap_sec) / (goal_seconds * 0.22))
     ctl_score = min(1.0, ctl_ratio)
 
-    probability = int(10 + (pace_score * 50) + (ctl_score * 25) + (consistency * 15))
+    probability = int((pace_score * 55) + (ctl_score * 25) + (consistency * 20))
     probability = max(5, min(probability, 95))
 
     return {
-        "current_projection": _fmt_hms(current_projection_sec),
-        "race_day_projection": _fmt_hms(race_day_projection_sec),
-        "elevation_adjusted": _fmt_hms(adjusted_projection),
+        "current_projection": _fmt_hms(current_projection_flat_sec),
+        "race_day_projection": _fmt_hms(race_day_course_sec),
         "probability": probability,
-        "flat_gap": _fmt_gap(flat_gap_sec),
-        "adjusted_gap": _fmt_gap(adjusted_gap_sec),
+        "gap_to_goal": _fmt_gap(gap_sec),
         "current_ctl": round(current_ctl, 1),
         "target_ctl": target_ctl,
-        "ctl_description": "CTL is your training fitness score from recent weeks. Higher CTL usually means better endurance base.",
+        "ctl_description": "CTL (Chronic Training Load) represents your long-term training fitness based on recent training stress. Higher CTL usually indicates stronger endurance capacity.",
+        "weekly_avg_km": round(weekly_avg_km, 1),
     }
 
 
 def long_run_progress(user_id):
     rows = fetch_all_metrics(user_id)
     today = date.today()
-    since = today - timedelta(days=56)
+    recent_since = today - timedelta(days=56)
+    durability_since = today - timedelta(days=112)
 
     recent_runs = []
+    durability_runs = []
+
     for row in rows:
         run_date = _parse_timestamp(row["timestamp"]).date()
-        if run_date < since:
-            continue
-
         distance = float(row["distance_km"] or 0)
-        if distance <= 0 or distance >= 35:
+        if distance <= 0 or distance >= 42.2:
             continue
 
-        recent_runs.append((distance, run_date))
+        if run_date >= recent_since:
+            recent_runs.append((distance, run_date))
+        if run_date >= durability_since:
+            durability_runs.append((distance, run_date))
 
     if not recent_runs:
         return {
@@ -259,6 +273,7 @@ def long_run_progress(user_id):
             "longest_run_date": None,
             "next_milestone": 8,
             "progress_pct": 0,
+            "durability_longest_km": round(max([d for d, _ in durability_runs], default=0.0), 1),
         }
 
     longest_run_km, longest_run_date = max(recent_runs, key=lambda x: x[0])
@@ -277,6 +292,7 @@ def long_run_progress(user_id):
         "longest_run_date": longest_run_date.isoformat(),
         "next_milestone": next_milestone,
         "progress_pct": min(pct, 100),
+        "durability_longest_km": round(max([d for d, _ in durability_runs], default=0.0), 1),
     }
 
 
@@ -306,11 +322,11 @@ def weekly_training(user_id):
 
     latest_tsb = float(latest["tsb"] or 0) if latest else 0
     if latest_tsb < -20:
-        load_risk = "High"
+        load_risk = "Red"
     elif latest_tsb < -10:
-        load_risk = "Moderate"
+        load_risk = "Yellow"
     else:
-        load_risk = "Low"
+        load_risk = "Green"
 
     activity_done_today = False
     if latest:
@@ -331,12 +347,12 @@ def today_training(intel):
 
     p = intel["probability"]
     if p < 40:
-        return {"title": "Aerobic Run", "details": "8-12 km easy", "purpose": "Build durability"}
+        return {"title": "Aerobic Run", "details": "12-16 km easy", "purpose": "Build aerobic endurance and durability."}
     if p < 60:
-        return {"title": "Long Run", "details": "14-20 km steady aerobic", "purpose": "Improve endurance"}
+        return {"title": "Long Run", "details": "16-22 km steady", "purpose": "Improve endurance and long-run confidence."}
     if p < 75:
-        return {"title": "Tempo Session", "details": "5-8 km threshold", "purpose": "Raise race pace"}
-    return {"title": "Race Specific", "details": "Marathon-pace intervals", "purpose": "Sharpen race form"}
+        return {"title": "Tempo Session", "details": "6-10 km comfortably hard", "purpose": "Improve sustained race pace."}
+    return {"title": "Race Specific", "details": "Marathon pace segments", "purpose": "Sharpen race execution."}
 
 
 def recent_runs(user_id, limit=5):
