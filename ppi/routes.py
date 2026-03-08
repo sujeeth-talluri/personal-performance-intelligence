@@ -36,9 +36,9 @@ from .services.strava_service import sync_strava_data
 
 web = Blueprint("web", __name__)
 
+
 def _utcnow_naive():
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
 
 
 def _current_user():
@@ -89,9 +89,12 @@ def register():
         elif get_user_by_email(email):
             error = "Email already exists. Please login."
         else:
-            user_id = create_user(name, email, generate_password_hash(password))
-            session["user_id"] = user_id
-            return redirect(url_for("web.onboarding"))
+            try:
+                user_id = create_user(name, email, generate_password_hash(password))
+                session["user_id"] = user_id
+                return redirect(url_for("web.onboarding"))
+            except Exception:
+                error = "Unable to create account right now. Please try again."
 
     return render_template("register.html", error=error)
 
@@ -194,6 +197,7 @@ def dashboard():
 @login_required
 def onboarding():
     user = _current_user()
+    error = None
 
     if request.method == "POST":
         runner_name = request.form.get("runner_name", "").strip()
@@ -209,19 +213,22 @@ def onboarding():
             race_distance = 0
 
         if runner_name and race_name and race_date and goal_time and race_distance > 0:
-            update_user_name(user.id, runner_name)
-            save_goal(
-                user_id=user.id,
-                race_name=race_name,
-                race_distance=race_distance,
-                goal_time=goal_time,
-                race_date=race_date,
-                elevation_type=elevation_type,
-                personal_best=personal_best,
-            )
-            return redirect(url_for("web.dashboard"))
+            try:
+                update_user_name(user.id, runner_name)
+                save_goal(
+                    user_id=user.id,
+                    race_name=race_name,
+                    race_distance=race_distance,
+                    goal_time=goal_time,
+                    race_date=race_date,
+                    elevation_type=elevation_type,
+                    personal_best=personal_best,
+                )
+                return redirect(url_for("web.dashboard"))
+            except Exception:
+                error = "Unable to save goal right now. Please try again."
 
-    return render_template("onboarding.html", user=user, goal=get_goal(user.id))
+    return render_template("onboarding.html", user=user, goal=get_goal(user.id), error=error)
 
 
 @web.route("/settings", methods=["GET", "POST"])
@@ -229,6 +236,7 @@ def onboarding():
 def settings():
     user = _current_user()
     goal = get_goal(user.id)
+    error = None
 
     if request.method == "POST":
         race_name = request.form.get("race_name", "").strip()
@@ -243,18 +251,21 @@ def settings():
             race_distance = 0
 
         if race_name and race_date and goal_time and race_distance > 0:
-            save_goal(
-                user_id=user.id,
-                race_name=race_name,
-                race_distance=race_distance,
-                goal_time=goal_time,
-                race_date=race_date,
-                elevation_type=elevation_type,
-                personal_best=personal_best,
-            )
-            return redirect(url_for("web.dashboard"))
+            try:
+                save_goal(
+                    user_id=user.id,
+                    race_name=race_name,
+                    race_distance=race_distance,
+                    goal_time=goal_time,
+                    race_date=race_date,
+                    elevation_type=elevation_type,
+                    personal_best=personal_best,
+                )
+                return redirect(url_for("web.dashboard"))
+            except Exception:
+                error = "Unable to update settings right now. Please try again."
 
-    return render_template("settings.html", user=user, goal=goal)
+    return render_template("settings.html", user=user, goal=goal, error=error)
 
 
 @web.route("/connect/strava")
@@ -289,5 +300,3 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
-
-

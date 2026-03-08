@@ -4,10 +4,18 @@ from .extensions import db
 from .models import Activity, Goal, Metric, PasswordReset, PredictionHistory, StravaToken, User
 
 
+def _commit():
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+
 def create_user(name, email, password_hash):
     user = User(name=name.strip(), email=email.strip().lower(), password_hash=password_hash)
     db.session.add(user)
-    db.session.commit()
+    _commit()
     return user.id
 
 
@@ -23,7 +31,7 @@ def update_user_name(user_id, name):
     user = get_user_by_id(user_id)
     if user:
         user.name = name.strip()
-        db.session.commit()
+        _commit()
 
 
 def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation_type, personal_best):
@@ -49,7 +57,7 @@ def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation
         )
         db.session.add(goal)
 
-    db.session.commit()
+    _commit()
 
 
 def get_goal(user_id):
@@ -72,7 +80,7 @@ def save_strava_tokens(user_id, athlete_id, access_token, refresh_token, expires
             expires_at=int(expires_at),
         )
         db.session.add(token)
-    db.session.commit()
+    _commit()
 
 
 def get_strava_token(user_id):
@@ -152,7 +160,7 @@ def fetch_latest_metric(user_id):
 def create_password_reset(user_id, token, expires_at):
     row = PasswordReset(user_id=user_id, token=token, expires_at=expires_at)
     db.session.add(row)
-    db.session.commit()
+    _commit()
 
 
 def get_password_reset(token):
@@ -163,20 +171,20 @@ def consume_password_reset(token):
     row = PasswordReset.query.filter_by(token=token).first()
     if row:
         db.session.delete(row)
-        db.session.commit()
+        _commit()
 
 
 def update_password(user_id, password_hash):
     user = get_user_by_id(user_id)
     if user:
         user.password_hash = password_hash
-        db.session.commit()
+        _commit()
 
 
 def save_prediction(user_id, projection_seconds):
     row = PredictionHistory(user_id=user_id, projection_seconds=projection_seconds)
     db.session.add(row)
-    db.session.commit()
+    _commit()
 
 
 def get_latest_prediction(user_id):
@@ -184,5 +192,4 @@ def get_latest_prediction(user_id):
 
 
 def commit_all():
-    db.session.commit()
-
+    _commit()
