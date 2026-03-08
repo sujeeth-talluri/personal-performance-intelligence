@@ -103,6 +103,9 @@ def dashboard():
 
     goal_context = build_goal_context(goal)
     intel = performance_intelligence(user["id"], goal_context)
+    weekly = weekly_training(user["id"])
+
+    show_today_plan = not weekly["activity_done_today"]
 
     return render_template(
         "dashboard.html",
@@ -111,7 +114,8 @@ def dashboard():
         intel=intel,
         long_run=long_run_progress(user["id"]),
         today_plan=today_training(intel),
-        weekly=weekly_training(user["id"]),
+        show_today_plan=show_today_plan,
+        weekly=weekly,
         runs=recent_runs(user["id"], limit=5),
         sync_info=sync_info,
     )

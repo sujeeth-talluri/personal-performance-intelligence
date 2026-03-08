@@ -26,9 +26,9 @@
       <article class='card'>
         <h2>Current Capability</h2>
         <div class='big'>{{ intel.current_projection if intel else 'No data yet' }}</div>
-        <div class='sub'>Based on recent training load</div>
+        <div class='sub'>Based on your last 8 weeks of training runs (race-like efforts excluded)</div>
         {% if intel %}
-        <div class='metric'><span>Elevation adjusted</span><strong>{{ intel.elevation_adjusted }}</strong></div>
+          <div class='metric'><span>Elevation adjusted</span><strong>{{ intel.elevation_adjusted }}</strong></div>
         {% endif %}
       </article>
 
@@ -36,16 +36,18 @@
         <h2>Race Day Potential</h2>
         <div class='big'>{{ intel.race_day_projection if intel else 'No data yet' }}</div>
         {% if intel %}
-        <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
-        <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
-        <div class='metric'><span>Gap to goal (flat)</span><strong>{{ intel.flat_gap }}</strong></div>
-        <div class='metric'><span>Gap to goal (adjusted)</span><strong>{{ intel.adjusted_gap }}</strong></div>
-        <div class='metric'><span>CTL vs target</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
+          <div class='metric'><span>Goal probability</span><strong>{{ intel.probability }}%</strong></div>
+          <div class='progress'><span style='width:{{ intel.probability }}%'></span></div>
+          <div class='metric'><span>Gap to goal (flat)</span><strong>{{ intel.flat_gap }}</strong></div>
+          <div class='metric'><span>Gap to goal (adjusted)</span><strong>{{ intel.adjusted_gap }}</strong></div>
+          <div class='metric'><span>CTL vs target</span><strong>{{ intel.current_ctl }} / {{ intel.target_ctl }}</strong></div>
+          <div class='sub'>{{ intel.ctl_description }}</div>
         {% endif %}
       </article>
 
       <article class='card'>
         <h2>Long Run Progression</h2>
+        <div class='sub'>Only recent training window (last 8 weeks)</div>
         <div class='metric'><span>Longest run</span><strong>{{ long_run.longest_run_km }} km</strong></div>
         <div class='metric'><span>Date</span><strong>{{ long_run.longest_run_date or 'N/A' }}</strong></div>
         <div class='metric'><span>Next milestone</span><strong>{{ long_run.next_milestone }} km</strong></div>
@@ -54,9 +56,14 @@
 
       <article class='card'>
         <h2>Today's Training</h2>
-        <div class='big'>{{ today_plan.title }}</div>
-        <div class='metric'><span>Session</span><strong>{{ today_plan.details }}</strong></div>
-        <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
+        {% if show_today_plan %}
+          <div class='big'>{{ today_plan.title }}</div>
+          <div class='metric'><span>Session</span><strong>{{ today_plan.details }}</strong></div>
+          <div class='metric'><span>Purpose</span><strong>{{ today_plan.purpose }}</strong></div>
+        {% else %}
+          <div class='big'>Done for today</div>
+          <div class='sub'>You already logged an activity today. Focus on recovery, hydration, and sleep.</div>
+        {% endif %}
       </article>
 
       <article class='card'>
