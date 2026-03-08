@@ -7,11 +7,24 @@ from flask import current_app
 from ..repositories import get_strava_token, save_strava_tokens
 
 
+def _validate_strava_config(require_secret=False):
+    cfg = current_app.config
+    client_id = cfg.get("STRAVA_CLIENT_ID")
+    redirect_uri = cfg.get("STRAVA_REDIRECT_URI")
+    client_secret = cfg.get("STRAVA_CLIENT_SECRET")
+
+    if not client_id or not redirect_uri:
+        raise ValueError("Strava OAuth is not configured. Set CLIENT_ID and STRAVA_REDIRECT_URI.")
+    if require_secret and not client_secret:
+        raise ValueError("Strava OAuth is not configured. Set CLIENT_SECRET.")
+
+
 def generate_oauth_state():
     return secrets.token_urlsafe(24)
 
 
 def get_authorize_url(state):
+    _validate_strava_config(require_secret=False)
     cfg = current_app.config
     params = {
         "client_id": cfg["STRAVA_CLIENT_ID"],
@@ -26,6 +39,7 @@ def get_authorize_url(state):
 
 
 def exchange_code_for_token(code):
+    _validate_strava_config(require_secret=True)
     cfg = current_app.config
     response = requests.post(
         "https://www.strava.com/oauth/token",
@@ -61,6 +75,7 @@ def refresh_access_token(user_id):
     if token.access_token and token.expires_at and token.expires_at > now + 60:
         return token.access_token
 
+    _validate_strava_config(require_secret=True)
     cfg = current_app.config
     response = requests.post(
         "https://www.strava.com/oauth/token",

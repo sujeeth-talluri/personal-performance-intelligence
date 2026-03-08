@@ -9,3 +9,5 @@ activities.csv
 vendor_pkgs/
 .pytest_cache/
 *.pyc
+
+instance/

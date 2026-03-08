@@ -197,7 +197,7 @@ def dashboard():
 @login_required
 def onboarding():
     user = _current_user()
-    error = None
+    error = request.args.get("error")
 
     if request.method == "POST":
         runner_name = request.form.get("runner_name", "").strip()
@@ -236,7 +236,7 @@ def onboarding():
 def settings():
     user = _current_user()
     goal = get_goal(user.id)
-    error = None
+    error = request.args.get("error")
 
     if request.method == "POST":
         race_name = request.form.get("race_name", "").strip()
@@ -275,7 +275,11 @@ def strava_login():
     state = generate_oauth_state()
     session["strava_state"] = state
     session["oauth_user_id"] = user.id
-    return redirect(get_authorize_url(state))
+    try:
+        return redirect(get_authorize_url(state))
+    except Exception:
+        current_app.logger.exception("Failed to start Strava OAuth")
+        return redirect(url_for("web.onboarding", error="Strava OAuth is not configured. Set CLIENT_ID, CLIENT_SECRET and STRAVA_REDIRECT_URI in Render."))
 
 
 @web.route("/auth/strava/callback")
@@ -290,8 +294,12 @@ def strava_callback():
     if not user_id or not code:
         return redirect(url_for("web.login"))
 
-    payload = exchange_code_for_token(code)
-    link_oauth_identity(user_id, payload)
+    try:
+        payload = exchange_code_for_token(code)
+        link_oauth_identity(user_id, payload)
+    except Exception:
+        current_app.logger.exception("Strava OAuth callback failed")
+        return redirect(url_for("web.onboarding", error="Strava authorization failed. Check CLIENT_ID/CLIENT_SECRET and callback URL settings."))
 
     session["user_id"] = user_id
     session.pop("strava_state", None)

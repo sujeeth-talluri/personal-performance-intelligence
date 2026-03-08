@@ -12,6 +12,7 @@
       <h1>Set up your race plan</h1>
       <p class='sub'>Do this once. You can edit anytime from settings.</p>
       <p><a class='btn' href='/connect/strava'>Connect Strava</a></p>
+      {% if error %}<p style='color:var(--danger);'>{{ error }}</p>{% endif %}
       <form method='post'>
         <div class='grid2'>
           <div class='row'><label>Runner name</label><input name='runner_name' value='{{ user.name if user else "" }}' required></div>
@@ -46,4 +47,5 @@
   </main>
 </body>
 </html>
+
 
