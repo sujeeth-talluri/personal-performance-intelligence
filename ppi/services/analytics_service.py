@@ -1,4 +1,4 @@
-﻿from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from math import ceil
 
 from ..repositories import (
@@ -318,7 +318,7 @@ def _metrics_layer(user_id, goal_ctx):
             "line1": "Consistent mileage requirement satisfied" if need_weeks == 0 else "Consistent mileage weeks",
             "line2": f"{consistent_weeks} completed",
             "line3": None if need_weeks == 0 else f"{need_weeks} more week required",
-            "weight": 0.30,
+            "weight": 0.25,
             "score": min(consistent_weeks / 3.0, 1.0),
         },
         {
@@ -329,13 +329,15 @@ def _metrics_layer(user_id, goal_ctx):
             "line1": "Weekly mileage threshold satisfied" if need_weekly == 0 else "Weekly mileage threshold not met",
             "line2": f"{rolling_week_distance_km} km completed (minimum needed: 45 km)",
             "line3": None if need_weekly == 0 else "Need to reach 45 km weekly mileage.",
-            "weight": 0.20,
+            "weight": 0.25,
             "score": min(rolling_week_distance_km / 45.0, 1.0),
         },
     ]
 
     readiness_progress = int(round(sum(i["weight"] * i["score"] for i in readiness_items) * 100))
     next_requirement = next((i["line3"] for i in readiness_items if not i["ready"] and i.get("line3")), None)
+    if week_closed and rolling_week_distance_km < 45.0:
+        next_requirement = "Prediction unlock expected after next qualifying week."
 
     latest_metric = fetch_latest_metric(user_id)
     ctl_real = round(float(latest_metric.ctl), 1) if latest_metric else 0.0
@@ -483,7 +485,7 @@ def performance_intelligence(user_id):
 
     training_status = {
         "title": "Training Status",
-        "summary": "Race prediction unlocking soon" if not metrics["readiness"]["ready"] else "Prediction ready",
+        "summary": "Race prediction unlocking after next qualifying week." if not metrics["readiness"]["ready"] else "Prediction ready",
         "detail": prediction["note"],
         "progress_pct": metrics["readiness_progress_pct"],
         "next_requirement": metrics["next_requirement"],
@@ -495,9 +497,9 @@ def performance_intelligence(user_id):
     if len(trend_rows) >= 2:
         delta = round(float(trend_rows[-1].ctl) - float(trend_rows[0].ctl), 1)
         if delta > 0.5:
-            ctl_trend_text = f"Trend: ↑ +{delta} last 14 days"
+            ctl_trend_text = f"Trend: up +{delta} last 14 days"
         elif delta < -0.5:
-            ctl_trend_text = f"Trend: ↓ {delta} last 14 days"
+            ctl_trend_text = f"Trend: down {delta} last 14 days"
         else:
             ctl_trend_text = "Trend: stable"
     else:
@@ -612,3 +614,6 @@ def recent_runs(user_id, limit=5):
         if len(out) >= limit:
             break
     return out
+
+
+

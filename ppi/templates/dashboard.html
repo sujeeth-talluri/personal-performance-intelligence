@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'>
@@ -12,13 +12,14 @@
       <div class='header-row'>
         <div>
           <h1>{{ goal.race_name }}</h1>
-          <div class='sub'>Goal {{ goal.goal_time }}</div>
+          <div class='sub'>Goal: {{ goal.goal_time }}</div>
+          <div class='sub'>Target pace: {{ goal.target_pace }}</div>
           <div class='sub'>{{ goal.days_remaining }} days remaining</div>
           <div class='sub' style='margin-top:6px;'>{{ user.name }}</div>
         </div>
         <div class='icon-actions'>
-          <a class='icon-btn' href='/settings' aria-label='Settings'>⚙</a>
-          <a class='icon-btn' href='/logout' aria-label='Logout'>🚪</a>
+          <a class='icon-btn' href='/settings' aria-label='Settings'>&#9881;</a>
+          <a class='icon-btn' href='/logout' aria-label='Logout'>&#128682;</a>
         </div>
       </div>
     </section>
@@ -37,7 +38,7 @@
         <div class='performance-number'>{{ intel.current_projection }}</div>
         <div class='sub'>Flat course estimate</div>
       {% else %}
-        <div class='sub-strong'>Prediction not calculated yet.</div>
+        <div class='sub-strong'>Prediction not calculated yet</div>
         <div class='sub'>Reason: {{ intel.prediction_note }}</div>
       {% endif %}
     </section>
@@ -64,7 +65,7 @@
         <div class='progress'><span style='width:{{ intel.goal_progress_pct }}%'></span></div>
       {% else %}
         <div class='sub-strong'>Goal progress unavailable</div>
-        <div class='sub'>Race prediction will appear after training data requirements are satisfied.</div>
+        <div class='sub'>Race prediction will appear once training data requirements are satisfied.</div>
       {% endif %}
     </section>
 
@@ -75,9 +76,14 @@
       <div class='metric'><span>Remaining</span><strong>{{ weekly_goal.remaining_km }} km</strong></div>
       <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
 
-      {% if weekly_goal.week_closed %}
-        <div class='sub-strong'>Weekly training closed.</div>
-        <div class='sub'>Goal resets tomorrow.</div>
+      {% if weekly_goal.week_closed and weekly_goal.completed_km < 45 %}
+        <div class='sub-strong status-orange'>Weekly mileage threshold not met this week</div>
+        <div class='sub'>{{ weekly_goal.completed_km }} km completed</div>
+        <div class='sub'>Minimum required: 45 km</div>
+        <div class='sub'>Prediction unlock expected after next qualifying week.</div>
+      {% elif weekly_goal.week_closed %}
+        <div class='sub-strong status-green'>Week completed</div>
+        <div class='sub'>Next training week begins tomorrow</div>
       {% elif weekly_goal.guidance %}
         <div class='sub status-green'>{{ weekly_goal.guidance }}</div>
       {% else %}
@@ -88,10 +94,11 @@
 
     <section class='card'>
       <h2>Fitness Trend</h2>
-      <div class='metric'><span>Current fitness</span><strong>{{ intel.current_ctl }}</strong></div>
+      <div class='metric'><span>Current fitness (CTL)</span><strong>{{ intel.current_ctl }}</strong></div>
       <div class='metric'><span>Goal fitness</span><strong>{{ intel.target_ctl }}</strong></div>
       <div class='metric'><span>Progress</span><strong>{{ intel.ctl_progress_pct }}%</strong></div>
       <div class='progress'><span style='width:{{ intel.ctl_progress_pct }}%'></span></div>
+      <div class='sub'>{{ intel.ctl_trend_text }}</div>
     </section>
 
     <section class='card'>
@@ -108,30 +115,39 @@
 
     <section class='card'>
       <h2>Endurance Readiness</h2>
-      <div class='metric'><span>Long Run Ratio</span><strong>{{ endurance.lrr if endurance.lrr is not none else 'Insufficient data' }}</strong></div>
-      <div class='sub'>This measures how large your longest run is compared to weekly mileage.</div>
-      <div class='sub'>Recommended range: 25% - 35%. Values above 40% increase fatigue risk.</div>
+
+      <div class='metric'><span>Long Run Ratio (LRR)</span><strong>{{ endurance.lrr if endurance.lrr is not none else 'Unavailable' }}</strong></div>
+      <div class='sub'>Recommended: 25-35%</div>
+      {% if endurance.lrr is not none %}
+        <div class='sub'>Your long run is {{ (endurance.lrr * 100)|round|int }}% of weekly mileage.</div>
+      {% endif %}
       <div class='sub status-{{ endurance.lrr_color }}'>{{ endurance.lrr_status }}</div>
-      {% if endurance.lrr_warning %}<div class='sub status-red'>{{ endurance.lrr_warning }}</div>{% endif %}
+      {% if endurance.lrr_warning %}
+        <div class='sub status-red'>Warning: {{ endurance.lrr_warning }}</div>
+        <div class='sub'>Advice: Increase weekly mileage or reduce long run size.</div>
+      {% endif %}
 
-      <div class='metric'><span>Aerobic Durability Index</span><strong>{{ endurance.adi if endurance.adi is not none else 'Insufficient data' }}</strong></div>
-      <div class='sub'>Aerobic Durability Index measures how well you maintain pace during longer runs.</div>
-      <div class='sub'>Higher values indicate stronger endurance.</div>
+      <div class='metric'><span>Aerobic Durability Index (ADI)</span><strong>{{ endurance.adi if endurance.adi is not none else 'Unavailable' }}</strong></div>
+      <div class='sub'>Recommended: near 1.00</div>
       <div class='sub status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</div>
+      <div class='sub'>Advice: Improve pace stability with steady aerobic runs.</div>
 
-      <div class='metric'><span>Fatigue Resistance Index</span><strong>{{ endurance.fri if endurance.fri is not none else 'Insufficient data' }}</strong></div>
+      <div class='metric'><span>Fatigue Resistance Index (FRI)</span><strong>{{ endurance.fri if endurance.fri is not none else 'Unavailable' }}</strong></div>
       <div class='sub'>Measures how well you maintain pace during long runs.</div>
       <div class='sub'>Requires: 3 long runs >=18 km within last 8 weeks</div>
       <div class='sub status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</div>
+      {% if endurance.fri_message %}<div class='sub status-grey'>{{ endurance.fri_message }}</div>{% endif %}
     </section>
 
     <section class='card'>
       <h2>Long Run Ladder</h2>
       {% set longest = long_run.longest_km %}
-      <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}✓{% endif %}</div>
-      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}✓{% elif longest < 24 %}(next){% endif %}</div>
-      <div class='ladder-item {{ 'next' if longest >= 24 and longest < 28 else ('done' if longest >= 28 else '') }}'>28 km {% if longest >= 28 %}✓{% elif longest >= 24 and longest < 28 %}(next){% endif %}</div>
-      <div class='ladder-item {{ 'next' if longest >= 28 and longest < 32 else ('done' if longest >= 32 else '') }}'>32 km {% if longest >= 32 %}✓{% elif longest >= 28 and longest < 32 %}(next){% endif %}</div>
+      {% set milestones_done = (1 if longest >= 21 else 0) + (1 if longest >= 24 else 0) + (1 if longest >= 28 else 0) + (1 if longest >= 32 else 0) %}
+      <div class='sub'>Progress: {{ milestones_done }} / 4 milestones completed</div>
+      <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}&#10003;{% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}?{% elif longest < 24 %}(next){% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest >= 24 and longest < 28 else ('done' if longest >= 28 else '') }}'>28 km {% if longest >= 28 %}?{% elif longest >= 24 and longest < 28 %}(next){% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest >= 28 and longest < 32 else ('done' if longest >= 32 else '') }}'>32 km {% if longest >= 32 %}?{% elif longest >= 28 and longest < 32 %}(next){% endif %}</div>
       <div class='sub'>Latest long run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
     </section>
 
@@ -152,9 +168,9 @@
       {% if runs %}
         {% for run in runs %}
           <div class='run-item'>
-            <div class='run-line'><strong>{{ run.distance }} km - {{ run.pace }}</strong></div>
-            <div class='run-line sub'>{{ run.time }} {% if run.hr %}• HR {{ run.hr }}{% endif %}</div>
-            <div class='run-line sub'>{{ run.date_label }}</div>
+            <div class='run-line'><strong>{{ run.date_label }}</strong></div>
+            <div class='run-line'>{{ run.distance }} km &bull; {{ run.pace }}</div>
+            <div class='run-line sub'>Time {{ run.time }}{% if run.hr %} &bull; HR {{ run.hr }}{% endif %}</div>
           </div>
         {% endfor %}
       {% else %}
@@ -164,3 +180,4 @@
   </main>
 </body>
 </html>
+
