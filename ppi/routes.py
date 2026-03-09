@@ -21,7 +21,6 @@ from .repositories import (
     update_user_name,
 )
 from .services.analytics_service import (
-    activity_done_today,
     performance_intelligence,
     recent_runs,
     today_training_reco,
@@ -71,6 +70,96 @@ def _should_sync_now(last_sync_at, cooldown_min):
         return True
     return (datetime.now(timezone.utc) - last_sync_at) >= timedelta(minutes=cooldown_min)
 
+
+
+def _today_local_date(user_timezone):
+    try:
+        tz = ZoneInfo(user_timezone)
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    return now_local.date()
+
+
+def _week_bounds(today_local):
+    start = today_local - timedelta(days=today_local.weekday())
+    end = start + timedelta(days=6)
+    return start, end
+
+
+def _build_weekly_plan(today_local, runs, weekly_goal, long_run):
+    week_start, _ = _week_bounds(today_local)
+    run_by_date = {r["date"]: r for r in runs}
+
+    long_km = int(round(long_run.get("next_milestone_km") or 24))
+    easy_km = max(6, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.14))))
+    aerobic_km = max(8, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.16))))
+    tempo_km = max(10, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.2))))
+
+    schedule = [
+        ("Mon", "Easy Run", f"{easy_km} km"),
+        ("Tue", "Aerobic Run", f"{aerobic_km} km"),
+        ("Wed", "Strength", "Gym"),
+        ("Thu", "Tempo Run", f"{tempo_km} km"),
+        ("Sat", "Easy Run", f"{easy_km} km"),
+        ("Sun", "Long Run", f"{long_km} km"),
+    ]
+    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Sat": 5, "Sun": 6}
+
+    items = []
+    for day_code, session_name, planned in schedule:
+        day_date = week_start + timedelta(days=weekday_map[day_code])
+        day_iso = day_date.isoformat()
+        done_run = run_by_date.get(day_iso)
+        items.append(
+            {
+                "day": day_code,
+                "session": session_name,
+                "planned": planned,
+                "done": bool(done_run),
+                "actual": f"{done_run['distance']} km" if done_run else None,
+            }
+        )
+    return items
+
+
+def _build_today_workout(today_local, runs, today_plan):
+    today_iso = today_local.isoformat()
+    today_run = next((r for r in runs if r["date"] == today_iso), None)
+
+    if today_run:
+        return {
+            "date": today_local.strftime("%a %b %d"),
+            "workout": "Run",
+            "status": "Completed",
+            "distance": f"{today_run['distance']} km",
+            "pace": today_run["pace"],
+            "hr": str(today_run["hr"]) if today_run["hr"] else "--",
+            "coach_insight": "Good aerobic execution today. Keep effort controlled.",
+            "next_suggestion": "Next key workout: aerobic run tomorrow.",
+            "completed": True,
+        }
+
+    return {
+        "date": today_local.strftime("%a %b %d"),
+        "workout": today_plan["title"],
+        "status": "Upcoming",
+        "distance": today_plan["details"],
+        "pace": "--",
+        "hr": "--",
+        "coach_insight": "Today is a setup session to support marathon consistency.",
+        "next_suggestion": "Next key workout: stay consistent with planned weekly volume.",
+        "completed": False,
+    }
+
+
+def _build_ai_summary(intel):
+    trend = intel.get("ctl_trend_text", "Trend: stable")
+    next_req = intel.get("training_status", {}).get("next_requirement") or "complete this week's key workouts."
+    return (
+        f"{trend} and your marathon projection is {intel.get('race_day_projection', 'pending')}. "
+        f"Focus on {next_req} to improve race-day confidence."
+    )
 
 def _current_user():
     user_id = session.get("user_id")
@@ -216,7 +305,12 @@ def dashboard():
     weekly_goal = intel["weekly"]
 
     today_plan = today_training_reco(intel["probability"], user_timezone=user_tz)
-    show_today_plan = not activity_done_today(user.id, user_timezone=user_tz)
+    runs = recent_runs(user.id, limit=20, user_timezone=user_tz)
+    today_local = _today_local_date(user_tz)
+
+    today_workout = _build_today_workout(today_local, runs, today_plan)
+    weekly_plan = _build_weekly_plan(today_local, runs, weekly_goal, intel["long_run"])
+    ai_summary = _build_ai_summary(intel)
 
     return render_template(
         "dashboard.html",
@@ -227,8 +321,11 @@ def dashboard():
         weekly_summary=weekly_summary,
         endurance=intel["endurance"],
         today_plan=today_plan,
-        show_today_plan=show_today_plan,
-        runs=recent_runs(user.id, limit=5, user_timezone=user_tz),
+        show_today_plan=not today_workout["completed"],
+        today_workout=today_workout,
+        weekly_plan=weekly_plan,
+        ai_summary=ai_summary,
+        runs=runs[:5],
         sync_info=sync_info,
         today_date=_today_date_label(user_tz),
         long_run=intel["long_run"],
@@ -350,6 +447,10 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
+
+
+
+
 
 
 
