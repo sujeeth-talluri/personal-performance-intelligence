@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 
 def _normalize_database_url(url):
@@ -10,7 +10,7 @@ def _normalize_database_url(url):
 
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+    SECRET_KEY = os.getenv("SECRET_KEY")
 
     DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
@@ -19,6 +19,7 @@ class Config:
     STRAVA_CLIENT_ID = os.getenv("CLIENT_ID")
     STRAVA_CLIENT_SECRET = os.getenv("CLIENT_SECRET")
     STRAVA_FETCH_PAGES = int(os.getenv("STRAVA_FETCH_PAGES", "3"))
+    STRAVA_SYNC_COOLDOWN_MIN = int(os.getenv("STRAVA_SYNC_COOLDOWN_MIN", "15"))
     STRAVA_SCOPES = os.getenv("STRAVA_SCOPES", "activity:read_all,profile:read_all")
     STRAVA_REDIRECT_URI = os.getenv("STRAVA_REDIRECT_URI", "http://localhost:5000/auth/strava/callback")
 
@@ -30,3 +31,5 @@ class Config:
     SMTP_USER = os.getenv("SMTP_USER")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
     SMTP_FROM = os.getenv("SMTP_FROM", "noreply@strideiq.app")
+
+

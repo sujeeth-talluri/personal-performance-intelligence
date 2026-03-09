@@ -162,3 +162,39 @@ select option {
 .inline { display: flex; gap: 10px; flex-wrap: wrap; }
 .row { display: grid; gap: 8px; margin-bottom: 10px; }
 
+
+.mini-chart {
+  margin-top: 10px;
+}
+
+.mini-chart-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.mini-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 68px;
+}
+
+.bar-wrap {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  opacity: 0.9;
+}
+
+.bar.fitness {
+  background: linear-gradient(180deg, #7ec8ff, #6bffdb);
+}

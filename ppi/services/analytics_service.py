@@ -1,8 +1,10 @@
 from datetime import date, datetime, timedelta, timezone
 from math import ceil
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..repositories import (
     fetch_activities,
+    fetch_latest_activity,
     fetch_latest_metric,
     fetch_metrics,
     fetch_recent_activities,
@@ -27,6 +29,33 @@ STRESS_TYPE_FACTOR = {
 
 def _utc_today():
     return datetime.now(timezone.utc).date()
+
+def _resolve_timezone(user_timezone=None):
+    tz_name = (user_timezone or "Asia/Kolkata").strip()
+    try:
+        return ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        fallback = {
+            "asia/kolkata": timezone(timedelta(hours=5, minutes=30)),
+            "asia/calcutta": timezone(timedelta(hours=5, minutes=30)),
+            "utc": timezone.utc,
+            "etc/utc": timezone.utc,
+        }
+        return fallback.get(tz_name.lower(), timezone.utc)
+
+
+def _today_local(user_timezone=None):
+    tz = _resolve_timezone(user_timezone)
+    return datetime.now(timezone.utc).astimezone(tz).date()
+
+
+def _to_local_date(dt_value, user_timezone=None):
+    tz = _resolve_timezone(user_timezone)
+    if dt_value.tzinfo is None:
+        dt_utc = dt_value.replace(tzinfo=timezone.utc)
+    else:
+        dt_utc = dt_value.astimezone(timezone.utc)
+    return dt_utc.astimezone(tz).date()
 
 
 def _hms_to_seconds(hms):
@@ -74,13 +103,13 @@ def _status_color(status):
     return "grey"
 
 
-def _activity_to_raw(a):
+def _activity_to_raw(a, user_timezone=None):
     d = float(a.distance_km or 0.0)
     t = float(a.moving_time or 0.0)
     pace = (t / d) if d > 0 and t > 0 else None
     return {
         "id": a.strava_activity_id,
-        "date": a.date.date(),
+        "date": _to_local_date(a.date, user_timezone),
         "type": (a.activity_type or "").lower(),
         "is_race": bool(a.is_race),
         "distance_km": d,
@@ -90,11 +119,11 @@ def _activity_to_raw(a):
     }
 
 
-def _raw_layer(user_id):
+def _raw_layer(user_id, user_timezone=None):
     seen = set()
     out = []
     for a in fetch_activities(user_id):
-        r = _activity_to_raw(a)
+        r = _activity_to_raw(a, user_timezone)
         if r["id"] in seen:
             continue
         seen.add(r["id"])
@@ -126,16 +155,53 @@ def _sum_distance_in_window(activities, end_day, days=7):
     return round(sum(a["distance_km"] for a in activities if start_day <= a["date"] <= end_day), 1)
 
 
-def _rolling_week_consistency(distance_activities, today):
-    anchors = [today - timedelta(days=7 * i) for i in range(4)]
-    rolling = [_sum_distance_in_window(distance_activities, a, days=7) for a in anchors]
-    return rolling, len([v for v in rolling if v >= 25.0])
+def _calendar_week_bounds(today):
+    start = today - timedelta(days=today.weekday())
+    end = start + timedelta(days=6)
+    return start, end
 
+
+def _calendar_week_distance(distance_activities, week_start, week_end):
+    return round(
+        sum(a["distance_km"] for a in distance_activities if week_start <= a["date"] <= week_end),
+        1,
+    )
+
+
+def _rolling_week_consistency(distance_activities, today):
+    week_start, _ = _calendar_week_bounds(today)
+    weekly_totals = []
+    for i in range(4):
+        start = week_start - timedelta(days=7 * i)
+        end = start + timedelta(days=6)
+        weekly_totals.append(_calendar_week_distance(distance_activities, start, end))
+    return weekly_totals, len([v for v in weekly_totals if v >= 25.0])
 
 def _ctl_proxy_6w(distance_activities, today):
     windows = [_sum_distance_in_window(distance_activities, today - timedelta(days=7 * i), days=7) for i in range(6)]
     return round(sum(windows) / len(windows), 1) if windows else 0.0
 
+def _daily_distance_series(distance_activities, today, days=14):
+    start = today - timedelta(days=days - 1)
+    out = []
+    for i in range(days):
+        day = start + timedelta(days=i)
+        km = round(sum(a["distance_km"] for a in distance_activities if a["date"] == day), 1)
+        out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": km})
+    return out
+
+
+def _ctl_series(metric_rows, today, days=14):
+    start = today - timedelta(days=days - 1)
+    by_date = {m.date: float(m.ctl) for m in metric_rows}
+    last_known = 0.0
+    out = []
+    for i in range(days):
+        day = start + timedelta(days=i)
+        if day in by_date:
+            last_known = by_date[day]
+        out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": round(last_known, 1)})
+    return out
 
 def _fit_half_equivalent(pace_medium, pace_long):
     if pace_medium and pace_long:
@@ -168,9 +234,10 @@ def _fri_from_runs(long_runs):
     return round(sum(ratios[-3:]) / 3.0, 3)
 
 
-def build_goal_context(goal):
+def build_goal_context(goal, today_local=None):
     goal_seconds = _hms_to_seconds(goal.goal_time)
-    days_remaining = (goal.race_date - date.today()).days
+    base_day = today_local or date.today()
+    days_remaining = (goal.race_date - base_day).days
     pace_sec = goal_seconds / float(goal.race_distance)
     return {
         "race_name": goal.race_name,
@@ -196,9 +263,9 @@ def _baseline_weekly_goal(goal_seconds):
     return 45.0
 
 
-def _metrics_layer(user_id, goal_ctx):
-    raw = _raw_layer(user_id)
-    today = _utc_today()
+def _metrics_layer(user_id, goal_ctx, user_timezone=None):
+    raw = _raw_layer(user_id, user_timezone)
+    today = _today_local(user_timezone)
 
     distance_acts = _distance_training_activities(raw)
     runs = _prediction_runs(raw)
@@ -207,9 +274,11 @@ def _metrics_layer(user_id, goal_ctx):
     medium_runs = [r for r in runs_8w if 8 <= r["distance_km"] <= 12]
     long_runs = [r for r in runs_8w if 18 <= r["distance_km"] <= 30]
 
-    rolling_week_distance_km = _sum_distance_in_window(distance_acts, today, days=7)
+    week_start, week_end = _calendar_week_bounds(today)
+    rolling_week_distance_km = _calendar_week_distance(distance_acts, week_start, week_end)
     _, consistent_weeks = _rolling_week_consistency(distance_acts, today)
     ctl_proxy = _ctl_proxy_6w(distance_acts, today)
+    distance_series_14 = _daily_distance_series(distance_acts, today, days=14)
 
     baseline_goal = _baseline_weekly_goal(goal_ctx["goal_seconds"])
     weekly_goal_km = round(max(baseline_goal, rolling_week_distance_km * 1.10), 1)
@@ -224,13 +293,14 @@ def _metrics_layer(user_id, goal_ctx):
     days_remaining_in_week = 6 - today.weekday()
     today_activity_logged = any(a["date"] == today for a in distance_acts)
     week_closed = today_activity_logged and days_remaining_in_week == 0
+    remaining_training_days = max(0, days_remaining_in_week + (0 if today_activity_logged else 1))
 
     if remaining_km <= 0:
         suggested_runs = 0
         avg_run_needed = 0.0
         guidance_text = "Goal achieved."
     else:
-        suggested_runs = int(max(1, ceil(remaining_km / max_safe_run)))
+        suggested_runs = max(1, remaining_training_days)
         avg_run_needed = round(remaining_km / suggested_runs, 1)
         guidance_text = None
 
@@ -239,7 +309,11 @@ def _metrics_layer(user_id, goal_ctx):
     lrr = None
     lrr_status = "Insufficient data"
     lrr_warning = None
-    if longest_run and completed_km > 0:
+    lrr_message = None
+    if completed_km < 10:
+        lrr_status = "Unavailable this week"
+        lrr_message = "Long run ratio will update after this week's runs."
+    elif longest_run and completed_km > 0:
         lrr = round(longest_run["distance_km"] / completed_km, 3)
         if lrr < 0.25:
             lrr_status = "Endurance stimulus too low"
@@ -306,7 +380,7 @@ def _metrics_layer(user_id, goal_ctx):
             "ready": need_long == 0,
             "line1": "Long runs requirement satisfied" if need_long == 0 else "Long runs requirement not met",
             "line2": f"{len(long_runs)} runs completed (minimum needed: 2)",
-            "line3": None if need_long == 0 else f"Need {need_long} more long run(s) between 18-30 km.",
+            "line3": None if need_long == 0 else "Next qualifying long run needed (18-30 km). Suggested: this weekend.",
             "weight": 0.25,
             "score": min(len(long_runs) / 2.0, 1.0),
         },
@@ -349,6 +423,7 @@ def _metrics_layer(user_id, goal_ctx):
         "pace_long": pace_long,
         "ctl_proxy": ctl_proxy,
         "ctl_real": ctl_real,
+        "distance_series_14": distance_series_14,
         "readiness": {"ready": all(i["ready"] for i in readiness_items), "items": readiness_items},
         "readiness_progress_pct": readiness_progress,
         "next_requirement": next_requirement,
@@ -361,7 +436,10 @@ def _metrics_layer(user_id, goal_ctx):
             "avg_run_needed": avg_run_needed,
             "guidance": guidance_text,
             "max_safe_run": max_safe_run,
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
             "days_remaining_in_week": days_remaining_in_week,
+            "remaining_training_days": remaining_training_days,
             "today_activity_logged": today_activity_logged,
             "week_closed": week_closed,
         },
@@ -371,6 +449,7 @@ def _metrics_layer(user_id, goal_ctx):
             "lrr_status": lrr_status,
             "lrr_color": _status_color(lrr_status),
             "lrr_warning": lrr_warning,
+            "lrr_message": lrr_message,
             "adi": adi,
             "adi_status": adi_status,
             "adi_color": _status_color(adi_status),
@@ -448,7 +527,25 @@ def _prediction_layer(user_id, goal_ctx, metrics):
 
     prev = get_latest_prediction(user_id)
     flat = (0.7 * float(prev.projection_seconds) + 0.3 * new_flat) if prev else new_flat
-    save_prediction(user_id, flat)
+
+    should_persist = prev is None
+    if prev is not None:
+        latest_signal_dt = None
+
+        latest_activity = fetch_latest_activity(user_id)
+        if latest_activity and latest_activity.date:
+            latest_signal_dt = latest_activity.date
+
+        latest_metric = fetch_latest_metric(user_id)
+        if latest_metric and latest_metric.date:
+            metric_dt = datetime.combine(latest_metric.date, datetime.min.time())
+            latest_signal_dt = max(latest_signal_dt, metric_dt) if latest_signal_dt else metric_dt
+
+        if latest_signal_dt and latest_signal_dt > prev.created_at:
+            should_persist = True
+
+    if should_persist:
+        save_prediction(user_id, flat)
 
     race_proj = flat * goal_ctx["elevation_factor"]
     gap = race_proj - goal_ctx["goal_seconds"]
@@ -464,13 +561,14 @@ def _prediction_layer(user_id, goal_ctx, metrics):
     }
 
 
-def performance_intelligence(user_id):
+def performance_intelligence(user_id, user_timezone=None):
     goal = get_goal(user_id)
     if not goal:
         return None
 
-    goal_ctx = build_goal_context(goal)
-    metrics = _metrics_layer(user_id, goal_ctx)
+    today_local = _today_local(user_timezone)
+    goal_ctx = build_goal_context(goal, today_local=today_local)
+    metrics = _metrics_layer(user_id, goal_ctx, user_timezone=user_timezone)
     prediction = _prediction_layer(user_id, goal_ctx, metrics)
 
     if goal_ctx["distance_km"] <= 10:
@@ -493,9 +591,22 @@ def performance_intelligence(user_id):
 
     ctl_progress_pct = int(max(0, min(100, (metrics["ctl_real"] / max(1.0, target_ctl)) * 100)))
 
-    trend_rows = [m for m in fetch_metrics(user_id) if m.date >= (_utc_today() - timedelta(days=14))]
-    if len(trend_rows) >= 2:
-        delta = round(float(trend_rows[-1].ctl) - float(trend_rows[0].ctl), 1)
+    all_metrics = fetch_metrics(user_id)
+    ctl_series_14 = _ctl_series(all_metrics, today_local, days=14)
+
+    if len(all_metrics) >= 2:
+        latest_metric_obj = all_metrics[-1]
+        latest_ctl = float(latest_metric_obj.ctl)
+
+        baseline_cutoff = latest_metric_obj.date - timedelta(days=14)
+        baseline_metric = all_metrics[0]
+        for m in all_metrics:
+            if m.date <= baseline_cutoff:
+                baseline_metric = m
+            else:
+                break
+
+        delta = round(latest_ctl - float(baseline_metric.ctl), 1)
         if delta > 0.5:
             ctl_trend_text = f"Trend: up +{delta} last 14 days"
         elif delta < -0.5:
@@ -547,6 +658,10 @@ def performance_intelligence(user_id):
         "endurance": metrics["endurance"],
         "training_status": training_status,
         "race_readiness": race_readiness,
+        "charts": {
+            "weekly_distance_14": metrics["distance_series_14"],
+            "ctl_14": ctl_series_14,
+        },
         "long_run": {
             "longest_km": round(longest["distance_km"], 1) if longest else 0.0,
             "longest_date": longest["date"].isoformat() if longest else None,
@@ -573,26 +688,34 @@ def weekly_training_summary(user_id):
     return {"ctl_trend": ctl_trend, "load_risk": risk}
 
 
-def activity_done_today(user_id):
-    today = _utc_today()
+def activity_done_today(user_id, user_timezone=None):
+    today = _today_local(user_timezone)
     for a in fetch_recent_activities(user_id, limit=25):
-        if a.date.date() == today:
+        if _to_local_date(a.date, user_timezone) == today:
             return True
     return False
 
 
-def today_training_reco(probability):
+def today_training_reco(probability, user_timezone=None):
+    today = _today_local(user_timezone)
+    if today.weekday() == 0:
+        return {
+            "title": "Easy Aerobic Run",
+            "details": "8-12 km easy",
+            "purpose": "Build aerobic base and start weekly mileage.",
+        }
+
     p = probability if probability is not None else 0
     if p < 30:
-        return {"title": "Recovery Day", "details": "Light mobility or rest", "purpose": "Recover and absorb training."}
+        return {"title": "Aerobic Run", "details": "8-10 km easy", "purpose": "Rebuild momentum and accumulate volume."}
     if p < 55:
-        return {"title": "Aerobic Run", "details": "12-14 km easy", "purpose": "Build aerobic endurance."}
+        return {"title": "Aerobic Run", "details": "10-14 km easy", "purpose": "Build aerobic endurance."}
     if p < 75:
         return {"title": "Steady Endurance", "details": "14-18 km steady", "purpose": "Improve fatigue resistance."}
     return {"title": "Race-Pace Session", "details": "Marathon pace intervals", "purpose": "Sharpen race execution."}
 
 
-def recent_runs(user_id, limit=5):
+def recent_runs(user_id, limit=5, user_timezone=None):
     rows = fetch_recent_activities(user_id, limit=30)
     out = []
     for a in rows:
@@ -600,7 +723,7 @@ def recent_runs(user_id, limit=5):
         if t not in {"run", "trailrun"}:
             continue
         pace = (a.moving_time / a.distance_km) if a.distance_km > 0 else 0
-        dt = a.date.date()
+        dt = _to_local_date(a.date, user_timezone)
         out.append(
             {
                 "date": dt.isoformat(),
@@ -614,6 +737,13 @@ def recent_runs(user_id, limit=5):
         if len(out) >= limit:
             break
     return out
+
+
+
+
+
+
+
 
 
 

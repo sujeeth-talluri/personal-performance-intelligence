@@ -1,8 +1,9 @@
-﻿import secrets
+import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from functools import wraps
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -39,6 +40,36 @@ web = Blueprint("web", __name__)
 
 def _utcnow_naive():
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def _user_timezone_name():
+    return current_app.config.get("USER_TIMEZONE") or current_app.config.get("APP_TIMEZONE") or "Asia/Kolkata"
+
+def _today_date_label(user_timezone):
+    try:
+        tz = ZoneInfo(user_timezone)
+    except ZoneInfoNotFoundError:
+        fallback = {
+            "asia/kolkata": timezone(timedelta(hours=5, minutes=30)),
+            "asia/calcutta": timezone(timedelta(hours=5, minutes=30)),
+            "utc": timezone.utc,
+            "etc/utc": timezone.utc,
+        }
+        tz = fallback.get((user_timezone or "").lower(), timezone.utc)
+    return datetime.now(timezone.utc).astimezone(tz).strftime("%b %d, %Y")
+
+def _parse_iso_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _should_sync_now(last_sync_at, cooldown_min):
+    if not last_sync_at:
+        return True
+    return (datetime.now(timezone.utc) - last_sync_at) >= timedelta(minutes=cooldown_min)
 
 
 def _current_user():
@@ -163,9 +194,20 @@ def logout():
 @login_required
 def dashboard():
     user = _current_user()
+    user_tz = _user_timezone_name()
 
-    sync_info = sync_strava_data(user_id=user.id, pages=current_app.config.get("STRAVA_FETCH_PAGES", 3))
-    intel = performance_intelligence(user.id)
+    force_sync = request.args.get("sync") == "1"
+    cooldown_min = int(current_app.config.get("STRAVA_SYNC_COOLDOWN_MIN", 15))
+    last_sync_at = _parse_iso_datetime(session.get("last_sync_at"))
+
+    if force_sync or _should_sync_now(last_sync_at, cooldown_min):
+        sync_info = sync_strava_data(user_id=user.id, pages=current_app.config.get("STRAVA_FETCH_PAGES", 3))
+        if sync_info.get("status") == "ok":
+            session["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        sync_info = {"status": "skipped", "reason": "cooldown", "new_activities": 0}
+
+    intel = performance_intelligence(user.id, user_timezone=user_tz)
 
     if not intel or not intel.get("goal"):
         return redirect(url_for("web.onboarding"))
@@ -173,8 +215,8 @@ def dashboard():
     weekly_summary = weekly_training_summary(user.id)
     weekly_goal = intel["weekly"]
 
-    today_plan = today_training_reco(intel["probability"])
-    show_today_plan = not activity_done_today(user.id)
+    today_plan = today_training_reco(intel["probability"], user_timezone=user_tz)
+    show_today_plan = not activity_done_today(user.id, user_timezone=user_tz)
 
     return render_template(
         "dashboard.html",
@@ -186,9 +228,9 @@ def dashboard():
         endurance=intel["endurance"],
         today_plan=today_plan,
         show_today_plan=show_today_plan,
-        runs=recent_runs(user.id, limit=5),
+        runs=recent_runs(user.id, limit=5, user_timezone=user_tz),
         sync_info=sync_info,
-        today_date=_utcnow_naive().date().isoformat(),
+        today_date=_today_date_label(user_tz),
         long_run=intel["long_run"],
     )
 
@@ -308,3 +350,8 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
+
+
+
+
+

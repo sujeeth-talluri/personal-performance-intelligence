@@ -1,4 +1,4 @@
-﻿from flask import Flask
+from flask import Flask
 
 from .config import Config
 from .extensions import db
@@ -12,6 +12,9 @@ def create_app(config_object=Config):
         static_folder="static",
     )
     app.config.from_object(config_object)
+    secret = app.config.get("SECRET_KEY")
+    if (not app.config.get("TESTING")) and (not secret or secret == "dev-secret-change-me"):
+        raise RuntimeError("SECRET_KEY is required for production.")
 
     if not app.config.get("SQLALCHEMY_DATABASE_URI"):
         raise RuntimeError("DATABASE_URL is required. Configure a persistent PostgreSQL connection.")
@@ -26,3 +29,4 @@ def create_app(config_object=Config):
     app.register_blueprint(web)
 
     return app
+
