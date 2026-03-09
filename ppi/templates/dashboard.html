@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'>
@@ -12,8 +12,8 @@
       <div class='header-row'>
         <div>
           <h1>{{ goal.race_name }}</h1>
-          <div class='sub'>Goal {{ goal.goal_time }}  -  Target {{ goal.target_pace }}</div>
-          <div class='sub'>{{ goal.days_remaining }} days remaining  -  Today {{ today_date }}</div>
+          <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }}</div>
+          <div class='sub'>{{ goal.days_remaining }} days remaining | Today {{ today_date }}</div>
           <div class='sub'>Runner: {{ user.name }}</div>
         </div>
         <div class='icon-actions'>
@@ -30,9 +30,9 @@
         <strong>{{ today_workout.workout }}</strong>
         <span class='pill {{ "pill-green" if today_workout.completed else "pill-yellow" }}'>{{ today_workout.status }}</span>
       </div>
-      <div class='metric'><span>&#128099; Distance</span><strong>{{ today_workout.distance }}</strong></div>
-      <div class='metric'><span>&#9201; Pace</span><strong>{{ today_workout.pace }}</strong></div>
-      <div class='metric'><span>&#10084; Avg HR</span><strong>{{ today_workout.hr }}</strong></div>
+      <div class='metric'><span>Distance</span><strong>{{ today_workout.distance }}</strong></div>
+      <div class='metric'><span>Pace</span><strong>{{ today_workout.pace }}</strong></div>
+      <div class='metric'><span>Avg HR</span><strong>{{ today_workout.hr }}</strong></div>
       <div class='sub'><strong>Coach Insight:</strong> {{ today_workout.coach_insight }}</div>
       <div class='sub'><strong>Next Run Suggestion:</strong> {{ today_workout.next_suggestion }}</div>
     </section>
@@ -52,28 +52,34 @@
         {% endfor %}
       </div>
       <div class='sub'>Weekly Goal: {{ weekly_goal.weekly_goal_km }} km</div>
-      <div class='sub'>Completed: {{ weekly_goal.completed_km }} km  -  Remaining: {{ weekly_goal.remaining_km }} km</div>
+      <div class='sub'>Completed: {{ weekly_goal.completed_km }} km | Remaining: {{ weekly_goal.remaining_km }} km</div>
       <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
-      <div class="mini-chart">
-        <div class="mini-chart-title">Weekly distance last 14 days</div>
-        {% set weekly_max = (intel.charts.weekly_distance_14 | map(attribute="value") | max) if intel.charts.weekly_distance_14 else 1 %}
-        <div class="mini-bars">
+      {% if weekly_goal.guidance %}
+        <div class='sub'>{{ weekly_goal.guidance }}</div>
+      {% else %}
+        <div class='sub'>Suggested runs remaining: {{ weekly_goal.runs_remaining }} | Avg distance per run: {{ weekly_goal.avg_run_needed }} km</div>
+      {% endif %}
+      <div class='mini-chart'>
+        <div class='mini-chart-title'>Daily distance (last 14 days)</div>
+        {% set weekly_max = (intel.charts.weekly_distance_14 | map(attribute='value') | max) if intel.charts.weekly_distance_14 else 1 %}
+        <div class='mini-bars'>
           {% for point in intel.charts.weekly_distance_14 %}
             {% set h = ((point.value / (weekly_max if weekly_max > 0 else 1)) * 100) | round(0, 'ceil') | int %}
-            <div class="bar-wrap" title="{{ point.label }}: {{ point.value }} km">
-              <div class="bar" style="height:{{ 8 if h < 8 and point.value > 0 else h }}%"></div>
+            <div class='bar-wrap' title='{{ point.label }}: {{ point.value }} km'>
+              <div class='bar' style='height:{{ 8 if h < 8 and point.value > 0 else h }}%'></div>
             </div>
           {% endfor %}
         </div>
       </div>
     </section>
 
-    <section class='card'>`r`n      <h2>{{ goal.race_name }}</h2>`r`n      <div class='sub'>Current Capability (Flat Course): {{ intel.current_projection }}</div>
-      <div class='sub'>Goal Time {{ goal.goal_time }}  -  Target Pace {{ goal.target_pace }}</div>
+    <section class='card'>
+      <h2>{{ goal.race_name }} Projection</h2>
+      <div class='sub'>Current Capability (Flat Course): {{ intel.current_projection }}</div>
+      <div class='sub'>Goal Time {{ goal.goal_time }} | Target Pace {{ goal.target_pace }}</div>
       {% if not intel.insufficient_data %}
         <div class='performance-number'>{{ intel.race_day_projection }}</div>
-        <div class='sub'>Current Capability (Flat Course): {{ intel.current_projection }}</div>
-        <div class='metric'><span>&#127942; Goal Probability</span><strong>{{ intel.probability }}%</strong></div>
+        <div class='metric'><span>Goal Probability</span><strong>{{ intel.probability }}%</strong></div>
         <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
         <div class='progress'><span style='width:{{ intel.goal_progress_pct }}%'></span></div>
       {% else %}
@@ -86,11 +92,12 @@
       <h2>Long Run Ladder</h2>
       {% set longest = long_run.longest_km %}
       <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}&#10003;{% endif %}</div>
-      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}&#8592; NEXT TARGET{% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}NEXT TARGET{% endif %}</div>
       <div class='ladder-item {{ 'done' if longest >= 28 else '' }}'>28 km {% if longest >= 28 %}&#10003;{% endif %}</div>
       <div class='ladder-item {{ 'done' if longest >= 32 else '' }}'>32 km {% if longest >= 32 %}&#10003;{% endif %}</div>
       <div class='sub'>Latest long run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
-      <div class='sub'>Recommended next long run date: Sunday</div>
+      {% set milestones_done = (1 if longest >= 21 else 0) + (1 if longest >= 24 else 0) + (1 if longest >= 28 else 0) + (1 if longest >= 32 else 0) %}
+      <div class='sub'>Milestone progress: {{ milestones_done }} / 4</div>
     </section>
 
     <section class='card'>
@@ -98,14 +105,14 @@
       <div class='metric'><span>Current CTL</span><strong>{{ intel.current_ctl }}</strong></div>
       <div class='metric'><span>Goal CTL</span><strong>{{ intel.target_ctl }}</strong></div>
       <div class='sub'>{{ intel.ctl_trend_text }}</div>
-      <div class="mini-chart">
-        <div class="mini-chart-title">Last 14 days CTL</div>
-        {% set ctl_max = (intel.charts.ctl_14 | map(attribute="value") | max) if intel.charts.ctl_14 else 1 %}
-        <div class="mini-bars">
+      <div class='mini-chart'>
+        <div class='mini-chart-title'>Last 14 days CTL</div>
+        {% set ctl_max = (intel.charts.ctl_14 | map(attribute='value') | max) if intel.charts.ctl_14 else 1 %}
+        <div class='mini-bars'>
           {% for point in intel.charts.ctl_14 %}
             {% set h = ((point.value / (ctl_max if ctl_max > 0 else 1)) * 100) | round(0, 'ceil') | int %}
-            <div class="bar-wrap" title="{{ point.label }}: {{ point.value }}">
-              <div class="bar fitness" style="height:{{ 8 if h < 8 and point.value > 0 else h }}%"></div>
+            <div class='bar-wrap' title='{{ point.label }}: {{ point.value }}'>
+              <div class='bar fitness' style='height:{{ 8 if h < 8 and point.value > 0 else h }}%'></div>
             </div>
           {% endfor %}
         </div>
@@ -124,13 +131,24 @@
 
     <section class='card'>
       <h2>Readiness Checklist</h2>
-      {% for item in intel.prediction_readiness["items"] %}
+      {% for item in intel.prediction_readiness['items'] %}
         <div class='metric'>
           <span>{{ item.title }}</span>
-          <strong class='{{ "status-green" if item.ready else "status-orange" }}'>{{ "?" if item.ready else "?" }} {{ item.done }} / {{ item.min }}</strong>
+          <strong class='{{ "status-green" if item.ready else "status-orange" }}'>{{ item.done }} / {{ item.min }}</strong>
         </div>
+        <div class='sub'>{{ item.line1 }}</div>
+        <div class='sub'>{{ item.line2 }}</div>
+        {% if item.line3 %}<div class='sub'>{{ item.line3 }}</div>{% endif %}
       {% endfor %}
       <div class='progress'><span style='width:{{ intel.training_status.progress_pct }}%'></span></div>
+    </section>
+
+    <section class='card'>
+      <h2>Race Readiness</h2>
+      <div class='metric'><span>Aerobic base</span><strong>{{ intel.race_readiness.aerobic_base }}</strong></div>
+      <div class='metric'><span>Endurance depth</span><strong>{{ intel.race_readiness.endurance_depth }}</strong></div>
+      <div class='metric'><span>Fatigue resistance</span><strong>{{ intel.race_readiness.fatigue_resistance }}</strong></div>
+      <div class='metric'><span>Overall readiness</span><strong>{{ intel.race_readiness.overall }}</strong></div>
     </section>
 
     <section class='card coaching'>

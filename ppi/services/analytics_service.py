@@ -181,6 +181,19 @@ def _ctl_proxy_6w(distance_activities, today):
     windows = [_sum_distance_in_window(distance_activities, today - timedelta(days=7 * i), days=7) for i in range(6)]
     return round(sum(windows) / len(windows), 1) if windows else 0.0
 
+def _ctl_proxy_at(distance_activities, end_day):
+    windows = [_sum_distance_in_window(distance_activities, end_day - timedelta(days=7 * i), days=7) for i in range(6)]
+    return round(sum(windows) / len(windows), 1) if windows else 0.0
+
+def _ctl_proxy_series(distance_activities, today, days=14):
+    start = today - timedelta(days=days - 1)
+    out = []
+    for i in range(days):
+        day = start + timedelta(days=i)
+        ctl_proxy = _ctl_proxy_at(distance_activities, day)
+        out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": ctl_proxy})
+    return out
+
 def _daily_distance_series(distance_activities, today, days=14):
     start = today - timedelta(days=days - 1)
     out = []
@@ -423,6 +436,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "pace_long": pace_long,
         "ctl_proxy": ctl_proxy,
         "ctl_real": ctl_real,
+        "ctl_proxy_series_14": _ctl_proxy_series(distance_acts, today, days=14),
         "distance_series_14": distance_series_14,
         "readiness": {"ready": all(i["ready"] for i in readiness_items), "items": readiness_items},
         "readiness_progress_pct": readiness_progress,
@@ -589,32 +603,17 @@ def performance_intelligence(user_id, user_timezone=None):
         "next_requirement": metrics["next_requirement"],
     }
 
-    ctl_progress_pct = int(max(0, min(100, (metrics["ctl_real"] / max(1.0, target_ctl)) * 100)))
+    ctl_progress_pct = int(max(0, min(100, (metrics["ctl_proxy"] / max(1.0, target_ctl)) * 100)))
 
-    all_metrics = fetch_metrics(user_id)
-    ctl_series_14 = _ctl_series(all_metrics, today_local, days=14)
-
-    if len(all_metrics) >= 2:
-        latest_metric_obj = all_metrics[-1]
-        latest_ctl = float(latest_metric_obj.ctl)
-
-        baseline_cutoff = latest_metric_obj.date - timedelta(days=14)
-        baseline_metric = all_metrics[0]
-        for m in all_metrics:
-            if m.date <= baseline_cutoff:
-                baseline_metric = m
-            else:
-                break
-
-        delta = round(latest_ctl - float(baseline_metric.ctl), 1)
-        if delta > 0.5:
-            ctl_trend_text = f"Trend: up +{delta} last 14 days"
-        elif delta < -0.5:
-            ctl_trend_text = f"Trend: down {delta} last 14 days"
-        else:
-            ctl_trend_text = "Trend: stable"
+    ctl_series_14 = metrics["ctl_proxy_series_14"]
+    ctl_delta = round(ctl_series_14[-1]["value"] - ctl_series_14[0]["value"], 1) if ctl_series_14 else 0.0
+    if ctl_delta > 0.3:
+        ctl_trend_text = f"Trend: up +{ctl_delta} last 14 days"
+    elif ctl_delta < -0.3:
+        ctl_trend_text = f"Trend: down {ctl_delta} last 14 days"
     else:
         ctl_trend_text = "Trend: stable"
+
 
     if metrics["weekly"]["completed_km"] >= 60:
         aerobic_base = "Strong"
@@ -649,7 +648,7 @@ def performance_intelligence(user_id, user_timezone=None):
         "prediction_note": prediction["note"],
         "goal_progress_pct": prediction["goal_progress_pct"],
         "insufficient_data": not prediction["valid"],
-        "current_ctl": metrics["ctl_real"],
+        "current_ctl": round(metrics["ctl_proxy"], 1),
         "target_ctl": target_ctl,
         "ctl_progress_pct": ctl_progress_pct,
         "ctl_trend_text": ctl_trend_text,
@@ -737,13 +736,4 @@ def recent_runs(user_id, limit=5, user_timezone=None):
         if len(out) >= limit:
             break
     return out
-
-
-
-
-
-
-
-
-
 
