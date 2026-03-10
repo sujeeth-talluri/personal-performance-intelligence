@@ -139,6 +139,17 @@ def _distance_training_activities(raw):
     ]
 
 
+def _load_activities(raw):
+    return [
+        r
+        for r in raw
+        if r["type"] in STRESS_TYPE_FACTOR
+        and not r["is_race"]
+        and r["moving_time_sec"] > 0
+        and (r["distance_km"] <= 50.0 if r["distance_km"] else True)
+    ]
+
+
 def _prediction_runs(raw):
     return [
         r
@@ -177,22 +188,35 @@ def _rolling_week_consistency(distance_activities, today):
         weekly_totals.append(_calendar_week_distance(distance_activities, start, end))
     return weekly_totals, len([v for v in weekly_totals if v >= 25.0])
 
-def _ctl_proxy_6w(distance_activities, today):
-    windows = [_sum_distance_in_window(distance_activities, today - timedelta(days=7 * i), days=7) for i in range(6)]
-    return round(sum(windows) / len(windows), 1) if windows else 0.0
+def _ctl_ema_series(load_activities, today, days=14):
+    if load_activities:
+        earliest = min(a["date"] for a in load_activities)
+        start = min(earliest, today - timedelta(days=120))
+    else:
+        start = today - timedelta(days=120)
 
-def _ctl_proxy_at(distance_activities, end_day):
-    windows = [_sum_distance_in_window(distance_activities, end_day - timedelta(days=7 * i), days=7) for i in range(6)]
-    return round(sum(windows) / len(windows), 1) if windows else 0.0
+    daily_tss = {}
+    for a in load_activities:
+        stress = activity_stress(a["type"], a["moving_time_sec"], a["avg_hr"])
+        daily_tss[a["date"]] = daily_tss.get(a["date"], 0.0) + stress
 
-def _ctl_proxy_series(distance_activities, today, days=14):
-    start = today - timedelta(days=days - 1)
+    ctl = 0.0
+    timeline = {}
+    day = start
+    while day <= today:
+        tss = daily_tss.get(day, 0.0)
+        ctl = ctl + (tss - ctl) / 42.0
+        timeline[day] = round(ctl, 1)
+        day += timedelta(days=1)
+
+    series_start = today - timedelta(days=days - 1)
     out = []
     for i in range(days):
-        day = start + timedelta(days=i)
-        ctl_proxy = _ctl_proxy_at(distance_activities, day)
-        out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": ctl_proxy})
-    return out
+        d = series_start + timedelta(days=i)
+        out.append({"date": d.isoformat(), "label": f"{d.strftime('%b')} {d.day}", "value": timeline.get(d, 0.0)})
+
+    return round(timeline.get(today, 0.0), 1), out
+
 
 def _daily_distance_series(distance_activities, today, days=14):
     start = today - timedelta(days=days - 1)
@@ -203,18 +227,6 @@ def _daily_distance_series(distance_activities, today, days=14):
         out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": km})
     return out
 
-
-def _ctl_series(metric_rows, today, days=14):
-    start = today - timedelta(days=days - 1)
-    by_date = {m.date: float(m.ctl) for m in metric_rows}
-    last_known = 0.0
-    out = []
-    for i in range(days):
-        day = start + timedelta(days=i)
-        if day in by_date:
-            last_known = by_date[day]
-        out.append({"date": day.isoformat(), "label": f"{day.strftime('%b')} {day.day}", "value": round(last_known, 1)})
-    return out
 
 def _fit_half_equivalent(pace_medium, pace_long):
     if pace_medium and pace_long:
@@ -281,6 +293,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     today = _today_local(user_timezone)
 
     distance_acts = _distance_training_activities(raw)
+    load_acts = _load_activities(raw)
     runs = _prediction_runs(raw)
     runs_8w = [r for r in runs if r["date"] >= today - timedelta(days=56)]
 
@@ -290,7 +303,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     week_start, week_end = _calendar_week_bounds(today)
     rolling_week_distance_km = _calendar_week_distance(distance_acts, week_start, week_end)
     _, consistent_weeks = _rolling_week_consistency(distance_acts, today)
-    ctl_proxy = _ctl_proxy_6w(distance_acts, today)
+    ctl_today, ctl_series_14 = _ctl_ema_series(load_acts, today, days=14)
     distance_series_14 = _daily_distance_series(distance_acts, today, days=14)
 
     baseline_goal = _baseline_weekly_goal(goal_ctx["goal_seconds"])
@@ -426,21 +439,28 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     if week_closed and rolling_week_distance_km < 45.0:
         next_requirement = "Prediction unlock expected after next qualifying week."
 
-    latest_metric = fetch_latest_metric(user_id)
-    ctl_real = round(float(latest_metric.ctl), 1) if latest_metric else 0.0
+    unlock_requirements = []
+    if need_long > 0:
+        unlock_requirements.append("2 long runs >=18 km")
+    if need_weekly > 0:
+        unlock_requirements.append("45 km weekly mileage")
+    if need_weeks > 0:
+        unlock_requirements.append("3 consistent training weeks")
+    if need_medium > 0:
+        unlock_requirements.append("3 medium runs between 8-12 km")
 
     return {
         "medium_runs": medium_runs,
         "long_runs": long_runs,
         "pace_medium": pace_medium,
         "pace_long": pace_long,
-        "ctl_proxy": ctl_proxy,
-        "ctl_real": ctl_real,
-        "ctl_proxy_series_14": _ctl_proxy_series(distance_acts, today, days=14),
+        "ctl_proxy": ctl_today,
+        "ctl_series_14": ctl_series_14,
         "distance_series_14": distance_series_14,
         "readiness": {"ready": all(i["ready"] for i in readiness_items), "items": readiness_items},
         "readiness_progress_pct": readiness_progress,
         "next_requirement": next_requirement,
+        "unlock_requirements": unlock_requirements,
         "weekly": {
             "weekly_goal_km": weekly_goal_km,
             "completed_km": completed_km,
@@ -473,8 +493,6 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "fri_message": fri_message,
         },
     }
-
-
 def _marathon_prediction_seconds(metrics):
     half_equiv = _fit_half_equivalent(metrics["pace_medium"], metrics["pace_long"])
     if not half_equiv:
@@ -605,7 +623,7 @@ def performance_intelligence(user_id, user_timezone=None):
 
     ctl_progress_pct = int(max(0, min(100, (metrics["ctl_proxy"] / max(1.0, target_ctl)) * 100)))
 
-    ctl_series_14 = metrics["ctl_proxy_series_14"]
+    ctl_series_14 = metrics["ctl_series_14"]
     ctl_delta = round(ctl_series_14[-1]["value"] - ctl_series_14[0]["value"], 1) if ctl_series_14 else 0.0
     if ctl_delta > 0.3:
         ctl_trend_text = f"Trend: up +{ctl_delta} last 14 days"
@@ -654,8 +672,14 @@ def performance_intelligence(user_id, user_timezone=None):
         "ctl_trend_text": ctl_trend_text,
         "weekly": weekly,
         "prediction_readiness": metrics["readiness"],
+        "unlock_requirements": metrics["unlock_requirements"],
         "endurance": metrics["endurance"],
         "training_status": training_status,
+        "training_counts": {
+            "long_runs": len(metrics["long_runs"]),
+            "medium_runs": len(metrics["medium_runs"]),
+            "consistent_weeks": next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0),
+        },
         "race_readiness": race_readiness,
         "charts": {
             "weekly_distance_14": metrics["distance_series_14"],

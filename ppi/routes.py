@@ -101,29 +101,69 @@ def _build_weekly_plan(today_local, runs, weekly_goal, long_run):
         ("Tue", "Aerobic Run", f"{aerobic_km} km"),
         ("Wed", "Strength", "Gym"),
         ("Thu", "Tempo Run", f"{tempo_km} km"),
+        ("Fri", "Strength", "Gym"),
         ("Sat", "Easy Run", f"{easy_km} km"),
         ("Sun", "Long Run", f"{long_km} km"),
     ]
-    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Sat": 5, "Sun": 6}
+    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
 
     items = []
     for day_code, session_name, planned in schedule:
         day_date = week_start + timedelta(days=weekday_map[day_code])
         day_iso = day_date.isoformat()
         done_run = run_by_date.get(day_iso)
+
+        planned_km = None
+        if planned.endswith(" km"):
+            try:
+                planned_km = float(planned.split(" ")[0])
+            except ValueError:
+                planned_km = None
+
+        is_distance_session = planned.endswith(" km")
+        status = "upcoming"
+        status_label = "Upcoming"
+        if done_run:
+            done_km = float(done_run["distance"])
+            if session_name == "Rest" or (planned_km is not None and done_km > planned_km + 0.4):
+                status = "extra"
+                status_label = f"Extra {done_run['distance']} km"
+            else:
+                status = "completed"
+                status_label = f"Completed {done_run['distance']} km"
+        elif day_date < today_local and is_distance_session:
+            status = "skipped"
+            status_label = "Skipped"
+        elif session_name == "Rest":
+            status = "rest"
+            status_label = "Rest"
+
         items.append(
             {
                 "day": day_code,
+                "date": day_date,
                 "session": session_name,
                 "planned": planned,
                 "done": bool(done_run),
                 "actual": f"{done_run['distance']} km" if done_run else None,
+                "status": status,
+                "status_label": status_label,
+                "planned_km": planned_km,
             }
         )
     return items
 
 
-def _build_today_workout(today_local, runs, today_plan):
+def _next_key_workout_label(today_local, weekly_plan):
+    for item in weekly_plan:
+        if item["session"] == "Rest":
+            continue
+        if item["date"] >= today_local and item["status"] not in {"completed", "extra"}:
+            return f"{item['day']} - {item['planned']} {item['session']}"
+    return "Complete this week's planned key sessions."
+
+
+def _build_today_workout(today_local, runs, today_plan, next_key_workout):
     today_iso = today_local.isoformat()
     today_run = next((r for r in runs if r["date"] == today_iso), None)
 
@@ -136,7 +176,7 @@ def _build_today_workout(today_local, runs, today_plan):
             "pace": today_run["pace"],
             "hr": str(today_run["hr"]) if today_run["hr"] else "--",
             "coach_insight": "Good aerobic execution today. Keep effort controlled.",
-            "next_suggestion": "Next key workout: aerobic run tomorrow.",
+            "next_key_workout": next_key_workout,
             "completed": True,
         }
 
@@ -148,18 +188,22 @@ def _build_today_workout(today_local, runs, today_plan):
         "pace": "--",
         "hr": "--",
         "coach_insight": "Today is a setup session to support marathon consistency.",
-        "next_suggestion": "Next key workout: stay consistent with planned weekly volume.",
+        "next_key_workout": next_key_workout,
         "completed": False,
     }
 
 
 def _build_ai_summary(intel):
-    trend = intel.get("ctl_trend_text", "Trend: stable")
-    next_req = intel.get("training_status", {}).get("next_requirement") or "complete this week's key workouts."
-    return (
-        f"{trend} and your marathon projection is {intel.get('race_day_projection', 'pending')}. "
-        f"Focus on {next_req} to improve race-day confidence."
-    )
+    long_run_count = intel.get("training_counts", {}).get("long_runs", 0)
+    weekly_km = float(intel.get("weekly", {}).get("completed_km", 0))
+    trend = (intel.get("ctl_trend_text") or "").lower()
+    if long_run_count < 2:
+        return "Schedule a long run this weekend to unlock race prediction."
+    if weekly_km < 45:
+        return "Increase weekly mileage to improve endurance."
+    if "down" in trend:
+        return "Training load dropped recently. Maintain consistent runs."
+    return "Training is trending in the right direction. Keep consistency through this week."
 
 def _current_user():
     user_id = session.get("user_id")
@@ -308,9 +352,11 @@ def dashboard():
     runs = recent_runs(user.id, limit=20, user_timezone=user_tz)
     today_local = _today_local_date(user_tz)
 
-    today_workout = _build_today_workout(today_local, runs, today_plan)
     weekly_plan = _build_weekly_plan(today_local, runs, weekly_goal, intel["long_run"])
+    next_key_workout = _next_key_workout_label(today_local, weekly_plan)
+    today_workout = _build_today_workout(today_local, runs, today_plan, next_key_workout)
     ai_summary = _build_ai_summary(intel)
+    key_session = next((item for item in weekly_plan if item["session"] == "Long Run"), weekly_plan[-1])
 
     return render_template(
         "dashboard.html",
@@ -324,6 +370,7 @@ def dashboard():
         show_today_plan=not today_workout["completed"],
         today_workout=today_workout,
         weekly_plan=weekly_plan,
+        key_session=key_session,
         ai_summary=ai_summary,
         runs=runs[:5],
         sync_info=sync_info,
@@ -447,11 +494,6 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
-
-
-
-
-
 
 
 

@@ -208,3 +208,7 @@ button, .btn {
 select option { background: #102632; color: #eef7ff; }
 .inline { display: flex; gap: 10px; flex-wrap: wrap; }
 .row { display: grid; gap: 8px; margin-bottom: 10px; }
+
+.unlock-list { margin: 8px 0 0 18px; padding: 0; }
+.unlock-list li { margin: 4px 0; }
+
