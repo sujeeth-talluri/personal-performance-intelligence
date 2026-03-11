@@ -697,6 +697,13 @@ def performance_intelligence(user_id, user_timezone=None):
         "overall": overall,
     }
 
+    consistent_weeks = next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0)
+    long_run_progress = min(1.0, (longest["distance_km"] / 32.0)) if longest else 0.0
+    weekly_mileage_progress = min(1.0, weekly["completed_km"] / 45.0)
+    consistency_progress = min(1.0, consistent_weeks / 3.0)
+    fitness_progress = min(1.0, round(metrics["ctl_proxy"], 1) / max(1.0, target_ctl))
+    marathon_readiness_pct = int(round((0.35 * long_run_progress + 0.30 * weekly_mileage_progress + 0.20 * consistency_progress + 0.15 * fitness_progress) * 100))
+
     return {
         "goal": goal_ctx,
         "current_projection": prediction["current_projection"],
@@ -720,9 +727,10 @@ def performance_intelligence(user_id, user_timezone=None):
         "training_counts": {
             "long_runs": len(metrics["long_runs"]),
             "medium_runs": len(metrics["medium_runs"]),
-            "consistent_weeks": next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0),
+            "consistent_weeks": consistent_weeks,
         },
         "race_readiness": race_readiness,
+        "marathon_readiness_pct": marathon_readiness_pct,
         "charts": {
             "weekly_distance_14": metrics["distance_series_14"],
             "ctl_14": ctl_series_14,
@@ -802,6 +810,8 @@ def recent_runs(user_id, limit=5, user_timezone=None):
         if len(out) >= limit:
             break
     return out
+
+
 
 
 

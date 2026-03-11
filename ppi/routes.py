@@ -9,9 +9,12 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .repositories import (
+    commit_all,
     consume_password_reset,
     create_password_reset,
     create_user,
+    fetch_activities_between,
+    fetch_workout_logs,
     get_goal,
     get_password_reset,
     get_user_by_email,
@@ -19,11 +22,11 @@ from .repositories import (
     save_goal,
     update_password,
     update_user_name,
+    upsert_workout_log,
 )
 from .services.analytics_service import (
     performance_intelligence,
     recent_runs,
-    today_training_reco,
     weekly_training_summary,
 )
 from .services.strava_oauth_service import (
@@ -86,109 +89,173 @@ def _week_bounds(today_local):
     end = start + timedelta(days=6)
     return start, end
 
+def _activity_local_date(dt_value, user_timezone):
+    try:
+        tz = ZoneInfo(user_timezone)
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    if dt_value.tzinfo is None:
+        dt_utc = dt_value.replace(tzinfo=timezone.utc)
+    else:
+        dt_utc = dt_value.astimezone(timezone.utc)
+    return dt_utc.astimezone(tz).date()
 
-def _build_weekly_plan(today_local, runs, weekly_goal, long_run):
-    week_start, _ = _week_bounds(today_local)
-    run_by_date = {r["date"]: r for r in runs}
+def _weekly_plan_template(weekly_goal, long_run):
+    weekly_target = max(45.0, float(weekly_goal.get("weekly_goal_km", 45.0)))
+    longest_km = float(long_run.get("longest_km") or 0.0)
+    next_milestone = float(long_run.get("next_milestone_km") or max(22.0, min(32.0, longest_km + 2.0)))
+    long_target = max(18.0, min(32.0, min(next_milestone, weekly_target * 0.38)))
+    tempo_target = max(8.0, min(16.0, round(weekly_target * 0.20, 1)))
+    aerobic_target = max(8.0, min(16.0, round(weekly_target * 0.17, 1)))
+    easy_one = max(6.0, min(12.0, round(weekly_target * 0.13, 1)))
+    remaining = max(6.0, weekly_target - (long_target + tempo_target + aerobic_target + easy_one))
+    easy_two = max(6.0, min(14.0, round(remaining, 1)))
+    return {
+        0: {"workout_type": "RUN", "session": "Easy Run", "target_km": easy_one},
+        1: {"workout_type": "RUN", "session": "Aerobic Run", "target_km": aerobic_target},
+        2: {"workout_type": "STRENGTH", "session": "Strength", "target_km": None},
+        3: {"workout_type": "RUN", "session": "Tempo Run", "target_km": tempo_target},
+        4: {"workout_type": "STRENGTH", "session": "Strength", "target_km": None},
+        5: {"workout_type": "RUN", "session": "Easy Run", "target_km": easy_two},
+        6: {"workout_type": "RUN", "session": "Long Run", "target_km": long_target},
+    }
 
-    long_km = int(round(long_run.get("next_milestone_km") or 24))
-    easy_km = max(6, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.14))))
-    aerobic_km = max(8, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.16))))
-    tempo_km = max(10, int(round((weekly_goal.get("weekly_goal_km", 60) * 0.2))))
 
-    schedule = [
-        ("Mon", "Easy Run", f"{easy_km} km"),
-        ("Tue", "Aerobic Run", f"{aerobic_km} km"),
-        ("Wed", "Strength", "Gym"),
-        ("Thu", "Tempo Run", f"{tempo_km} km"),
-        ("Fri", "Strength", "Gym"),
-        ("Sat", "Easy Run", f"{easy_km} km"),
-        ("Sun", "Long Run", f"{long_km} km"),
-    ]
-    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
 
-    items = []
-    for day_code, session_name, planned in schedule:
-        day_date = week_start + timedelta(days=weekday_map[day_code])
-        day_iso = day_date.isoformat()
-        done_run = run_by_date.get(day_iso)
+def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_run):
+    week_start, week_end = _week_bounds(today_local)
+    template = _weekly_plan_template(weekly_goal, long_run)
 
-        planned_km = None
-        if planned.endswith(" km"):
-            try:
-                planned_km = float(planned.split(" ")[0])
-            except ValueError:
-                planned_km = None
-
-        is_distance_session = planned.endswith(" km")
-        status = "upcoming"
-        status_label = "Upcoming"
-        if done_run:
-            done_km = float(done_run["distance"])
-            if session_name == "Rest" or (planned_km is not None and done_km > planned_km + 0.4):
-                status = "extra"
-                status_label = f"Extra {done_run['distance']} km"
-            else:
-                status = "completed"
-                status_label = f"Completed {done_run['distance']} km"
-        elif day_date < today_local and is_distance_session:
-            status = "skipped"
-            status_label = "Skipped"
-        elif session_name == "Rest":
-            status = "rest"
-            status_label = "Rest"
-
-        items.append(
-            {
-                "day": day_code,
-                "date": day_date,
-                "session": session_name,
-                "planned": planned,
-                "done": bool(done_run),
-                "actual": f"{done_run['distance']} km" if done_run else None,
-                "status": status,
-                "status_label": status_label,
-                "planned_km": planned_km,
-                "workout_type": "RUN" if planned.endswith(" km") else "STRENGTH" if session_name == "Strength" else "REST",
-            }
+    existing = {w.workout_date: w for w in fetch_workout_logs(user_id, week_start, week_end)}
+    for offset in range(7):
+        day_date = week_start + timedelta(days=offset)
+        if day_date in existing:
+            continue
+        plan = template[offset]
+        upsert_workout_log(
+            user_id=user_id,
+            workout_date=day_date,
+            workout_type=plan["workout_type"],
+            session_name=plan["session"],
+            target_distance_km=plan["target_km"],
+            status="planned",
+            source="engine",
+            auto_commit=False,
         )
-    return items
+    commit_all()
 
+    start_dt = datetime.combine(week_start - timedelta(days=1), datetime.min.time())
+    end_dt = datetime.combine(week_end + timedelta(days=1), datetime.max.time())
+    activities = fetch_activities_between(user_id, start_dt, end_dt)
+    by_day = {}
+    for a in activities:
+        local_day = _activity_local_date(a.date, user_timezone)
+        by_day.setdefault(local_day, []).append(a)
+
+    logs = fetch_workout_logs(user_id, week_start, week_end)
+    for log in logs:
+        acts = by_day.get(log.workout_date, [])
+        run_km = round(sum(a.distance_km for a in acts if (a.activity_type or "").lower() in {"run", "trailrun"} and not a.is_race), 1)
+        strength_done = any((a.activity_type or "").lower() in {"strength", "yoga"} for a in acts)
+
+        new_status = log.status
+        new_actual = log.actual_distance_km
+        if log.workout_type == "RUN":
+            target = float(log.target_distance_km or 0.0)
+            if run_km > 0:
+                new_status = "overperformed" if target > 0 and run_km > (target * 1.08) else "completed"
+                new_actual = run_km
+            elif log.workout_date < today_local:
+                new_status = "skipped"
+                new_actual = None
+            else:
+                new_status = "planned"
+                new_actual = None
+        elif log.workout_type == "STRENGTH":
+            if strength_done:
+                new_status = "completed"
+            elif log.workout_date < today_local:
+                new_status = "skipped"
+            else:
+                new_status = "planned"
+        else:
+            new_status = "planned"
+
+        if new_status != log.status or new_actual != log.actual_distance_km:
+            upsert_workout_log(
+                user_id=user_id,
+                workout_date=log.workout_date,
+                workout_type=log.workout_type,
+                session_name=log.session_name,
+                target_distance_km=log.target_distance_km,
+                status=new_status,
+                actual_distance_km=new_actual,
+                notes=log.notes,
+                source=log.source,
+                auto_commit=False,
+            )
+    commit_all()
+
+    out = []
+    for log in fetch_workout_logs(user_id, week_start, week_end):
+        planned = f"{int(round(log.target_distance_km))} km" if log.target_distance_km else ("Gym" if log.workout_type == "STRENGTH" else "Rest")
+        actual = f"{round(log.actual_distance_km, 1)} km" if log.actual_distance_km is not None else ("Gym" if log.status == "completed" and log.workout_type == "STRENGTH" else None)
+        out.append({
+            "day": log.workout_date.strftime("%a"),
+            "date": log.workout_date,
+            "session": log.session_name,
+            "planned": planned,
+            "done": log.status in {"completed", "overperformed"},
+            "actual": actual,
+            "status": log.status,
+            "status_label": log.status.title(),
+            "planned_km": log.target_distance_km,
+            "workout_type": log.workout_type,
+        })
+    return out
 
 def _next_key_workout_label(today_local, weekly_plan):
     for item in weekly_plan:
-        if item["session"] == "Rest":
+        if item["workout_type"] != "RUN":
             continue
-        if item["date"] > today_local and item["status"] not in {"completed", "extra"}:
+        if item["date"] > today_local and item["status"] not in {"completed", "overperformed"}:
             return f"{item['day']} - {item['planned']} {item['session']}"
-    return "Complete this week's planned key sessions."
+    return "No upcoming run scheduled this week."
 
-
-def _build_today_workout(today_local, runs, today_plan, next_key_workout):
+def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
     today_iso = today_local.isoformat()
     today_run = next((r for r in runs if r["date"] == today_iso), None)
+    today_assignment = next((w for w in weekly_plan if w["date"].isoformat() == today_iso), None)
+
+    workout_name = today_assignment["session"] if today_assignment else "Rest"
+    workout_type = today_assignment["workout_type"] if today_assignment else "REST"
+    target = today_assignment["planned"] if today_assignment else "Rest"
 
     if today_run:
         return {
             "date": today_local.strftime("%a %b %d"),
-            "workout": "Run",
+            "workout": workout_name,
+            "workout_type": workout_type,
             "status": "Completed",
+            "distance_target": target,
             "distance": f"{today_run['distance']} km",
             "pace": today_run["pace"],
             "hr": str(today_run["hr"]) if today_run["hr"] else "--",
-            "coach_insight": "Good aerobic execution today. Keep effort controlled.",
+            "coach_insight": "Workout completed for today. Keep recovery and hydration on track.",
             "next_key_workout": next_key_workout,
             "completed": True,
         }
 
     return {
         "date": today_local.strftime("%a %b %d"),
-        "workout": today_plan["title"],
+        "workout": workout_name,
+        "workout_type": workout_type,
         "status": "Upcoming",
-        "distance": today_plan["details"],
+        "distance_target": target,
+        "distance": "--",
         "pace": "--",
         "hr": "--",
-        "coach_insight": "Today is a setup session to support marathon consistency.",
+        "coach_insight": "Today's session is assigned from your weekly plan.",
         "next_key_workout": next_key_workout,
         "completed": False,
     }
@@ -200,8 +267,13 @@ def _build_ai_summary(intel, weekly_plan):
         return "Injury risk is elevated. Reduce long-run strain and keep easy days truly easy."
 
     missed = [p for p in weekly_plan if p.get("status") == "skipped" and p.get("workout_type") == "RUN"]
+    upcoming_runs = [p for p in weekly_plan if p.get("workout_type") == "RUN" and p.get("status") in {"upcoming", "skipped"}]
     if missed:
-        return "You missed a key run this week. Recover consistency before adding intensity."
+        first = missed[0]
+        focus = ", ".join([f"{u['day']} {u['session']}" for u in upcoming_runs[:2]])
+        if focus:
+            return f"You skipped {first['day']}'s {first['session']}. Focus on {focus}."
+        return f"You skipped {first['day']}'s {first['session']}."
 
     long_run_count = intel.get("training_counts", {}).get("long_runs", 0)
     if long_run_count < 2:
@@ -359,14 +431,12 @@ def dashboard():
 
     weekly_summary = weekly_training_summary(user.id)
     weekly_goal = intel["weekly"]
-
-    today_plan = today_training_reco(intel["probability"], user_timezone=user_tz)
     runs = recent_runs(user.id, limit=20, user_timezone=user_tz)
     today_local = _today_local_date(user_tz)
 
-    weekly_plan = _build_weekly_plan(today_local, runs, weekly_goal, intel["long_run"])
+    weekly_plan = _build_weekly_plan(user.id, today_local, user_tz, weekly_goal, intel["long_run"])
     next_key_workout = _next_key_workout_label(today_local, weekly_plan)
-    today_workout = _build_today_workout(today_local, runs, today_plan, next_key_workout)
+    today_workout = _build_today_workout(today_local, runs, weekly_plan, next_key_workout)
     ai_summary = _build_ai_summary(intel, weekly_plan)
     key_session = next((item for item in weekly_plan if item["session"] == "Long Run"), weekly_plan[-1])
     key_session_importance = "High" if key_session["session"] == "Long Run" else "Medium" if key_session["session"] == "Tempo Run" else "Low"
@@ -379,7 +449,6 @@ def dashboard():
         weekly_goal=weekly_goal,
         weekly_summary=weekly_summary,
         endurance=intel["endurance"],
-        today_plan=today_plan,
         show_today_plan=not today_workout["completed"],
         today_workout=today_workout,
         weekly_plan=weekly_plan,
@@ -508,6 +577,14 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
+
+
+
+
+
+
+
+
 
 
 

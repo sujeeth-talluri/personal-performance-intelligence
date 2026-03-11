@@ -1,7 +1,7 @@
-﻿from datetime import date, datetime
+from datetime import date, datetime
 
 from .extensions import db
-from .models import Activity, Goal, Metric, PasswordReset, PredictionHistory, StravaToken, User
+from .models import Activity, Goal, Metric, PasswordReset, PredictionHistory, StravaToken, User, WorkoutLog
 
 
 def _commit():
@@ -193,3 +193,62 @@ def get_latest_prediction(user_id):
 
 def commit_all():
     _commit()
+
+def fetch_activities_between(user_id, start_dt, end_dt):
+    return (
+        Activity.query.filter(Activity.user_id == user_id)
+        .filter(Activity.date >= start_dt)
+        .filter(Activity.date <= end_dt)
+        .order_by(Activity.date.asc())
+        .all()
+    )
+
+
+def fetch_workout_logs(user_id, start_date, end_date):
+    return (
+        WorkoutLog.query.filter(WorkoutLog.user_id == user_id)
+        .filter(WorkoutLog.workout_date >= start_date)
+        .filter(WorkoutLog.workout_date <= end_date)
+        .order_by(WorkoutLog.workout_date.asc())
+        .all()
+    )
+
+
+def upsert_workout_log(
+    user_id,
+    workout_date,
+    workout_type,
+    session_name,
+    target_distance_km,
+    status="planned",
+    actual_distance_km=None,
+    notes=None,
+    source="engine",
+    auto_commit=True,
+):
+    row = WorkoutLog.query.filter_by(user_id=user_id, workout_date=workout_date).first()
+    if row:
+        row.workout_type = workout_type
+        row.session_name = session_name
+        row.target_distance_km = target_distance_km
+        row.status = status
+        row.actual_distance_km = actual_distance_km
+        row.notes = notes
+        row.source = source
+    else:
+        row = WorkoutLog(
+            user_id=user_id,
+            workout_date=workout_date,
+            workout_type=workout_type,
+            session_name=session_name,
+            target_distance_km=target_distance_km,
+            status=status,
+            actual_distance_km=actual_distance_km,
+            notes=notes,
+            source=source,
+        )
+        db.session.add(row)
+
+    if auto_commit:
+        _commit()
+    return row

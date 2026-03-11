@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 
 from .extensions import db
 
@@ -90,3 +90,19 @@ class PredictionHistory(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=_utcnow_naive, nullable=False)
     projection_seconds = db.Column(db.Float, nullable=False)
+
+class WorkoutLog(db.Model):
+    __tablename__ = "workout_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    workout_date = db.Column(db.Date, nullable=False, index=True)
+    workout_type = db.Column(db.String(16), nullable=False)  # RUN | STRENGTH | REST
+    session_name = db.Column(db.String(64), nullable=False)
+    target_distance_km = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(16), nullable=False, default="planned")  # planned | completed | skipped | overperformed
+    actual_distance_km = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.String(255), nullable=True)
+    source = db.Column(db.String(24), nullable=False, default="engine")
+
+    __table_args__ = (db.UniqueConstraint("user_id", "workout_date", name="uq_user_workout_date"),)
