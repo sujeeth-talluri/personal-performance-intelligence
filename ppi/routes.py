@@ -149,6 +149,7 @@ def _build_weekly_plan(today_local, runs, weekly_goal, long_run):
                 "status": status,
                 "status_label": status_label,
                 "planned_km": planned_km,
+                "workout_type": "RUN" if planned.endswith(" km") else "STRENGTH" if session_name == "Strength" else "REST",
             }
         )
     return items
@@ -158,7 +159,7 @@ def _next_key_workout_label(today_local, weekly_plan):
     for item in weekly_plan:
         if item["session"] == "Rest":
             continue
-        if item["date"] >= today_local and item["status"] not in {"completed", "extra"}:
+        if item["date"] > today_local and item["status"] not in {"completed", "extra"}:
             return f"{item['day']} - {item['planned']} {item['session']}"
     return "Complete this week's planned key sessions."
 
@@ -193,17 +194,28 @@ def _build_today_workout(today_local, runs, today_plan, next_key_workout):
     }
 
 
-def _build_ai_summary(intel):
+def _build_ai_summary(intel, weekly_plan):
+    # Priority: injury risk -> missed workouts -> long run progression -> training load -> readiness
+    if (intel.get("endurance", {}).get("lrr_status") or "").lower() == "fatigue risk":
+        return "Injury risk is elevated. Reduce long-run strain and keep easy days truly easy."
+
+    missed = [p for p in weekly_plan if p.get("status") == "skipped" and p.get("workout_type") == "RUN"]
+    if missed:
+        return "You missed a key run this week. Recover consistency before adding intensity."
+
     long_run_count = intel.get("training_counts", {}).get("long_runs", 0)
-    weekly_km = float(intel.get("weekly", {}).get("completed_km", 0))
-    trend = (intel.get("ctl_trend_text") or "").lower()
     if long_run_count < 2:
-        return "Schedule a long run this weekend to unlock race prediction."
-    if weekly_km < 45:
-        return "Increase weekly mileage to improve endurance."
+        return "Long run progression is behind. Schedule a long run this weekend to unlock prediction."
+
+    trend = (intel.get("ctl_trend_text") or "").lower()
     if "down" in trend:
-        return "Training load dropped recently. Maintain consistent runs."
-    return "Training is trending in the right direction. Keep consistency through this week."
+        return "Training load dropped recently. Add steady volume to stabilize fitness."
+
+    next_req = intel.get("training_status", {}).get("next_requirement")
+    if next_req:
+        return f"Prediction readiness: {next_req}"
+
+    return "Training is on track. Keep this week consistent and protect recovery."
 
 def _current_user():
     user_id = session.get("user_id")
@@ -355,8 +367,9 @@ def dashboard():
     weekly_plan = _build_weekly_plan(today_local, runs, weekly_goal, intel["long_run"])
     next_key_workout = _next_key_workout_label(today_local, weekly_plan)
     today_workout = _build_today_workout(today_local, runs, today_plan, next_key_workout)
-    ai_summary = _build_ai_summary(intel)
+    ai_summary = _build_ai_summary(intel, weekly_plan)
     key_session = next((item for item in weekly_plan if item["session"] == "Long Run"), weekly_plan[-1])
+    key_session_importance = "High" if key_session["session"] == "Long Run" else "Medium" if key_session["session"] == "Tempo Run" else "Low"
 
     return render_template(
         "dashboard.html",
@@ -371,6 +384,7 @@ def dashboard():
         today_workout=today_workout,
         weekly_plan=weekly_plan,
         key_session=key_session,
+        key_session_importance=key_session_importance,
         ai_summary=ai_summary,
         runs=runs[:5],
         sync_info=sync_info,
@@ -494,6 +508,9 @@ def strava_callback():
     if not get_goal(user_id):
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
+
+
+
 
 
 

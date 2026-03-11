@@ -90,6 +90,16 @@ def _elevation_factor(elevation_type):
     return max(1.0, factors.get((elevation_type or "moderate").lower(), 1.02))
 
 
+
+def _running_stress_score(activity, marathon_pace_sec_per_km):
+    if activity["type"] not in {"run", "trailrun"}:
+        return 0.0
+    run_pace = activity.get("pace_sec_per_km")
+    if not run_pace or run_pace <= 0 or marathon_pace_sec_per_km <= 0:
+        return 0.0
+    pace_ratio = marathon_pace_sec_per_km / run_pace
+    duration_minutes = activity["moving_time_sec"] / 60.0
+    return round(max(0.0, duration_minutes * pace_ratio), 2)
 def _status_color(status):
     s = (status or "").lower()
     if "unavailable" in s or "insufficient" in s:
@@ -188,7 +198,7 @@ def _rolling_week_consistency(distance_activities, today):
         weekly_totals.append(_calendar_week_distance(distance_activities, start, end))
     return weekly_totals, len([v for v in weekly_totals if v >= 25.0])
 
-def _ctl_ema_series(load_activities, today, days=14):
+def _ctl_ema_series(load_activities, today, marathon_pace_sec_per_km, days=14):
     if load_activities:
         earliest = min(a["date"] for a in load_activities)
         start = min(earliest, today - timedelta(days=120))
@@ -197,7 +207,7 @@ def _ctl_ema_series(load_activities, today, days=14):
 
     daily_tss = {}
     for a in load_activities:
-        stress = activity_stress(a["type"], a["moving_time_sec"], a["avg_hr"])
+        stress = _running_stress_score(a, marathon_pace_sec_per_km)
         daily_tss[a["date"]] = daily_tss.get(a["date"], 0.0) + stress
 
     ctl = 0.0
@@ -303,7 +313,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     week_start, week_end = _calendar_week_bounds(today)
     rolling_week_distance_km = _calendar_week_distance(distance_acts, week_start, week_end)
     _, consistent_weeks = _rolling_week_consistency(distance_acts, today)
-    ctl_today, ctl_series_14 = _ctl_ema_series(load_acts, today, days=14)
+    ctl_today, ctl_series_14 = _ctl_ema_series(load_acts, today, goal_ctx["goal_seconds"] / 42.195, days=14)
     distance_series_14 = _daily_distance_series(distance_acts, today, days=14)
 
     baseline_goal = _baseline_weekly_goal(goal_ctx["goal_seconds"])
@@ -449,6 +459,34 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     if need_medium > 0:
         unlock_requirements.append("3 medium runs between 8-12 km")
 
+    eta_candidates = [need_long, need_weeks, need_weekly]
+    if need_medium > 0:
+        eta_candidates.append((need_medium + 1) // 2)
+    eta_weeks = max(eta_candidates) if eta_candidates else 0
+    if eta_weeks <= 0:
+        unlock_eta = "Ready now"
+    elif eta_weeks == 1:
+        unlock_eta = "1 week"
+    elif eta_weeks == 2:
+        unlock_eta = "1-2 weeks"
+    else:
+        unlock_eta = f"{eta_weeks} weeks"
+
+    longest_for_shape = longest_run["distance_km"] if longest_run else 0.0
+    consistency_ratio = min(1.0, consistent_weeks / 4.0)
+    marathon_shape = min(1.0, (longest_for_shape / 32.0) * 0.4 + (rolling_week_distance_km / 70.0) * 0.4 + consistency_ratio * 0.2)
+    if adi is None:
+        aerobic_durability = 0.75
+    else:
+        aerobic_durability = max(0.6, min(1.05, 1.0 / max(1.0, adi)))
+    bonk_risk_score = max(0.0, min(1.0, 1.0 - (marathon_shape * aerobic_durability)))
+    if bonk_risk_score < 0.33:
+        bonk_risk_label = "Low"
+    elif bonk_risk_score < 0.66:
+        bonk_risk_label = "Moderate"
+    else:
+        bonk_risk_label = "High"
+
     return {
         "medium_runs": medium_runs,
         "long_runs": long_runs,
@@ -461,6 +499,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "readiness_progress_pct": readiness_progress,
         "next_requirement": next_requirement,
         "unlock_requirements": unlock_requirements,
+        "unlock_eta": unlock_eta,
+        "bonk_risk": {"score": round(bonk_risk_score, 2), "label": bonk_risk_label, "marathon_shape": round(marathon_shape, 2)},
         "weekly": {
             "weekly_goal_km": weekly_goal_km,
             "completed_km": completed_km,
@@ -673,7 +713,9 @@ def performance_intelligence(user_id, user_timezone=None):
         "weekly": weekly,
         "prediction_readiness": metrics["readiness"],
         "unlock_requirements": metrics["unlock_requirements"],
+        "unlock_eta": metrics["unlock_eta"],
         "endurance": metrics["endurance"],
+        "bonk_risk": metrics["bonk_risk"],
         "training_status": training_status,
         "training_counts": {
             "long_runs": len(metrics["long_runs"]),
@@ -760,4 +802,8 @@ def recent_runs(user_id, limit=5, user_timezone=None):
         if len(out) >= limit:
             break
     return out
+
+
+
+
 

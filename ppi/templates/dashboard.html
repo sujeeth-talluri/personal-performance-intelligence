@@ -42,15 +42,13 @@
       <div class='plan-list'>
         {% for p in weekly_plan %}
           <div class='plan-row'>
-            <span>{{ p.day }} {{ p.session }}</span>
+            <span>{{ p.day }} {{ p.session }} <span class='sub'>{{ p.workout_type }}</span></span>
             {% if p.status == 'completed' %}
-              <strong class='status-green'>&#10003; {{ p.actual }}</strong>
+              <strong class='status-green'>&#10003; completed {{ p.actual }}</strong>
             {% elif p.status == 'skipped' %}
               <strong class='status-orange'>&#9888; skipped</strong>
             {% elif p.status == 'extra' %}
-              <strong class='status-orange'>&#11014; {{ p.actual }}{% if p.planned_km %} (planned {{ p.planned_km|int }} km){% endif %}</strong>
-            {% elif p.status == 'rest' %}
-              <strong class='sub'>Rest</strong>
+              <strong class='status-orange'>&#11014; overperformed {{ p.actual }}{% if p.planned_km %} (planned {{ p.planned_km|int }} km){% endif %}</strong>
             {% else %}
               <strong>{{ p.planned }}</strong>
             {% endif %}
@@ -60,11 +58,6 @@
       <div class='sub'>Weekly Goal: {{ weekly_goal.weekly_goal_km }} km</div>
       <div class='sub'>Completed: {{ weekly_goal.completed_km }} km | Remaining: {{ weekly_goal.remaining_km }} km</div>
       <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
-      {% if weekly_goal.guidance %}
-        <div class='sub'>{{ weekly_goal.guidance }}</div>
-      {% else %}
-        <div class='sub'>Suggested runs remaining: {{ weekly_goal.runs_remaining }} | Avg distance per run: {{ weekly_goal.avg_run_needed }} km</div>
-      {% endif %}
     </section>
 
     <section class='card'>
@@ -83,6 +76,7 @@
             <li>{{ cond }}</li>
           {% endfor %}
         </ul>
+        <div class='sub'><strong>Estimated unlock:</strong> {{ intel.unlock_eta }}</div>
       {% endif %}
     </section>
 
@@ -90,6 +84,7 @@
       <h2>Key Session This Week</h2>
       <div class='performance-number' style='font-size:1.5rem'>{{ key_session.day }} - {{ key_session.planned }} {{ key_session.session }}</div>
       <div class='sub'>Purpose: endurance progression.</div>
+      <div class='sub'><strong>Importance:</strong> {{ key_session_importance }}</div>
     </section>
 
     <section class='card'>
@@ -128,13 +123,14 @@
       <div class='metric'><span>Aerobic Durability</span><strong class='status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</strong></div>
       <div class='sub'>Your pace slightly declines in longer runs.</div>
       <div class='metric'><span>Fatigue Resistance</span><strong class='status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</strong></div>
-      <div class='sub'>This shows how well you hold pace across long efforts.</div>
+      <div class='sub'>Requires 3 long runs >=18 km. Currently completed: {{ intel.training_counts.long_runs }}</div>
       <div class='metric'><span>Long Run Balance</span><strong class='status-{{ endurance.lrr_color }}'>{{ endurance.lrr_status }}</strong></div>
       <div class='sub'>Checks if your long run is balanced against weekly mileage.</div>
+      <div class='metric'><span>Marathon Bonk Risk</span><strong class='status-{{ 'green' if intel.bonk_risk.label == 'Low' else ('orange' if intel.bonk_risk.label == 'Moderate' else 'red') }}'>{{ intel.bonk_risk.label }}</strong></div>
     </section>
 
     <section class='card'>
-      <h2>Readiness Checklist</h2>
+      <h2>Prediction Readiness</h2>
       <div class='sub'>These metrics confirm that enough training data exists to estimate marathon performance.</div>
       {% for item in intel.prediction_readiness['items'] %}
         <div class='metric'>
@@ -170,4 +166,3 @@
   </main>
 </body>
 </html>
-
