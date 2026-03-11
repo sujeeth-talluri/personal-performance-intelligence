@@ -8,13 +8,12 @@
 </head>
 <body>
   <main class='wrap'>
-    <section class='card hero'>
+    <section class='card hero compact'>
       <div class='header-row'>
         <div>
           <h1>{{ goal.race_name }}</h1>
-          <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }}</div>
-          <div class='sub'>{{ goal.days_remaining }} days remaining | Today {{ today_date }}</div>
-          <div class='sub'>Runner: {{ user.name }}</div>
+          <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
+          <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
         </div>
         <div class='icon-actions'>
           <a class='icon-btn' href='/settings' aria-label='Settings'>&#9881;</a>
@@ -32,118 +31,109 @@
       </div>
       <div class='metric'><span>Workout Type</span><strong>{{ today_workout.workout_type }}</strong></div>
       <div class='metric'><span>Distance Target</span><strong>{{ today_workout.distance_target }}</strong></div>
-      <div class='metric'><span>Completed Distance</span><strong>{{ today_workout.distance }}</strong></div>
-      <div class='sub'><strong>Next Key Workout:</strong> {{ today_workout.next_key_workout }}</div>
+      <div class='metric'><span>Next Key Workout</span><strong>{{ today_workout.next_key_workout }}</strong></div>
+    </section>
+
+    <section class='card key-session'>
+      <h2>Key Session This Week</h2>
+      <div class='performance-number medium'>{{ key_session.day }} - {{ key_session.planned }} {{ key_session.session }}</div>
+      <div class='split-2'>
+        <div>
+          <div class='label'>Purpose</div>
+          <div class='sub'>Build marathon endurance</div>
+        </div>
+        <div>
+          <div class='label'>Importance</div>
+          <div class='sub-strong'>{{ key_session_importance }}</div>
+        </div>
+      </div>
     </section>
 
     <section class='card'>
-      <h2>This Week Plan</h2>
+      <h2>Weekly Plan</h2>
       <div class='plan-list'>
         {% for p in weekly_plan %}
-          <div class='plan-row'>
+          <div class='plan-row {{ 'done-row' if p.status in ['completed','overperformed'] else '' }} {{ 'skip-row' if p.status == 'skipped' else '' }}'>
             <span>{{ p.day }} {{ p.session }}</span>
             {% if p.status == 'completed' %}
               <strong class='status-green'>&#10003; {{ p.actual }}</strong>
+            {% elif p.status == 'overperformed' %}
+              <strong class='status-red'>&#11014; {{ p.actual }}{% if p.planned_km %} (target {{ p.planned_km|int }} km){% endif %}</strong>
             {% elif p.status == 'skipped' %}
-              <strong class='status-orange'>&#9888; skipped</strong>
-            {% elif p.status == 'extra' %}
-              <strong class='status-orange'>&#11014; {{ p.actual }}{% if p.planned_km %} (planned {{ p.planned_km|int }} km){% endif %}</strong>
+              <strong class='status-orange'>&#9888; Skipped</strong>
             {% elif p.workout_type == 'STRENGTH' %}
-              <strong>&#127947;&#65039; {{ p.planned }}</strong>
+              <strong>&#127947; Gym</strong>
             {% else %}
-              <strong>{{ p.planned }}</strong>
+              <strong>Target {{ p.planned }}</strong>
             {% endif %}
           </div>
         {% endfor %}
       </div>
-      <div class='sub'>Weekly Goal: {{ weekly_goal.weekly_goal_km }} km</div>
-      <div class='sub'>Completed: {{ weekly_goal.completed_km }} km | Remaining: {{ weekly_goal.remaining_km }} km</div>
-      <div class='progress'><span style='width:{{ weekly_goal.progress }}%'></span></div>
+      <div class='sub'>Goal {{ weekly_goal.weekly_goal_km }} km | Done {{ weekly_goal.completed_km }} km | Remaining {{ weekly_goal.remaining_km }} km</div>
+      <div class='progress animated'><span style='width:{{ weekly_goal.progress }}%'></span></div>
     </section>
 
     <section class='card'>
-      <h2>{{ goal.race_name }} Projection</h2>
-      <div class='sub'>Current Capability (Flat Course): {{ intel.current_projection }}</div>
-      <div class='sub'>Goal Time {{ goal.goal_time }} | Target Pace {{ goal.target_pace }}</div>
-      {% if not intel.insufficient_data %}
-        <div class='performance-number'>{{ intel.race_day_projection }}</div>
+      <h2>Marathon Projection</h2>
+      <div class='sub'>Current Capability (Flat Course)</div>
+      <div class='performance-number'>{{ intel.current_projection_range }}</div>
+      <div class='sub'>{{ goal.race_name }} Projection ({{ goal.elevation_type.title() }} Course)</div>
+      <div class='performance-number medium'>{{ intel.race_day_projection_range }}</div>
+      <div class='sub'>{{ intel.prediction_note }}</div>
+      {% if intel.probability is not none %}
         <div class='metric'><span>Goal Probability</span><strong>{{ intel.probability }}%</strong></div>
-        <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
-        <div class='progress'><span style='width:{{ intel.goal_progress_pct }}%'></span></div>
       {% else %}
-        <div class='sub-strong'>Race prediction unlocks after:</div>
-        <ul class='sub unlock-list'>
-          {% for cond in intel.unlock_requirements %}
-            <li>{{ cond }}</li>
-          {% endfor %}
-        </ul>
-        <div class='sub'><strong>Estimated unlock:</strong> {{ intel.unlock_eta }}</div>
+        <div class='metric'><span>Goal Probability</span><strong class='status-grey'>Calibrating</strong></div>
       {% endif %}
-    </section>
-
-    <section class='card'>
-      <h2>Key Session This Week</h2>
-      <div class='performance-number' style='font-size:1.5rem'>{{ key_session.day }} - {{ key_session.planned }} {{ key_session.session }}</div>
-      <div class='sub'>Purpose: endurance progression.</div>
-      <div class='sub'><strong>Importance:</strong> {{ key_session_importance }}</div>
+      <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal }}</strong></div>
     </section>
 
     <section class='card'>
       <h2>Long Run Ladder</h2>
       {% set longest = long_run.longest_km %}
       <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}&#10003;{% endif %}</div>
-      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}NEXT TARGET{% endif %}</div>
-      <div class='ladder-item {{ 'done' if longest >= 28 else '' }}'>28 km {% if longest >= 28 %}&#10003;{% endif %}</div>
-      <div class='ladder-item {{ 'done' if longest >= 32 else '' }}'>32 km {% if longest >= 32 %}&#10003;{% endif %}</div>
-      {% set milestones_done = (1 if longest >= 21 else 0) + (1 if longest >= 24 else 0) + (1 if longest >= 28 else 0) + (1 if longest >= 32 else 0) %}
+      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}NEXT{% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest >= 24 and longest < 28 else ('done' if longest >= 28 else '') }}'>28 km {% if longest >= 28 %}&#10003;{% endif %}</div>
+      <div class='ladder-item {{ 'next' if longest >= 28 and longest < 32 else ('done' if longest >= 32 else '') }}'>32 km {% if longest >= 32 %}&#10003;{% endif %}</div>
       <div class='sub'>Latest long run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
-      <div class='sub'>Milestone progress: {{ milestones_done }} / 4</div>
+      <div class='sub'>32 km long run typically indicates full marathon readiness.</div>
     </section>
 
     <section class='card'>
-      <h2>Fitness Build</h2>
-      <div class='metric'><span>Current CTL</span><strong>{{ intel.current_ctl }}</strong></div>
-      <div class='metric'><span>Goal CTL</span><strong>{{ intel.target_ctl }}</strong></div>
+      <h2>Fitness Trend</h2>
+      <div class='metric'><span>Fitness Trend</span><strong>{{ intel.fitness_trend_label }}</strong></div>
+      <div class='metric'><span>Training Momentum</span><strong>{{ intel.training_momentum }}</strong></div>
       <div class='sub'>{{ intel.ctl_trend_text }}</div>
-      <div class='mini-chart'>
-        <div class='mini-chart-title'>Last 14 days CTL</div>
-        {% set ctl_max = (intel.charts.ctl_14 | map(attribute='value') | max) if intel.charts.ctl_14 else 1 %}
-        <div class='mini-bars'>
-          {% for point in intel.charts.ctl_14 %}
-            {% set h = ((point.value / (ctl_max if ctl_max > 0 else 1)) * 100) | round(0, 'ceil') | int %}
-            <div class='bar-wrap' title='{{ point.label }}: {{ point.value }}'>
-              <div class='bar fitness' style='height:{{ 8 if h < 8 and point.value > 0 else h }}%'></div>
-            </div>
-          {% endfor %}
-        </div>
+      <div class='line-chart-wrap'>
+        <svg id='fitness-line' class='line-chart' viewBox='0 0 320 96' preserveAspectRatio='none' data-points='{{ intel.charts.ctl_14 | tojson }}'>
+          <polyline class='line-chart-path' points=''></polyline>
+        </svg>
       </div>
     </section>
 
     <section class='card'>
       <h2>Endurance Profile</h2>
-      <div class='metric'><span>Aerobic Durability</span><strong class='status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</strong></div>
-      <div class='sub'>Your pace fades slightly in runs longer than 12 km. Add long aerobic runs to improve durability.</div>
-      <div class='metric'><span>Fatigue Resistance</span><strong class='status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</strong></div>
-      <div class='sub'>Requires 3 long runs >=18 km. Currently completed: {{ intel.training_counts.long_runs }}</div>
-      <div class='metric'><span>Marathon Bonk Risk</span><strong class='status-{{ 'green' if intel.bonk_risk.label == 'Low' else ('orange' if intel.bonk_risk.label == 'Moderate' else 'red') }}'>{{ intel.bonk_risk.label }}</strong></div>
-      <div class='sub'>Reason: Longest run so far: {{ long_run.longest_km }} km.</div>
-      <div class='sub'>Recommended: Complete 24 km and 28 km long runs.</div>
+      <div class='endurance-block'>
+        <div class='metric'><span>Aerobic Durability</span><strong class='status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</strong></div>
+        <div class='sub'><span class='label'>Cause</span> Pace fades slightly in runs longer than 12 km.</div>
+        <div class='sub'><span class='label'>Fix</span> Add long aerobic runs and finish steady.</div>
+      </div>
+      <div class='endurance-block'>
+        <div class='metric'><span>Fatigue Resistance</span><strong class='status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</strong></div>
+        <div class='sub'>Requires 3 long runs >=18 km. Currently completed: {{ intel.training_counts.long_runs }}</div>
+      </div>
+      <div class='endurance-block'>
+        <div class='metric'><span>Bonk Risk</span><strong class='status-{{ 'green' if intel.bonk_risk.label == 'Low' else ('orange' if intel.bonk_risk.label == 'Moderate' else 'red') }}'>{{ intel.bonk_risk.label }}</strong></div>
+        <div class='sub'><span class='label'>Cause</span> Longest run: {{ long_run.longest_km }} km</div>
+        <div class='sub'><span class='label'>Fix</span> Complete 24 km and 28 km long runs.</div>
+      </div>
     </section>
 
     <section class='card'>
-      <h2>Prediction Readiness</h2>
-      <div class='metric'><span>Marathon Readiness</span><strong>{{ intel.marathon_readiness_pct }}%</strong></div>
-      <div class='progress'><span style='width:{{ intel.marathon_readiness_pct }}%'></span></div>
-      <div class='sub'>These metrics confirm that enough training data exists to estimate marathon performance.</div>
-      {% for item in intel.prediction_readiness['items'] %}
-        <div class='metric'>
-          <span>{{ item.title }}</span>
-          <strong class='{{ "status-green" if item.ready else "status-orange" }}'>{{ item.done }} / {{ item.min }}</strong>
-        </div>
-        <div class='sub'>{{ item.line1 }}</div>
-        <div class='sub'>{{ item.line2 }}</div>
-        {% if item.line3 %}<div class='sub'>{{ item.line3 }}</div>{% endif %}
-      {% endfor %}
+      <h2>Marathon Readiness</h2>
+      <div class='performance-number medium'>{{ intel.marathon_readiness_pct }}%</div>
+      <div class='progress animated'><span style='width:{{ intel.marathon_readiness_pct }}%'></span></div>
+      <div class='sub'><strong>Next Step:</strong> {{ intel.marathon_readiness_next_step }}</div>
     </section>
 
     <section class='card coaching'>
@@ -166,5 +156,31 @@
       {% endif %}
     </section>
   </main>
+
+  <script>
+    (function () {
+      const svg = document.getElementById('fitness-line');
+      if (!svg) return;
+      const raw = svg.dataset.points;
+      if (!raw) return;
+      let points = [];
+      try { points = JSON.parse(raw); } catch (_) { return; }
+      const values = points.map(p => Number(p.value || 0));
+      if (!values.length) return;
+      const min = Math.min.apply(null, values);
+      const max = Math.max.apply(null, values);
+      const range = Math.max(1, max - min);
+      const w = 320;
+      const h = 96;
+      const step = values.length > 1 ? (w / (values.length - 1)) : 0;
+      const coords = values.map((v, i) => {
+        const x = i * step;
+        const y = h - ((v - min) / range) * (h - 10) - 5;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+      const line = svg.querySelector('.line-chart-path');
+      if (line) line.setAttribute('points', coords);
+    })();
+  </script>
 </body>
 </html>
