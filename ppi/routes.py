@@ -40,6 +40,11 @@ from .services.strava_service import sync_strava_data
 web = Blueprint("web", __name__)
 
 
+@web.route("/healthz")
+def healthz():
+    return {"status": "ok"}, 200
+
+
 def _utcnow_naive():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 

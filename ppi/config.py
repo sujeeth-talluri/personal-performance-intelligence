@@ -1,4 +1,5 @@
 import os
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 def _normalize_database_url(url):
@@ -9,11 +10,33 @@ def _normalize_database_url(url):
     return url
 
 
+def _database_engine_options(url):
+    if not url:
+        return {}
+
+    options = {"pool_pre_ping": True}
+    if not url.startswith("postgresql://"):
+        return options
+
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.setdefault("connect_timeout", "5")
+    normalized_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    return {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "connect_args": {"connect_timeout": int(query["connect_timeout"])},
+        "_normalized_url": normalized_url,
+    }
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
 
     DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
-    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    _ENGINE_OPTIONS = _database_engine_options(DATABASE_URL)
+    SQLALCHEMY_DATABASE_URI = _ENGINE_OPTIONS.pop("_normalized_url", DATABASE_URL)
+    SQLALCHEMY_ENGINE_OPTIONS = _ENGINE_OPTIONS
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     STRAVA_CLIENT_ID = os.getenv("CLIENT_ID")
