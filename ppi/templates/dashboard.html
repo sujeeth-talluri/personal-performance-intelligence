@@ -50,7 +50,7 @@
       <div class='split-2'>
         <div>
           <div class='label'>Purpose</div>
-          <div class='sub'>Build marathon endurance</div>
+          <div class='sub'>{{ key_session.purpose or 'Build marathon endurance' }}</div>
         </div>
         <div>
           <div class='label'>Importance</div>
@@ -93,10 +93,10 @@
         {% endfor %}
       </div>
       {% if week_closed %}
-        <div class='sub'>Goal {{ weekly_goal.weekly_goal_km }} km | Completed {{ weekly_goal.completed_km }} km | Completion {{ weekly_completion_pct }}%</div>
+        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Completed {{ weekly_plan_completed_km }} km | Completion {{ weekly_completion_pct }}%</div>
         <div class='sub'><strong>Status:</strong> {{ weekly_status }}</div>
       {% else %}
-        <div class='sub'>Goal {{ weekly_goal.weekly_goal_km }} km | Done {{ weekly_goal.completed_km }} km | Remaining {{ weekly_goal.remaining_km }} km</div>
+        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Done {{ weekly_plan_completed_km }} km | Remaining {{ weekly_plan_remaining_km }} km</div>
       {% endif %}
       <div class='progress animated'><span style='width:{{ weekly_completion_pct }}%'></span></div>
     </section>

@@ -901,6 +901,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "high_fatigue": fatigue_flags["high_fatigue"],
             "moderate_fatigue": fatigue_flags["moderate_fatigue"],
             "long_run_failed_recent": long_run_state.get("failed_recent", False),
+            "goal_marathon_pace_sec_per_km": goal_ctx["goal_seconds"] / 42.195,
         },
         "longest_run": longest_run,
         "latest_long_run": latest_long_run,
