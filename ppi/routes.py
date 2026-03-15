@@ -124,6 +124,11 @@ def _weekly_plan_template(weekly_goal, long_run):
         tempo_target = max(6.0, min(10.0, round(weekly_target * 0.16, 1)))
         aerobic_target = max(6.0, min(10.0, round(weekly_target * 0.15, 1)))
         easy_one = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
+    elif phase == "recovery":
+        long_target = max(14.0, min(22.0, weekly_target * 0.28))
+        tempo_target = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
+        aerobic_target = max(6.0, min(10.0, round(weekly_target * 0.14, 1)))
+        easy_one = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
     elif phase == "taper":
         long_target = max(12.0, min(24.0, weekly_target * 0.30))
         tempo_target = max(6.0, min(10.0, round(weekly_target * 0.15, 1)))
@@ -219,6 +224,9 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
     phase = weekly_goal.get("phase", "build")
     rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
     max_safe_run = float(weekly_goal.get("max_safe_run") or max(10.0, weekly_goal_km * 0.35))
+    long_run_failed_recent = bool(weekly_goal.get("long_run_failed_recent"))
+    high_fatigue = bool(weekly_goal.get("high_fatigue"))
+    moderate_fatigue = bool(weekly_goal.get("moderate_fatigue"))
 
     missed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "missed"]
     partial_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "partial"]
@@ -243,6 +251,19 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
             meta = _plan_meta_for_session(item["session"])
             item.update(meta)
 
+    if phase == "recovery":
+        for item in future_runs:
+            if item["session"] == "Tempo Run":
+                item["session"] = "Aerobic Run"
+                item["planned_km"] = round(max(6.0, (item["planned_km"] or 0.0) * 0.8), 1)
+                item["planned"] = f"{int(round(item['planned_km']))} km"
+                item["adaptive_note"] = "Recovery week reduces workout intensity while preserving consistency."
+                item.update(_plan_meta_for_session(item["session"]))
+            elif item["session"] == "Long Run":
+                item["planned_km"] = round(min(max_safe_run, max(14.0, (item["planned_km"] or 0.0) * 0.85)), 1)
+                item["planned"] = f"{int(round(item['planned_km']))} km"
+                item["adaptive_note"] = "Recovery week trims long-run stress."
+
     if len(missed_runs) + len(partial_runs) >= 2:
         for item in future_runs:
             if item["session"] == "Tempo Run":
@@ -253,7 +274,7 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
                 item.update(_plan_meta_for_session(item["session"]))
                 break
 
-    if fatigue_score >= 2:
+    if high_fatigue or fatigue_score >= 2:
         for item in future_runs:
             if item["session"] in {"Easy Run", "Aerobic Run"}:
                 item["session"] = "Recovery Run"
@@ -268,6 +289,21 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
                 item["planned"] = f"{int(round(item['planned_km']))} km"
                 if not item.get("adaptive_note"):
                     item["adaptive_note"] = "Long run trimmed slightly to keep fatigue under control."
+    elif moderate_fatigue:
+        for item in future_runs:
+            if item["session"] == "Tempo Run":
+                item["planned_km"] = round(max(6.0, (item["planned_km"] or 0.0) * 0.9), 1)
+                item["planned"] = f"{int(round(item['planned_km']))} km"
+                item["adaptive_note"] = "Tempo volume trimmed to keep fatigue stable."
+                break
+
+    if long_run_failed_recent:
+        for item in future_runs:
+            if item["session"] == "Long Run":
+                item["planned_km"] = round(min(max_safe_run, max(16.0, (item["planned_km"] or 0.0) * 0.92)), 1)
+                item["planned"] = f"{int(round(item['planned_km']))} km"
+                item["adaptive_note"] = "Long run repeated at a safer step after the last incomplete attempt."
+                break
 
     if overperformed_runs and phase != "taper":
         next_easy = next((item for item in future_runs if item["session"] in {"Easy Run", "Aerobic Run", "Recovery Run"}), None)
@@ -288,7 +324,8 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
         for item in future_runs:
             base = float(item["planned_km"] or 0.0)
             if item["session"] == "Long Run":
-                adjusted = min(max_safe_run, base * min(scale, 1.0))
+                long_floor = 12.0 if phase in {"taper", "rebuild", "recovery"} else max(14.0, base * 0.85)
+                adjusted = max(long_floor, min(max_safe_run, base * min(scale, 1.0)))
             elif item["session"] == "Recovery Run":
                 adjusted = base
             else:
