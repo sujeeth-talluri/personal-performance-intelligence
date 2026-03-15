@@ -127,6 +127,7 @@ h2 { margin: 0 0 8px; font-size: 0.92rem; text-transform: uppercase; letter-spac
   border: 1px solid transparent;
 }
 .pill-green { background: rgba(74,222,128,.14); border-color: rgba(74,222,128,.45); color: var(--ok); }
+.pill-orange { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.45); color: var(--warn); }
 .pill-yellow { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.45); color: var(--warn); }
 
 .plan-list { display: grid; gap: 8px; }
@@ -140,7 +141,12 @@ h2 { margin: 0 0 8px; font-size: 0.92rem; text-transform: uppercase; letter-spac
   background: rgba(255,255,255,.06);
   font-size: .9rem;
 }
+.plan-main { display: grid; gap: 2px; }
+.plan-distance { font-size: 1.18rem; font-weight: 800; line-height: 1.05; }
+.plan-meta { color: var(--muted); font-size: 0.82rem; }
+.plan-status { text-align: right; font-size: 0.78rem; text-transform: lowercase; }
 .plan-row.done-row { box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.35); }
+.plan-row.partial-row { box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.4); }
 .plan-row.skip-row { box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.4); }
 
 .split-2 {
@@ -155,18 +161,28 @@ h2 { margin: 0 0 8px; font-size: 0.92rem; text-transform: uppercase; letter-spac
   border-radius: 10px;
   margin-bottom: 8px;
   font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 .ladder-item.done { border-color: rgba(74,222,128,.5); color: var(--ok); }
 .ladder-item.next { border-color: rgba(245,158,11,.6); color: var(--warn); }
+.ladder-item span { color: var(--muted); font-size: 0.78rem; text-align: right; }
 
 .run-item {
   border: 1px solid rgba(255,255,255,.14);
   border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
+  display: grid;
+  gap: 2px;
 }
 .run-item:last-child { margin-bottom: 0; }
 .run-line { line-height: 1.3; word-break: break-word; }
+.run-date { color: var(--muted); font-size: 0.78rem; }
+.run-stat { line-height: 1.2; font-size: 0.94rem; }
+.run-stat.strong { font-size: 1.18rem; font-weight: 800; }
 
 .coach-primary {
   border-color: rgba(45,212,191,.5);
@@ -195,7 +211,7 @@ h2 { margin: 0 0 8px; font-size: 0.92rem; text-transform: uppercase; letter-spac
 }
 .line-chart {
   width: 100%;
-  height: 88px;
+  height: 62px;
   display: block;
 }
 .line-chart-path {
@@ -204,6 +220,17 @@ h2 { margin: 0 0 8px; font-size: 0.92rem; text-transform: uppercase; letter-spac
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.line-chart-baseline {
+  stroke: rgba(255,255,255,.18);
+  stroke-width: 1;
+}
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 input, select, button, a.btn {
@@ -229,3 +256,4 @@ select option { background: #102632; color: #eef7ff; }
 
 .unlock-list { margin: 8px 0 0 18px; padding: 0; }
 .unlock-list li { margin: 4px 0; }
+.projection-frame { margin-bottom: 8px; }

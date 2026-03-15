@@ -15,6 +15,7 @@ from ..repositories import (
 
 THRESHOLD_HR = 168
 DISTANCE_ACTIVITY_TYPES = {"run", "trailrun", "walk", "hike", "ride", "swim"}
+RUN_ACTIVITY_TYPES = {"run", "trailrun"}
 STRESS_TYPE_FACTOR = {
     "run": 1.0,
     "trailrun": 1.0,
@@ -77,6 +78,77 @@ def _fmt_gap(total_seconds):
 def _fmt_range(low_seconds, high_seconds):
     return f"{_fmt_hms(low_seconds)} - {_fmt_hms(high_seconds)}"
 
+
+def _fmt_minutes_range(low_seconds, high_seconds):
+    low_minutes = max(0, int(round(low_seconds / 60.0)))
+    high_minutes = max(low_minutes, int(round(high_seconds / 60.0)))
+    if low_minutes == high_minutes:
+        return f"{low_minutes} minutes"
+    return f"{low_minutes}-{high_minutes} minutes"
+
+
+def _goal_label(goal_seconds, distance_km):
+    hours = goal_seconds / 3600.0
+    if distance_km >= 40:
+        if hours <= 3:
+            return "Sub-3 Marathon"
+        if hours <= 4:
+            return "Sub-4 Marathon"
+        return f"Goal {int(hours)}:{int((goal_seconds % 3600) // 60):02d} Marathon"
+    return f"Goal {int(goal_seconds // 3600)}:{int((goal_seconds % 3600) // 60):02d}"
+
+
+def _confidence_label(score):
+    if score >= 0.75:
+        return "High"
+    if score >= 0.5:
+        return "Moderate"
+    if score >= 0.3:
+        return "Building"
+    return "Low"
+
+
+def _training_phase(days_remaining):
+    if days_remaining <= 14:
+        return "taper"
+    if days_remaining <= 35:
+        return "peak"
+    if days_remaining <= 84:
+        return "build"
+    return "base"
+
+
+def _is_anomalous_run(raw):
+    if raw["distance_km"] <= 0 or raw["moving_time_sec"] <= 0:
+        return True
+    pace = raw.get("pace_sec_per_km")
+    if raw["type"] in {"run", "trailrun"} and pace:
+        if pace < 150 or pace > 900:
+            return True
+    elevation_gain = raw.get("elevation_gain") or 0.0
+    if raw["distance_km"] < 10 and elevation_gain > 1500:
+        return True
+    if raw["distance_km"] > 80:
+        return True
+    return False
+
+
+def _weekly_distance_history(distance_activities, today, weeks=5):
+    week_start, _ = _calendar_week_bounds(today)
+    totals = []
+    for i in range(weeks):
+        start = week_start - timedelta(days=7 * i)
+        end = start + timedelta(days=6)
+        totals.append(_calendar_week_distance(distance_activities, start, end))
+    return totals
+
+
+def _gap_days(runs, today):
+    if not runs:
+        return 999
+    latest = max(r["date"] for r in runs)
+    return (today - latest).days
+
 def activity_stress(activity_type, moving_time_seconds, avg_hr):
     duration_min = (moving_time_seconds or 0) / 60.0
     if duration_min <= 0:
@@ -95,14 +167,23 @@ def _elevation_factor(elevation_type):
 
 
 def _running_stress_score(activity, marathon_pace_sec_per_km):
-    if activity["type"] not in {"run", "trailrun"}:
-        return 0.0
-    run_pace = activity.get("pace_sec_per_km")
-    if not run_pace or run_pace <= 0 or marathon_pace_sec_per_km <= 0:
-        return 0.0
-    pace_ratio = marathon_pace_sec_per_km / run_pace
     duration_minutes = activity["moving_time_sec"] / 60.0
-    return round(max(0.0, duration_minutes * pace_ratio), 2)
+    if duration_minutes <= 0:
+        return 0.0
+
+    activity_type = activity["type"]
+    elevation_gain = float(activity.get("elevation_gain") or 0.0)
+    elevation_factor = 1.0 + min(0.25, elevation_gain / 4000.0)
+
+    if activity_type in {"run", "trailrun"}:
+        run_pace = activity.get("pace_sec_per_km")
+        if not run_pace or run_pace <= 0 or marathon_pace_sec_per_km <= 0:
+            return 0.0
+        pace_ratio = marathon_pace_sec_per_km / run_pace
+        return round(max(0.0, duration_minutes * pace_ratio * elevation_factor), 2)
+
+    type_factor = STRESS_TYPE_FACTOR.get(activity_type, 0.5)
+    return round(duration_minutes * type_factor * elevation_factor, 2)
 def _status_color(status):
     s = (status or "").lower()
     if "unavailable" in s or "insufficient" in s:
@@ -129,7 +210,55 @@ def _activity_to_raw(a, user_timezone=None):
         "moving_time_sec": t,
         "pace_sec_per_km": pace,
         "avg_hr": float(a.avg_hr) if a.avg_hr else None,
+        "elevation_gain": float(a.elevation_gain) if a.elevation_gain else 0.0,
+        "first_half_pace_sec_per_km": getattr(a, "first_half_pace_sec_per_km", None),
+        "second_half_pace_sec_per_km": getattr(a, "second_half_pace_sec_per_km", None),
     }
+
+
+def _classify_run_intensity(run, marathon_pace_sec_per_km):
+    run_pace = run.get("pace_sec_per_km")
+    distance_km = float(run.get("distance_km") or 0.0)
+    avg_hr = run.get("avg_hr")
+    if not run_pace or run_pace <= 0 or marathon_pace_sec_per_km <= 0:
+        return "unknown"
+
+    ratio = run_pace / marathon_pace_sec_per_km
+    hr_high = avg_hr is not None and avg_hr >= 0.9 * THRESHOLD_HR
+    hr_moderate = avg_hr is not None and avg_hr >= 0.82 * THRESHOLD_HR
+
+    if distance_km >= 18:
+        if ratio <= 1.03 and hr_moderate:
+            return "marathon_specific_long"
+        if ratio <= 1.10:
+            return "steady_long"
+        return "easy_long"
+
+    if distance_km >= 12:
+        if ratio <= 0.95 or hr_high:
+            return "tempo"
+        if ratio <= 1.03:
+            return "marathon_specific"
+        if ratio <= 1.12:
+            return "aerobic"
+        return "easy"
+
+    if distance_km >= 8:
+        if ratio <= 0.92:
+            return "speed"
+        if ratio <= 0.97 or hr_high:
+            return "tempo"
+        if ratio <= 1.05:
+            return "steady"
+        if ratio <= 1.15:
+            return "aerobic"
+        return "easy"
+
+    if ratio <= 1.05 and hr_moderate:
+        return "steady"
+    if ratio <= 1.15:
+        return "easy"
+    return "recovery"
 
 
 def _raw_layer(user_id, user_timezone=None):
@@ -139,6 +268,7 @@ def _raw_layer(user_id, user_timezone=None):
         r = _activity_to_raw(a, user_timezone)
         if r["id"] in seen:
             continue
+        r["anomaly"] = _is_anomalous_run(r)
         seen.add(r["id"])
         out.append(r)
     return out
@@ -148,7 +278,15 @@ def _distance_training_activities(raw):
     return [
         r
         for r in raw
-        if r["type"] in DISTANCE_ACTIVITY_TYPES and not r["is_race"] and 0 < r["distance_km"] <= 50.0
+        if r["type"] in DISTANCE_ACTIVITY_TYPES and not r["is_race"] and not r.get("anomaly") and 0 < r["distance_km"] <= 50.0
+    ]
+
+
+def _run_training_activities(raw):
+    return [
+        r
+        for r in raw
+        if r["type"] in RUN_ACTIVITY_TYPES and not r["is_race"] and not r.get("anomaly") and 0 < r["distance_km"] <= 50.0
     ]
 
 
@@ -158,6 +296,7 @@ def _load_activities(raw):
         for r in raw
         if r["type"] in STRESS_TYPE_FACTOR
         and not r["is_race"]
+        and not r.get("anomaly")
         and r["moving_time_sec"] > 0
         and (r["distance_km"] <= 50.0 if r["distance_km"] else True)
     ]
@@ -169,9 +308,30 @@ def _prediction_runs(raw):
         for r in raw
         if r["type"] in {"run", "trailrun"}
         and not r["is_race"]
+        and not r.get("anomaly")
         and 0 < r["distance_km"] <= 42.2
         and r["moving_time_sec"] > 0
     ]
+
+
+def _recent_gap_metrics(runs, today, window_days=42):
+    if not runs:
+        return {"days_since_latest": 999, "max_gap_days": 999}
+
+    sorted_dates = sorted({r["date"] for r in runs})
+    days_since_latest = (today - sorted_dates[-1]).days
+    window_start = today - timedelta(days=window_days)
+    window_dates = [d for d in sorted_dates if d >= window_start]
+    if not window_dates:
+        return {"days_since_latest": days_since_latest, "max_gap_days": days_since_latest}
+
+    max_gap = max(
+        ((window_dates[idx] - window_dates[idx - 1]).days for idx in range(1, len(window_dates))),
+        default=0,
+    )
+    max_gap = max(max_gap, (window_dates[0] - window_start).days)
+    max_gap = max(max_gap, (today - window_dates[-1]).days)
+    return {"days_since_latest": days_since_latest, "max_gap_days": max_gap}
 
 
 def _sum_distance_in_window(activities, end_day, days=7):
@@ -272,6 +432,30 @@ def _fri_from_runs(long_runs):
     return round(sum(ratios[-3:]) / 3.0, 3)
 
 
+def _aerobic_durability_from_runs(long_runs):
+    qualifying = [r for r in long_runs if r["distance_km"] >= 15]
+    if not qualifying:
+        return None, None
+
+    pace_drops = []
+    for run in qualifying:
+        first = run.get("first_half_pace_sec_per_km")
+        second = run.get("second_half_pace_sec_per_km")
+        if not first or not second or first <= 0:
+            continue
+        pace_drops.append((second - first) / first)
+
+    if not pace_drops:
+        return None, None
+
+    pace_drop = sum(pace_drops) / len(pace_drops)
+    if pace_drop < 0.05:
+        return "Strong", pace_drop
+    if pace_drop < 0.10:
+        return "Moderate", pace_drop
+    return "Weak", pace_drop
+
+
 def build_goal_context(goal, today_local=None):
     goal_seconds = _hms_to_seconds(goal.goal_time)
     base_day = today_local or date.today()
@@ -304,34 +488,64 @@ def _baseline_weekly_goal(goal_seconds):
 def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     raw = _raw_layer(user_id, user_timezone)
     today = _today_local(user_timezone)
+    phase = _training_phase(goal_ctx["days_remaining"])
 
     distance_acts = _distance_training_activities(raw)
+    run_distance_acts = _run_training_activities(raw)
     load_acts = _load_activities(raw)
     runs = _prediction_runs(raw)
+    for run in runs:
+        run["intensity"] = _classify_run_intensity(run, goal_ctx["goal_seconds"] / 42.195)
     runs_8w = [r for r in runs if r["date"] >= today - timedelta(days=56)]
 
-    medium_runs = [r for r in runs_8w if 8 <= r["distance_km"] <= 12]
+    medium_runs = [
+        r for r in runs_8w
+        if 8 <= r["distance_km"] <= 12 and r.get("intensity") in {"steady", "tempo", "marathon_specific", "aerobic", "speed"}
+    ]
     long_runs = [r for r in runs_8w if 18 <= r["distance_km"] <= 30]
+    marathon_specific_runs = [
+        r for r in runs_8w
+        if r.get("intensity") in {"marathon_specific", "marathon_specific_long", "steady_long", "tempo"} and r["distance_km"] >= 10
+    ]
 
     week_start, week_end = _calendar_week_bounds(today)
-    rolling_week_distance_km = _calendar_week_distance(distance_acts, week_start, week_end)
-    rolling_weeks, consistent_weeks = _rolling_week_consistency(distance_acts, today)
+    rolling_week_distance_km = _calendar_week_distance(run_distance_acts, week_start, week_end)
+    cross_training_distance_km = round(
+        sum(a["distance_km"] for a in distance_acts if a["type"] not in RUN_ACTIVITY_TYPES and week_start <= a["date"] <= week_end),
+        1,
+    )
+    rolling_weeks, consistent_weeks = _rolling_week_consistency(run_distance_acts, today)
+    weekly_history = _weekly_distance_history(run_distance_acts, today, weeks=5)
+    prior_weeks = weekly_history[1:] if len(weekly_history) > 1 else []
+    prior_avg = round(sum(prior_weeks) / len(prior_weeks), 1) if prior_weeks else 0.0
+    gap_metrics = _recent_gap_metrics(runs, today)
+    gap_days = gap_metrics["days_since_latest"]
+    rebuild_mode = gap_days >= 21 or (gap_metrics["max_gap_days"] >= 21 and consistent_weeks < 3)
     ctl_today, ctl_series_14 = _ctl_ema_series(load_acts, today, goal_ctx["goal_seconds"] / 42.195, days=14)
-    distance_series_14 = _daily_distance_series(distance_acts, today, days=14)
+    distance_series_14 = _daily_distance_series(run_distance_acts, today, days=14)
 
-    baseline_goal = _baseline_weekly_goal(goal_ctx["goal_seconds"])
-    weekly_goal_km = round(max(baseline_goal, rolling_week_distance_km * 1.10), 1)
+    desired_peak = _baseline_weekly_goal(goal_ctx["goal_seconds"])
+    phase_cap_factor = {"base": 0.75, "build": 0.9, "peak": 1.0, "taper": 0.65}.get(phase, 0.9)
+    if rebuild_mode:
+        weekly_goal_km = round(max(18.0, min(desired_peak * 0.6, max(22.0, prior_avg * 0.65 if prior_avg else 22.0))), 1)
+    elif prior_avg > 0:
+        ramp_factor = 1.06 if phase == "base" else 1.08 if phase == "build" else 1.03 if phase == "peak" else 0.7
+        weekly_goal_km = round(max(20.0, min(desired_peak * phase_cap_factor, prior_avg * ramp_factor)), 1)
+    else:
+        weekly_goal_km = round(max(24.0, desired_peak * 0.55), 1)
     completed_km = rolling_week_distance_km
     remaining_km = round(max(0.0, weekly_goal_km - completed_km), 1)
 
+    runs_30d = [r for r in runs if r["date"] >= today - timedelta(days=30)]
     longest_run = max(runs_8w, key=lambda x: x["distance_km"], default=None)
+    latest_long_run = max(runs_30d, key=lambda x: x["distance_km"], default=None)
     long_run_km = longest_run["distance_km"] if longest_run else 0.0
     max_safe_run = min(long_run_km * 1.1 if long_run_km > 0 else weekly_goal_km * 0.35, weekly_goal_km * 0.35)
     max_safe_run = round(max(5.0, max_safe_run), 1)
 
     days_remaining_in_week = 6 - today.weekday()
-    today_activity_logged = any(a["date"] == today for a in distance_acts)
-    week_closed = today_activity_logged and days_remaining_in_week == 0
+    today_activity_logged = any(a["date"] == today for a in run_distance_acts)
+    week_closed = False
     remaining_training_days = max(0, days_remaining_in_week + (0 if today_activity_logged else 1))
 
     if remaining_km <= 0:
@@ -366,22 +580,20 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             lrr_warning = "Long run too large relative to weekly mileage."
 
     adi = None
-    adi_status = "Insufficient data"
+    adi_status = "Unavailable"
+    adi_message = "Need split pace data from long runs to classify durability."
     pace_medium = (sum(r["pace_sec_per_km"] for r in medium_runs) / len(medium_runs)) if medium_runs else None
     pace_long = (sum(r["pace_sec_per_km"] for r in long_runs) / len(long_runs)) if long_runs else None
-    if pace_medium and pace_long:
-        adi = round(pace_long / pace_medium, 3)
-        if adi >= 1.00:
-            adi_status = "Strong endurance"
-        elif adi >= 0.97:
-            adi_status = "Moderate"
-        else:
-            adi_status = "Developing"
+    durability_label, pace_drop = _aerobic_durability_from_runs(long_runs)
+    if durability_label is not None and pace_drop is not None:
+        adi = round(pace_drop * 100.0, 1)
+        adi_status = durability_label
+        adi_message = f"Pace drop after 15 km is {adi:.1f}%."
 
     fri = _fri_from_runs(long_runs)
     if fri is None:
         fri_status = "FRI unavailable"
-        fri_message = "Need 3 long runs >=18 km in last 8 weeks."
+        fri_message = f"{len(long_runs)} / 3 qualifying long runs completed"
     elif fri > 0.97:
         fri_status = "Excellent fatigue resistance"
         fri_message = None
@@ -395,10 +607,19 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         fri_status = "Weak endurance durability"
         fri_message = None
 
+    weekly_readiness_target = 45.0
+    if phase == "taper":
+        weekly_readiness_target = min(45.0, max(25.0, round(prior_avg * 0.65, 1) if prior_avg else 25.0))
+    elif rebuild_mode:
+        weekly_readiness_target = min(45.0, max(20.0, round(weekly_goal_km * 0.8, 1)))
+
     need_medium = max(0, 3 - len(medium_runs))
     need_long = max(0, 2 - len(long_runs))
     need_weeks = max(0, 3 - consistent_weeks)
-    need_weekly = 0 if rolling_week_distance_km >= 45 else 1
+    if phase == "taper" and consistent_weeks >= 3 and len(long_runs) >= 2:
+        need_weekly = 0
+    else:
+        need_weekly = 0 if rolling_week_distance_km >= weekly_readiness_target else 1
 
     readiness_items = [
         {
@@ -437,13 +658,29 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         {
             "title": "Weekly mileage",
             "done": rolling_week_distance_km,
-            "min": 45,
+            "min": weekly_readiness_target,
             "ready": need_weekly == 0,
-            "line1": "Weekly mileage threshold satisfied" if need_weekly == 0 else "Weekly mileage threshold not met",
-            "line2": f"{rolling_week_distance_km} km completed (minimum needed: 45 km)",
-            "line3": None if need_weekly == 0 else "Need to reach 45 km weekly mileage.",
+            "line1": (
+                "Taper mileage handled from prior training"
+                if phase == "taper" and need_weekly == 0
+                else ("Weekly mileage threshold satisfied" if need_weekly == 0 else "Weekly mileage threshold not met")
+            ),
+            "line2": (
+                f"{rolling_week_distance_km} km completed (taper target: {weekly_readiness_target} km)"
+                if phase == "taper"
+                else f"{rolling_week_distance_km} km completed (minimum needed: {weekly_readiness_target} km)"
+            ),
+            "line3": (
+                None
+                if need_weekly == 0
+                else (
+                    "Taper week is intentionally lighter. Use prior consistency to protect prediction confidence."
+                    if phase == "taper"
+                    else f"Need to reach {weekly_readiness_target} km weekly mileage."
+                )
+            ),
             "weight": 0.25,
-            "score": min(rolling_week_distance_km / 45.0, 1.0),
+            "score": min(rolling_week_distance_km / max(1.0, weekly_readiness_target), 1.0),
         },
     ]
 
@@ -456,7 +693,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     if need_long > 0:
         unlock_requirements.append("2 long runs >=18 km")
     if need_weekly > 0:
-        unlock_requirements.append("45 km weekly mileage")
+        unlock_requirements.append(f"{int(round(weekly_readiness_target))} km weekly mileage")
     if need_weeks > 0:
         unlock_requirements.append("3 consistent training weeks")
     if need_medium > 0:
@@ -475,26 +712,30 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     else:
         unlock_eta = f"{eta_weeks} weeks"
 
-    longest_for_shape = longest_run["distance_km"] if longest_run else 0.0
+    longest_for_shape = latest_long_run["distance_km"] if latest_long_run else 0.0
     consistency_ratio = min(1.0, consistent_weeks / 4.0)
-    marathon_shape = min(1.0, (longest_for_shape / 32.0) * 0.4 + (rolling_week_distance_km / 70.0) * 0.4 + consistency_ratio * 0.2)
-    if adi is None:
-        aerobic_durability = 0.75
-    else:
-        aerobic_durability = max(0.6, min(1.05, 1.0 / max(1.0, adi)))
-    bonk_risk_score = max(0.0, min(1.0, 1.0 - (marathon_shape * aerobic_durability)))
-    if bonk_risk_score < 0.33:
-        bonk_risk_label = "Low"
-    elif bonk_risk_score < 0.66:
+    marathon_shape = min(1.0, (longest_for_shape / 32.0) * 0.4 + (prior_avg / 70.0) * 0.4 + consistency_ratio * 0.2)
+    if longest_for_shape < 24:
+        bonk_risk_label = "High"
+    elif longest_for_shape < 30:
         bonk_risk_label = "Moderate"
     else:
-        bonk_risk_label = "High"
+        bonk_risk_label = "Low"
+    back_to_back_long_runs = 0
+    for idx in range(1, len(long_runs)):
+        if (long_runs[idx]["date"] - long_runs[idx - 1]["date"]).days <= 2:
+            back_to_back_long_runs += 1
+    if back_to_back_long_runs > 0 and bonk_risk_label != "High":
+        bonk_risk_label = "Moderate"
+    bonk_risk_score = 1.0 if bonk_risk_label == "High" else 0.5 if bonk_risk_label == "Moderate" else 0.15
 
     return {
         "medium_runs": medium_runs,
         "long_runs": long_runs,
         "pace_medium": pace_medium,
         "pace_long": pace_long,
+        "marathon_specific_runs": marathon_specific_runs,
+        "goal_marathon_pace_sec_per_km": goal_ctx["goal_seconds"] / 42.195,
         "ctl_proxy": ctl_today,
         "ctl_series_14": ctl_series_14,
         "distance_series_14": distance_series_14,
@@ -507,6 +748,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "weekly": {
             "weekly_goal_km": weekly_goal_km,
             "completed_km": completed_km,
+            "cross_training_km": cross_training_distance_km,
             "remaining_km": remaining_km,
             "progress": progress,
             "runs_remaining": suggested_runs,
@@ -520,8 +762,18 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "today_activity_logged": today_activity_logged,
             "week_closed": week_closed,
             "weekly_mileage_change": round((rolling_weeks[0] if len(rolling_weeks) > 0 else 0.0) - (rolling_weeks[1] if len(rolling_weeks) > 1 else 0.0), 1),
+            "prior_avg_km": prior_avg,
+            "phase": phase,
+            "rebuild_mode": rebuild_mode,
+            "weekly_readiness_target_km": weekly_readiness_target,
         },
         "longest_run": longest_run,
+        "latest_long_run": latest_long_run,
+        "phase": phase,
+        "gap_days": gap_days,
+        "max_gap_days": gap_metrics["max_gap_days"],
+        "rebuild_mode": rebuild_mode,
+        "back_to_back_long_runs": back_to_back_long_runs,
         "endurance": {
             "lrr": lrr,
             "lrr_status": lrr_status,
@@ -531,6 +783,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "adi": adi,
             "adi_status": adi_status,
             "adi_color": _status_color(adi_status),
+            "adi_message": adi_message,
             "fri": fri,
             "fri_status": fri_status,
             "fri_color": _status_color(fri_status),
@@ -538,9 +791,37 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         },
     }
 def _marathon_prediction_seconds(metrics):
+    candidate_signals = []
     half_equiv = _fit_half_equivalent(metrics["pace_medium"], metrics["pace_long"])
-    if not half_equiv:
+    if half_equiv:
+        candidate_signals.append((half_equiv * 2.1, 0.25))
+
+    for run in metrics.get("medium_runs", []):
+        if 10 <= run["distance_km"] <= 30:
+            intensity = run.get("intensity")
+            weight = 0.16 if intensity in {"tempo", "speed"} else 0.14 if intensity in {"marathon_specific", "steady"} else 0.10
+            exponent = 1.05 if intensity in {"tempo", "speed"} else 1.06
+            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
+
+    for run in metrics.get("marathon_specific_runs", []):
+        if run["distance_km"] >= 14 and run.get("pace_sec_per_km"):
+            exponent = 1.03 if run.get("intensity") in {"marathon_specific_long", "steady_long"} else 1.04
+            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), 0.22))
+
+    for run in metrics.get("long_runs", []):
+        if run["distance_km"] >= 24 and run.get("pace_sec_per_km"):
+            marathon_pace = metrics.get("goal_marathon_pace_sec_per_km") or run["pace_sec_per_km"]
+            pace_gap = abs(run["pace_sec_per_km"] - marathon_pace) / max(1.0, marathon_pace)
+            if pace_gap <= 0.15:
+                weight = 0.24 if run.get("intensity") == "marathon_specific_long" else 0.18
+                exponent = 1.03 if run.get("intensity") == "marathon_specific_long" else 1.05
+                candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
+
+    if not candidate_signals:
         return None
+
+    weight_total = sum(weight for _, weight in candidate_signals)
+    marathon_time = sum(value * weight for value, weight in candidate_signals) / max(1e-6, weight_total)
 
     fri = metrics["endurance"]["fri"]
     if fri is None:
@@ -554,13 +835,18 @@ def _marathon_prediction_seconds(metrics):
     else:
         fatigue_factor = 1.10
 
-    marathon_time = half_equiv * 2.1 * fatigue_factor
+    marathon_time *= fatigue_factor
 
-    weekly = metrics["weekly"]["completed_km"]
+    weekly = metrics["weekly"]["prior_avg_km"] or metrics["weekly"]["completed_km"]
     if weekly >= 65:
         marathon_time *= 0.98
     elif weekly < 45:
         marathon_time *= 1.03
+
+    if metrics.get("rebuild_mode"):
+        marathon_time *= 1.05
+    if metrics.get("phase") == "taper":
+        marathon_time *= 0.99
 
     return marathon_time
 
@@ -582,7 +868,6 @@ def _prediction_layer(user_id, goal_ctx, metrics):
         longest = metrics.get("longest_run")
         pace_long = metrics.get("pace_long")
         pace_medium = metrics.get("pace_medium")
-        shape = metrics.get("bonk_risk", {}).get("marathon_shape", 0.55)
         if pace_long:
             new_flat = pace_long * 42.195 * 1.10
         elif pace_medium:
@@ -590,8 +875,19 @@ def _prediction_layer(user_id, goal_ctx, metrics):
         elif longest and longest.get("pace_sec_per_km"):
             new_flat = longest["pace_sec_per_km"] * 42.195 * 1.16
         else:
-            shape_guard = max(0.55, min(0.95, float(shape)))
-            new_flat = goal_ctx["goal_seconds"] / shape_guard
+            return {
+                "valid": False,
+                "current_projection": "--",
+                "race_day_projection": "--",
+                "current_projection_range": "--",
+                "race_day_projection_range": "--",
+                "gap_to_goal_range": "--",
+                "probability": None,
+                "gap_to_goal": "--",
+                "goal_confidence": "Low",
+                "goal_progress_pct": 0,
+                "note": "Not enough reliable running data for marathon projection.",
+            }
 
     prev = get_latest_prediction(user_id)
     flat = (0.7 * float(prev.projection_seconds) + 0.3 * new_flat) if prev else new_flat
@@ -622,20 +918,45 @@ def _prediction_layer(user_id, goal_ctx, metrics):
     race_low = race_proj * (1.0 - range_width)
     race_high = race_proj * (1.0 + range_width)
     gap = race_proj - goal_ctx["goal_seconds"]
+    gap_low = race_low - goal_ctx["goal_seconds"]
+    gap_high = race_high - goal_ctx["goal_seconds"]
+    has_marathon_specific_base = len(metrics.get("long_runs", [])) >= 1
+    provisional_prediction = not has_marathon_specific_base
+
+    if provisional_prediction:
+        goal_confidence = "Low"
+    elif metrics["readiness"]["ready"]:
+        if gap <= 0:
+            goal_confidence = "High"
+        elif gap <= 20 * 60:
+            goal_confidence = "Moderate"
+        else:
+            goal_confidence = "Building"
+    else:
+        if gap_high <= 20 * 60:
+            goal_confidence = "Moderate"
+        else:
+            goal_confidence = "Building"
 
     return {
-        "valid": metrics["readiness"]["ready"],
+        "valid": metrics["readiness"]["ready"] and not provisional_prediction,
         "current_projection": _fmt_hms(flat),
         "race_day_projection": _fmt_hms(race_proj),
         "current_projection_range": _fmt_range(flat_low, flat_high),
         "race_day_projection_range": _fmt_range(race_low, race_high),
-        "probability": _goal_probability(race_proj, goal_ctx["goal_seconds"]) if metrics["readiness"]["ready"] else None,
+        "gap_to_goal_range": "--" if provisional_prediction else _fmt_minutes_range(gap_low, gap_high),
+        "probability": _goal_probability(race_proj, goal_ctx["goal_seconds"]) if metrics["readiness"]["ready"] and not provisional_prediction else None,
         "gap_to_goal": _fmt_gap(gap),
+        "goal_confidence": goal_confidence,
         "goal_progress_pct": int(max(0, min(100, (goal_ctx["goal_seconds"] / race_proj) * 100))),
         "note": (
             "Based on current fitness and long-run progress."
-            if metrics["readiness"]["ready"]
-            else (metrics["next_requirement"] or "Range shown with limited training signals. Complete key readiness sessions.")
+            if metrics["readiness"]["ready"] and not provisional_prediction
+            else (
+                "Provisional range only. Complete a qualifying long run to compare reliably with your marathon goal."
+                if provisional_prediction
+                else (metrics["next_requirement"] or "Range shown with limited training signals. Complete key readiness sessions.")
+            )
         ),
     }
 def performance_intelligence(user_id, user_timezone=None):
@@ -714,21 +1035,33 @@ def performance_intelligence(user_id, user_timezone=None):
 
     consistent_weeks = next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0)
     long_run_progress = min(1.0, (longest["distance_km"] / 32.0)) if longest else 0.0
-    weekly_mileage_progress = min(1.0, weekly["completed_km"] / 45.0)
+    weekly_mileage_progress = min(1.0, weekly["completed_km"] / max(1.0, weekly.get("weekly_readiness_target_km") or 45.0))
     consistency_progress = min(1.0, consistent_weeks / 3.0)
     fitness_progress = min(1.0, round(metrics["ctl_proxy"], 1) / max(1.0, target_ctl))
     marathon_readiness_pct = int(round((0.35 * long_run_progress + 0.30 * weekly_mileage_progress + 0.20 * consistency_progress + 0.15 * fitness_progress) * 100))
+    goal_confidence_score = (0.4 * long_run_progress) + (0.3 * weekly_mileage_progress) + (0.2 * consistency_progress) + (0.1 * fitness_progress)
+
+    if marathon_readiness_pct >= 75:
+        readiness_status = "Strong"
+    elif marathon_readiness_pct >= 45:
+        readiness_status = "Building"
+    else:
+        readiness_status = "Early Build"
 
     next_step = metrics["next_requirement"] or "Maintain this week and complete your scheduled long run."
 
     return {
         "goal": goal_ctx,
+        "goal_label": _goal_label(goal_ctx["goal_seconds"], goal_ctx["distance_km"]),
         "current_projection": prediction["current_projection"],
         "race_day_projection": prediction["race_day_projection"],
         "current_projection_range": prediction["current_projection_range"],
         "race_day_projection_range": prediction["race_day_projection_range"],
         "probability": prediction["probability"],
         "gap_to_goal": prediction["gap_to_goal"],
+        "gap_to_goal_range": prediction["gap_to_goal_range"],
+        "goal_confidence": prediction["goal_confidence"],
+        "goal_confidence_score": round(goal_confidence_score, 2),
         "prediction_note": prediction["note"],
         "goal_progress_pct": prediction["goal_progress_pct"],
         "insufficient_data": not prediction["valid"],
@@ -753,6 +1086,7 @@ def performance_intelligence(user_id, user_timezone=None):
         },
         "race_readiness": race_readiness,
         "marathon_readiness_pct": marathon_readiness_pct,
+        "marathon_readiness_status": readiness_status,
         "marathon_readiness_next_step": next_step,
         "charts": {
             "weekly_distance_14": metrics["distance_series_14"],
@@ -761,7 +1095,9 @@ def performance_intelligence(user_id, user_timezone=None):
         "long_run": {
             "longest_km": round(longest["distance_km"], 1) if longest else 0.0,
             "longest_date": longest["date"].isoformat() if longest else None,
-            "next_milestone_km": 24 if longest and longest["distance_km"] < 24 else 28 if longest and longest["distance_km"] < 28 else 32,
+            "latest_km": round(metrics["latest_long_run"]["distance_km"], 1) if metrics.get("latest_long_run") else 0.0,
+            "latest_date": metrics["latest_long_run"]["date"].isoformat() if metrics.get("latest_long_run") else None,
+            "next_milestone_km": 24 if not metrics.get("latest_long_run") or metrics["latest_long_run"]["distance_km"] < 24 else 28 if metrics["latest_long_run"]["distance_km"] < 28 else 32,
             "progress": min(100, int((weekly["completed_km"] / max(1.0, weekly["weekly_goal_km"])) * 100)),
         },
     }
