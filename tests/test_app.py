@@ -1,6 +1,10 @@
-﻿import pytest
+from datetime import date
+
+import pytest
 
 from ppi import create_app
+from ppi.routes import _weekly_plan_template
+from ppi.services.analytics_service import _long_run_progress_state, _training_phase
 
 
 class TestConfig:
@@ -107,3 +111,25 @@ def test_settings_page(client):
     assert settings.status_code == 200
     assert b"Settings" in settings.data
 
+
+def test_training_phase_thresholds():
+    assert _training_phase(7 * 20) == "base"
+    assert _training_phase(7 * 15) == "build"
+    assert _training_phase(7 * 8) == "peak"
+    assert _training_phase(7 * 4) == "taper"
+
+
+def test_long_run_ladder_requires_true_milestone_completion():
+    runs = [{"date": date(2026, 3, 1), "distance_km": 18.3}]
+    state = _long_run_progress_state(runs, date(2026, 3, 16))
+    assert state["completed_step"] == 18
+    assert state["next_step"] == 21
+
+
+def test_weekly_plan_keeps_long_run_within_35_percent_of_week():
+    weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
+    long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
+    plan = _weekly_plan_template(weekly_goal, long_run)
+    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
+    long_target = float(plan[6]["target_km"])
+    assert long_target <= planned_km * 0.35 + 0.2

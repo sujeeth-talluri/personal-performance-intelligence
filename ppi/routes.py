@@ -29,6 +29,16 @@ from .services.analytics_service import (
     recent_runs,
     weekly_training_summary,
 )
+from .services.plan_engine import (
+    apply_adaptive_plan as service_apply_adaptive_plan,
+    build_weekly_plan_template,
+    classify_quality_completion as service_classify_quality_completion,
+    classify_run_completion as service_classify_run_completion,
+    goal_marathon_pace as service_goal_marathon_pace,
+    plan_meta_for_session as service_plan_meta_for_session,
+    select_best_run_for_session as service_select_best_run_for_session,
+    training_consistency_score as service_training_consistency_score,
+)
 from .services.strava_oauth_service import (
     exchange_code_for_token,
     generate_oauth_state,
@@ -114,77 +124,11 @@ def _activity_local_date(dt_value, user_timezone):
     return dt_utc.astimezone(tz).date()
 
 def _weekly_plan_template(weekly_goal, long_run):
-    weekly_target = max(18.0, float(weekly_goal.get("weekly_goal_km", 18.0)))
-    phase = weekly_goal.get("phase", "build")
-    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
-    longest_km = float(long_run.get("longest_km") or 0.0)
-    next_milestone = float(long_run.get("next_milestone_km") or max(22.0, min(32.0, longest_km + 2.0)))
-    if rebuild_mode:
-        long_target = max(14.0, min(22.0, weekly_target * 0.30))
-        quality_target = max(6.0, min(10.0, round(weekly_target * 0.16, 1)))
-        aerobic_target = max(6.0, min(10.0, round(weekly_target * 0.15, 1)))
-        easy_one = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
-        tuesday_session = "Aerobic Run"
-        thursday_session = "Aerobic Run"
-    elif phase == "recovery":
-        long_target = max(14.0, min(22.0, weekly_target * 0.28))
-        quality_target = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
-        aerobic_target = max(6.0, min(10.0, round(weekly_target * 0.14, 1)))
-        easy_one = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
-        tuesday_session = "Aerobic Run"
-        thursday_session = "Steady Run"
-    elif phase == "taper":
-        long_target = max(12.0, min(24.0, weekly_target * 0.30))
-        quality_target = max(6.0, min(10.0, round(weekly_target * 0.15, 1)))
-        aerobic_target = max(6.0, min(10.0, round(weekly_target * 0.14, 1)))
-        easy_one = max(5.0, min(8.0, round(weekly_target * 0.12, 1)))
-        tuesday_session = "Marathon Pace Run"
-        thursday_session = "Recovery Run"
-    elif phase == "base":
-        long_target = max(16.0, min(28.0, min(next_milestone, weekly_target * 0.34)))
-        quality_target = max(6.0, min(12.0, round(weekly_target * 0.16, 1)))
-        aerobic_target = max(8.0, min(14.0, round(weekly_target * 0.18, 1)))
-        easy_one = max(6.0, min(10.0, round(weekly_target * 0.14, 1)))
-        tuesday_session = "Aerobic Run"
-        thursday_session = "Steady Run"
-    else:
-        long_target = max(18.0, min(32.0, min(next_milestone, weekly_target * 0.38)))
-        quality_target = max(8.0, min(16.0, round(weekly_target * 0.20, 1)))
-        aerobic_target = max(8.0, min(16.0, round(weekly_target * 0.17, 1)))
-        easy_one = max(6.0, min(12.0, round(weekly_target * 0.13, 1)))
-        if phase == "peak":
-            tuesday_session = "Speed Session"
-            thursday_session = "Marathon Pace Run"
-        else:
-            tuesday_session = "Speed Session"
-            thursday_session = "Marathon Pace Run"
-    remaining = max(6.0, weekly_target - (long_target + quality_target + aerobic_target + easy_one))
-    easy_two = max(6.0, min(14.0, round(remaining, 1)))
-    return {
-        0: {"workout_type": "RUN", "session": "Easy Run", "target_km": easy_one, "intensity": "easy", "importance": "Low", "purpose": "Absorb prior load and keep volume consistent."},
-        1: {"workout_type": "RUN", "session": tuesday_session, "target_km": aerobic_target if tuesday_session == "Aerobic Run" else quality_target, "intensity": "aerobic", "importance": "Medium", "purpose": "Build aerobic endurance and support weekly mileage."},
-        2: {"workout_type": "STRENGTH", "session": "Strength", "target_km": None, "intensity": "strength", "importance": "Medium", "purpose": "Maintain durability and injury resistance."},
-        3: {"workout_type": "RUN", "session": thursday_session, "target_km": quality_target, "intensity": "tempo", "importance": "High", "purpose": "Improve marathon-specific strength and threshold control."},
-        4: {"workout_type": "STRENGTH", "session": "Strength", "target_km": None, "intensity": "strength", "importance": "Medium", "purpose": "Support stability and reduce injury risk."},
-        5: {"workout_type": "RUN", "session": "Easy Run", "target_km": easy_two, "intensity": "easy", "importance": "Low", "purpose": "Add controlled mileage without excess fatigue."},
-        6: {"workout_type": "RUN", "session": "Long Run", "target_km": long_target, "intensity": "long_run", "importance": "High", "purpose": "Build marathon endurance and fueling durability."},
-    }
+    return build_weekly_plan_template(weekly_goal, long_run)
 
 
 def _classify_run_completion(actual_km, target_km):
-    if not target_km or target_km <= 0:
-        return "completed", 100, round(max(0.0, actual_km or 0.0), 1)
-    if actual_km is None or actual_km <= 0:
-        return "missed", 0, 0.0
-
-    raw_pct = int(round((actual_km / target_km) * 100))
-    completion_pct = min(100, raw_pct)
-    extra_km = round(max(0.0, actual_km - target_km), 1)
-    if actual_km >= 0.9 * target_km:
-        return "completed", completion_pct, extra_km
-    if actual_km >= 0.5 * target_km:
-        return "partial", completion_pct, extra_km
-    return "missed", completion_pct, extra_km
+    return service_classify_run_completion(actual_km, target_km)
 
 
 def _status_label(status):
@@ -200,7 +144,7 @@ def _status_label(status):
 
 
 def _goal_marathon_pace(weekly_goal):
-    return float(weekly_goal.get("goal_marathon_pace_sec_per_km") or 0.0)
+    return service_goal_marathon_pace(weekly_goal)
 
 
 def _run_pace_sec_per_km(activity):
@@ -212,65 +156,11 @@ def _run_pace_sec_per_km(activity):
 
 
 def _select_best_run_for_session(run_acts, session_name, weekly_goal):
-    marathon_pace = _goal_marathon_pace(weekly_goal)
-    if not run_acts:
-        return None
-    if session_name == "Long Run":
-        return max(run_acts, key=lambda a: (float(a.distance_km or 0.0), -(_run_pace_sec_per_km(a) or 9999)))
-    if session_name == "Marathon Pace Run":
-        return min(
-            run_acts,
-            key=lambda a: (
-                abs((_run_pace_sec_per_km(a) or marathon_pace or 9999) - marathon_pace) if marathon_pace else (_run_pace_sec_per_km(a) or 9999),
-                -float(a.distance_km or 0.0),
-            ),
-        )
-    if session_name == "Speed Session":
-        return min(run_acts, key=lambda a: ((_run_pace_sec_per_km(a) or 9999), -float(a.distance_km or 0.0)))
-    if session_name in {"Tempo Run", "Steady Run"}:
-        return min(
-            run_acts,
-            key=lambda a: ((_run_pace_sec_per_km(a) or 9999), -float(a.distance_km or 0.0)),
-        )
-    return None
+    return service_select_best_run_for_session(run_acts, session_name, weekly_goal, _run_pace_sec_per_km)
 
 
 def _classify_quality_completion(session_name, actual_km, target_km, pace_sec_per_km, weekly_goal):
-    status, completion_pct, extra_km = _classify_run_completion(actual_km, target_km)
-    marathon_pace = _goal_marathon_pace(weekly_goal)
-    if not pace_sec_per_km or marathon_pace <= 0:
-        return status, completion_pct, extra_km
-
-    if session_name == "Marathon Pace Run":
-        pace_ok = abs(pace_sec_per_km - marathon_pace) / marathon_pace <= 0.05
-        if actual_km >= 0.9 * target_km and pace_ok:
-            return "completed", completion_pct, extra_km
-        if actual_km >= 0.6 * target_km and abs(pace_sec_per_km - marathon_pace) / marathon_pace <= 0.08:
-            return "partial", completion_pct, extra_km
-        return "missed", completion_pct, extra_km
-
-    if session_name == "Speed Session":
-        if pace_sec_per_km <= marathon_pace * 0.95 and actual_km >= 0.85 * target_km:
-            return "completed", completion_pct, extra_km
-        if pace_sec_per_km <= marathon_pace * 1.00 and actual_km >= 0.6 * target_km:
-            return "partial", completion_pct, extra_km
-        return "missed", completion_pct, extra_km
-
-    if session_name == "Steady Run":
-        if pace_sec_per_km <= marathon_pace * 1.10 and actual_km >= 0.9 * target_km:
-            return "completed", completion_pct, extra_km
-        if actual_km >= 0.6 * target_km:
-            return "partial", completion_pct, extra_km
-        return "missed", completion_pct, extra_km
-
-    if session_name == "Tempo Run":
-        if pace_sec_per_km <= marathon_pace * 0.98 and actual_km >= 0.85 * target_km:
-            return "completed", completion_pct, extra_km
-        if pace_sec_per_km <= marathon_pace * 1.03 and actual_km >= 0.6 * target_km:
-            return "partial", completion_pct, extra_km
-        return "missed", completion_pct, extra_km
-
-    return status, completion_pct, extra_km
+    return service_classify_quality_completion(session_name, actual_km, target_km, pace_sec_per_km, weekly_goal)
 
 
 def _priority_rank(item):
@@ -289,18 +179,7 @@ def _priority_rank(item):
 
 
 def _plan_meta_for_session(session_name):
-    catalog = {
-        "Long Run": {"intensity": "long_run", "importance": "High", "purpose": "Build marathon endurance and fueling durability."},
-        "Tempo Run": {"intensity": "tempo", "importance": "High", "purpose": "Improve marathon-specific strength and threshold control."},
-        "Speed Session": {"intensity": "speed", "importance": "High", "purpose": "Develop economy, leg speed, and top-end aerobic power."},
-        "Marathon Pace Run": {"intensity": "marathon_specific", "importance": "High", "purpose": "Practice goal-race rhythm and marathon-specific durability."},
-        "Aerobic Run": {"intensity": "aerobic", "importance": "Medium", "purpose": "Build aerobic endurance and support weekly mileage."},
-        "Steady Run": {"intensity": "steady", "importance": "Medium", "purpose": "Build aerobic strength without excessive fatigue."},
-        "Easy Run": {"intensity": "easy", "importance": "Low", "purpose": "Absorb prior load and keep volume consistent."},
-        "Recovery Run": {"intensity": "recovery", "importance": "Low", "purpose": "Reduce fatigue and keep the week moving without strain."},
-        "Strength": {"intensity": "strength", "importance": "Medium", "purpose": "Maintain durability and injury resistance."},
-    }
-    return catalog.get(session_name, {"intensity": "easy", "importance": "Low", "purpose": "Support the weekly training cycle."})
+    return service_plan_meta_for_session(session_name)
 
 
 def _fatigue_score(plan_items, weekly_goal_km, today_local):
@@ -323,124 +202,7 @@ def _fatigue_score(plan_items, weekly_goal_km, today_local):
 
 
 def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
-    weekly_goal_km = float(weekly_goal.get("weekly_goal_km") or 0.0)
-    phase = weekly_goal.get("phase", "build")
-    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
-    max_safe_run = float(weekly_goal.get("max_safe_run") or max(10.0, weekly_goal_km * 0.35))
-    long_run_failed_recent = bool(weekly_goal.get("long_run_failed_recent"))
-    high_fatigue = bool(weekly_goal.get("high_fatigue"))
-    moderate_fatigue = bool(weekly_goal.get("moderate_fatigue"))
-
-    missed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "missed"]
-    partial_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "partial"]
-    overperformed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and (item.get("extra_km") or 0.0) >= 1.0]
-    completed_run_km = sum(item["actual_km"] or 0.0 for item in plan_items if item["workout_type"] == "RUN" and item["actual_km"])
-    fatigue_score = _fatigue_score(plan_items, weekly_goal_km, today_local)
-
-    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] == "planned"]
-    if not future_runs:
-        return plan_items
-
-    # Rebuild mode strips quality and caps the long run.
-    if rebuild_mode:
-        for item in future_runs:
-            if item["session"] in {"Tempo Run", "Speed Session", "Marathon Pace Run"}:
-                item["session"] = "Aerobic Run"
-                item["adaptive_note"] = "Quality reduced while rebuilding consistency after a gap."
-            if item["session"] == "Long Run":
-                item["planned_km"] = round(min(item["planned_km"] or 0.0, max_safe_run, 18.0), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Long run capped while rebuilding durability."
-            meta = _plan_meta_for_session(item["session"])
-            item.update(meta)
-
-    if phase == "recovery":
-        for item in future_runs:
-            if item["session"] in {"Tempo Run", "Speed Session", "Marathon Pace Run"}:
-                item["session"] = "Aerobic Run"
-                item["planned_km"] = round(max(6.0, (item["planned_km"] or 0.0) * 0.8), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Recovery week reduces workout intensity while preserving consistency."
-                item.update(_plan_meta_for_session(item["session"]))
-            elif item["session"] == "Long Run":
-                item["planned_km"] = round(min(max_safe_run, max(14.0, (item["planned_km"] or 0.0) * 0.85)), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Recovery week trims long-run stress."
-
-    if len(missed_runs) + len(partial_runs) >= 2:
-        for item in future_runs:
-            if item["session"] in {"Tempo Run", "Speed Session", "Marathon Pace Run"}:
-                item["session"] = "Aerobic Run"
-                item["planned_km"] = round(max(6.0, (item["planned_km"] or 0.0) * 0.85), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Quality session reduced after missed work earlier in the week."
-                item.update(_plan_meta_for_session(item["session"]))
-                break
-
-    if high_fatigue or fatigue_score >= 2:
-        for item in future_runs:
-            if item["session"] in {"Easy Run", "Aerobic Run"}:
-                item["session"] = "Recovery Run"
-                item["planned_km"] = round(max(4.0, (item["planned_km"] or 0.0) * 0.75), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Recovery inserted to control fatigue."
-                item.update(_plan_meta_for_session(item["session"]))
-                break
-        for item in future_runs:
-            if item["session"] == "Long Run":
-                item["planned_km"] = round(min(max_safe_run, max(12.0, (item["planned_km"] or 0.0) * 0.9)), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                if not item.get("adaptive_note"):
-                    item["adaptive_note"] = "Long run trimmed slightly to keep fatigue under control."
-    elif moderate_fatigue:
-        for item in future_runs:
-            if item["session"] in {"Tempo Run", "Speed Session", "Marathon Pace Run"}:
-                item["planned_km"] = round(max(6.0, (item["planned_km"] or 0.0) * 0.9), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Quality session volume trimmed to keep fatigue stable."
-                break
-
-    if long_run_failed_recent:
-        for item in future_runs:
-            if item["session"] == "Long Run":
-                item["planned_km"] = round(min(max_safe_run, max(16.0, (item["planned_km"] or 0.0) * 0.92)), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Long run repeated at a safer step after the last incomplete attempt."
-                break
-
-    if overperformed_runs and phase != "taper":
-        next_easy = next((item for item in future_runs if item["session"] in {"Easy Run", "Aerobic Run", "Recovery Run"}), None)
-        if next_easy:
-            next_easy["session"] = "Recovery Run"
-            next_easy["planned_km"] = round(max(4.0, (next_easy["planned_km"] or 0.0) * 0.85), 1)
-            next_easy["planned"] = f"{int(round(next_easy['planned_km']))} km"
-            next_easy["adaptive_note"] = "Recovery added after a bigger-than-planned run."
-            next_easy.update(_plan_meta_for_session(next_easy["session"]))
-
-    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] == "planned"]
-    target_remaining = max(0.0, weekly_goal_km - completed_run_km)
-    future_total = sum(item["planned_km"] or 0.0 for item in future_runs)
-    if future_runs and future_total > 0:
-        scale = min(1.15, max(0.8, target_remaining / future_total if target_remaining > 0 else 0.8))
-        if phase == "taper":
-            scale = min(scale, 1.0)
-        for item in future_runs:
-            base = float(item["planned_km"] or 0.0)
-            if item["session"] == "Long Run":
-                long_floor = 12.0 if phase in {"taper", "rebuild", "recovery"} else max(14.0, base * 0.85)
-                adjusted = max(long_floor, min(max_safe_run, base * min(scale, 1.0)))
-            elif item["session"] == "Recovery Run":
-                adjusted = base
-            else:
-                adjusted = base * scale
-            if adjusted > 0:
-                item["planned_km"] = round(max(4.0, adjusted), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-
-    for item in plan_items:
-        item.setdefault("adaptive_note", None)
-        item.update(_plan_meta_for_session(item["session"]))
-    return plan_items
+    return service_apply_adaptive_plan(plan_items, today_local, weekly_goal)
 
 
 def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_run, week_start=None):
@@ -609,7 +371,7 @@ def _next_key_workout_from_plan(today_local, current_plan, next_week_plan=None):
     if not future_candidates:
         return current_next
 
-    high_priority = [item for item in future_candidates if item["session"] in {"Tempo Run", "Long Run", "Aerobic Run"}]
+    high_priority = [item for item in future_candidates if item["session"] in {"Long Run", "Marathon Pace Run", "Speed Session", "Tempo Run", "Aerobic Run"}]
     selected = high_priority[0] if high_priority else future_candidates[0]
     return f"{selected['day']} - {selected['planned']} {selected['session']}"
 
@@ -723,6 +485,14 @@ def _build_ai_summary(intel, weekly_plan):
     if next_run:
         return f"Complete {next_run['day']} {next_run['session']} to keep weekly mileage on track."
     return "Training is on track. Stay consistent with your weekly plan."
+
+
+def _training_consistency_score(user_id, today_local):
+    start = today_local - timedelta(days=27)
+    logs = fetch_workout_logs(user_id, start, today_local)
+    return service_training_consistency_score(logs)
+
+
 def _current_user():
     user_id = session.get("user_id")
     if not user_id:
@@ -884,7 +654,7 @@ def dashboard():
     weekly_extra_km = round(max(0.0, float(weekly_goal["completed_km"]) - weekly_plan_completed_km), 1)
     weekly_plan_remaining_km = round(max(0.0, weekly_plan_goal_km - min(weekly_plan_completed_km, weekly_plan_goal_km)), 1)
     weekly_plan_completion_pct = min(100, int(round((weekly_plan_completed_km / max(1.0, weekly_plan_goal_km)) * 100))) if weekly_plan_goal_km > 0 else 0
-    consistency_score = int(round((len(completed_runs) / max(1, len(planned_runs))) * 100))
+    consistency_score = _training_consistency_score(user.id, today_local)
     week_closed = _now_local_datetime(user_tz) > datetime.combine(week_end, datetime.max.time()).replace(tzinfo=_now_local_datetime(user_tz).tzinfo)
     weekly_completion_pct = weekly_plan_completion_pct
     weekly_status = "Goal achieved" if weekly_plan_completed_km >= weekly_plan_goal_km else "Goal not achieved" if week_closed else "In progress"

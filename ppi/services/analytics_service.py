@@ -8,37 +8,29 @@ from ..repositories import (
     fetch_latest_metric,
     fetch_metrics,
     fetch_recent_activities,
+    fetch_workout_logs,
     get_goal,
     get_latest_prediction,
     save_prediction,
 )
+from .load_engine import (
+    DISTANCE_ACTIVITY_TYPES,
+    RUN_ACTIVITY_TYPES,
+    RUN_INTENSITY_FACTOR,
+    STRESS_TYPE_FACTOR,
+    classify_run_intensity as service_classify_run_intensity,
+    load_model as service_load_model,
+    running_stress_score as service_running_stress_score,
+)
+from .prediction_engine import (
+    fit_half_equivalent as service_fit_half_equivalent,
+    marathon_prediction_seconds as service_marathon_prediction_seconds,
+    riegel_projection as service_riegel_projection,
+    vo2max_estimate_from_runs as service_vo2max_estimate_from_runs,
+    vo2max_marathon_projection as service_vo2max_marathon_projection,
+)
 
 THRESHOLD_HR = 168
-DISTANCE_ACTIVITY_TYPES = {"run", "trailrun", "walk", "hike", "ride", "swim"}
-RUN_ACTIVITY_TYPES = {"run", "trailrun"}
-STRESS_TYPE_FACTOR = {
-    "run": 1.0,
-    "trailrun": 1.0,
-    "walk": 0.55,
-    "hike": 0.60,
-    "ride": 0.85,
-    "swim": 0.80,
-    "strength": 0.70,
-    "yoga": 0.35,
-}
-RUN_INTENSITY_FACTOR = {
-    "recovery": 0.85,
-    "easy": 1.0,
-    "aerobic": 1.1,
-    "steady": 1.15,
-    "steady_long": 1.2,
-    "easy_long": 1.1,
-    "marathon_specific": 1.2,
-    "marathon_specific_long": 1.25,
-    "tempo": 1.3,
-    "speed": 1.5,
-    "unknown": 1.0,
-}
 
 
 def _utc_today():
@@ -123,11 +115,11 @@ def _confidence_label(score):
 
 def _training_phase(days_remaining):
     weeks_to_race = max(0.0, days_remaining / 7.0)
-    if weeks_to_race < 3:
+    if weeks_to_race <= 6:
         return "taper"
-    if weeks_to_race <= 9:
+    if weeks_to_race <= 12:
         return "peak"
-    if weeks_to_race <= 16:
+    if weeks_to_race <= 18:
         return "build"
     return "base"
 
@@ -198,25 +190,7 @@ def _elevation_factor(elevation_type):
 
 
 def _running_stress_score(activity, marathon_pace_sec_per_km):
-    activity_type = activity["type"]
-    distance_km = float(activity.get("distance_km") or 0.0)
-    duration_minutes = float(activity.get("moving_time_sec") or 0.0) / 60.0
-    elevation_gain = float(activity.get("elevation_gain") or 0.0)
-    elevation_factor = 1.0 + min(0.12, elevation_gain / 5000.0)
-
-    if activity_type in {"run", "trailrun"}:
-        intensity = activity.get("intensity") or _classify_run_intensity(activity, marathon_pace_sec_per_km)
-        intensity_factor = RUN_INTENSITY_FACTOR.get(intensity, 1.0)
-        if distance_km < 3.0:
-            return 0.0
-        return round(distance_km * intensity_factor * elevation_factor, 2)
-
-    type_factor = STRESS_TYPE_FACTOR.get(activity_type, 0.5)
-    if distance_km > 0:
-        return round(distance_km * type_factor * elevation_factor, 2)
-    if duration_minutes > 0:
-        return round((duration_minutes / 10.0) * type_factor, 2)
-    return 0.0
+    return service_running_stress_score(activity, marathon_pace_sec_per_km)
 def _status_color(status):
     s = (status or "").lower()
     if "unavailable" in s or "insufficient" in s:
@@ -250,48 +224,7 @@ def _activity_to_raw(a, user_timezone=None):
 
 
 def _classify_run_intensity(run, marathon_pace_sec_per_km):
-    run_pace = run.get("pace_sec_per_km")
-    distance_km = float(run.get("distance_km") or 0.0)
-    avg_hr = run.get("avg_hr")
-    if not run_pace or run_pace <= 0 or marathon_pace_sec_per_km <= 0:
-        return "unknown"
-
-    ratio = run_pace / marathon_pace_sec_per_km
-    hr_high = avg_hr is not None and avg_hr >= 0.9 * THRESHOLD_HR
-    hr_moderate = avg_hr is not None and avg_hr >= 0.82 * THRESHOLD_HR
-
-    if distance_km >= 18:
-        if ratio <= 1.03 and hr_moderate:
-            return "marathon_specific_long"
-        if ratio <= 1.10:
-            return "steady_long"
-        return "easy_long"
-
-    if distance_km >= 12:
-        if ratio <= 0.95 or hr_high:
-            return "tempo"
-        if ratio <= 1.03:
-            return "marathon_specific"
-        if ratio <= 1.12:
-            return "aerobic"
-        return "easy"
-
-    if distance_km >= 8:
-        if ratio <= 0.92:
-            return "speed"
-        if ratio <= 0.97 or hr_high:
-            return "tempo"
-        if ratio <= 1.05:
-            return "steady"
-        if ratio <= 1.15:
-            return "aerobic"
-        return "easy"
-
-    if ratio <= 1.05 and hr_moderate:
-        return "steady"
-    if ratio <= 1.15:
-        return "easy"
-    return "recovery"
+    return service_classify_run_intensity(run, marathon_pace_sec_per_km)
 
 
 def _raw_layer(user_id, user_timezone=None):
@@ -400,80 +333,12 @@ def _rolling_week_consistency(distance_activities, today):
     return weekly_totals, len([v for v in weekly_totals if v >= 25.0])
 
 def _ctl_ema_series(load_activities, today, marathon_pace_sec_per_km, days=14):
-    if load_activities:
-        earliest = min(a["date"] for a in load_activities)
-        start = min(earliest, today - timedelta(days=120))
-    else:
-        start = today - timedelta(days=120)
-
-    daily_tss = {}
-    for a in load_activities:
-        stress = _running_stress_score(a, marathon_pace_sec_per_km)
-        daily_tss[a["date"]] = daily_tss.get(a["date"], 0.0) + stress
-
-    ctl = 0.0
-    timeline = {}
-    day = start
-    while day <= today:
-        tss = daily_tss.get(day, 0.0)
-        ctl = ctl + (tss - ctl) / 42.0
-        timeline[day] = round(ctl, 1)
-        day += timedelta(days=1)
-
-    series_start = today - timedelta(days=days - 1)
-    out = []
-    for i in range(days):
-        d = series_start + timedelta(days=i)
-        out.append({"date": d.isoformat(), "label": f"{d.strftime('%b')} {d.day}", "value": timeline.get(d, 0.0)})
-
-    return round(timeline.get(today, 0.0), 1), out
+    load = service_load_model(load_activities, today, marathon_pace_sec_per_km, days=days)
+    return load["ctl_today"], load["ctl_series"]
 
 
 def _load_model(load_activities, today, marathon_pace_sec_per_km, days=14):
-    if load_activities:
-        earliest = min(a["date"] for a in load_activities)
-        start = min(earliest, today - timedelta(days=120))
-    else:
-        start = today - timedelta(days=120)
-
-    daily_tss = {}
-    for a in load_activities:
-        stress = _running_stress_score(a, marathon_pace_sec_per_km)
-        daily_tss[a["date"]] = daily_tss.get(a["date"], 0.0) + stress
-
-    ctl = 0.0
-    atl = 0.0
-    ctl_timeline = {}
-    atl_timeline = {}
-    day = start
-    while day <= today:
-        tss = daily_tss.get(day, 0.0)
-        ctl = ctl + (tss - ctl) / 42.0
-        atl = atl + (tss - atl) / 7.0
-        ctl_timeline[day] = round(ctl, 1)
-        atl_timeline[day] = round(atl, 1)
-        day += timedelta(days=1)
-
-    series_start = today - timedelta(days=days - 1)
-    ctl_out = []
-    atl_out = []
-    for i in range(days):
-        d = series_start + timedelta(days=i)
-        ctl_out.append({"date": d.isoformat(), "label": f"{d.strftime('%b')} {d.day}", "value": ctl_timeline.get(d, 0.0)})
-        atl_out.append({"date": d.isoformat(), "label": f"{d.strftime('%b')} {d.day}", "value": atl_timeline.get(d, 0.0)})
-
-    ctl_today = round(ctl_timeline.get(today, 0.0), 1)
-    atl_today = round(atl_timeline.get(today, 0.0), 1)
-    tsb_today = round(ctl_today - atl_today, 1)
-    fatigue_ratio = round(atl_today / max(1.0, ctl_today), 2)
-    return {
-        "ctl_today": ctl_today,
-        "atl_today": atl_today,
-        "tsb_today": tsb_today,
-        "fatigue_ratio": fatigue_ratio,
-        "ctl_series": ctl_out,
-        "atl_series": atl_out,
-    }
+    return service_load_model(load_activities, today, marathon_pace_sec_per_km, days=days)
 
 
 def _daily_distance_series(distance_activities, today, days=14):
@@ -534,13 +399,19 @@ def _race_simulation_runs(runs, marathon_pace_sec_per_km):
 
 
 def _fit_half_equivalent(pace_medium, pace_long):
-    if pace_medium and pace_long:
-        return (0.55 * pace_long + 0.45 * pace_medium) * 21.1
-    if pace_long:
-        return pace_long * 21.1
-    if pace_medium:
-        return pace_medium * 21.1
-    return None
+    return service_fit_half_equivalent(pace_medium, pace_long)
+
+
+def _riegel_projection(time_seconds, distance_km, target_km=42.195, exponent=1.06):
+    return service_riegel_projection(time_seconds, distance_km, target_km=target_km, exponent=exponent)
+
+
+def _vo2max_estimate_from_runs(runs):
+    return service_vo2max_estimate_from_runs(runs)
+
+
+def _vo2max_marathon_projection(vo2max):
+    return service_vo2max_marathon_projection(vo2max)
 
 
 def _fri_from_runs(long_runs):
@@ -649,6 +520,11 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         r for r in runs_8w
         if r.get("intensity") in {"marathon_specific", "marathon_specific_long", "steady_long", "tempo"} and r["distance_km"] >= 10
     ]
+    recent_race_runs = [
+        r for r in raw
+        if r["type"] in RUN_ACTIVITY_TYPES and r.get("is_race") and 5 <= r["distance_km"] <= 21.5 and r["date"] >= today - timedelta(days=84)
+    ]
+    vo2max_estimate = _vo2max_estimate_from_runs(runs_8w + recent_race_runs)
 
     week_start, week_end = _calendar_week_bounds(today)
     rolling_week_distance_km = _calendar_week_distance(run_distance_acts, week_start, week_end)
@@ -657,6 +533,10 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         1,
     )
     rolling_weeks, consistent_weeks = _rolling_week_consistency(run_distance_acts, today)
+    recent_planned_logs = fetch_workout_logs(user_id, today - timedelta(days=27), today)
+    planned_run_logs = [log for log in recent_planned_logs if log.workout_type == "RUN"]
+    completed_run_logs = [log for log in planned_run_logs if log.status == "completed"]
+    training_consistency_ratio = (len(completed_run_logs) / len(planned_run_logs)) if planned_run_logs else 0.0
     weekly_history = _weekly_distance_history(run_distance_acts, today, weeks=5)
     prior_weeks = weekly_history[1:] if len(weekly_history) > 1 else []
     prior_avg = round(sum(prior_weeks) / len(prior_weeks), 1) if prior_weeks else 0.0
@@ -895,6 +775,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "medium_runs": medium_runs,
         "long_runs": long_runs,
         "race_simulation_runs": race_sim_runs,
+        "recent_race_runs": recent_race_runs,
+        "vo2max_estimate": vo2max_estimate,
         "pace_medium": pace_medium,
         "pace_long": pace_long,
         "marathon_specific_runs": marathon_specific_runs,
@@ -936,6 +818,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "rebuild_mode": rebuild_mode,
             "weekly_readiness_target_km": weekly_readiness_target,
             "fatigue_ratio": load_model["fatigue_ratio"],
+            "training_consistency_ratio": round(training_consistency_ratio, 2),
             "high_fatigue": fatigue_flags["high_fatigue"],
             "moderate_fatigue": fatigue_flags["moderate_fatigue"],
             "long_run_failed_recent": long_run_state.get("failed_recent", False),
@@ -968,74 +851,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         },
     }
 def _marathon_prediction_seconds(metrics):
-    candidate_signals = []
-    half_equiv = _fit_half_equivalent(metrics["pace_medium"], metrics["pace_long"])
-    if half_equiv:
-        candidate_signals.append((half_equiv * 2.1, 0.25))
-
-    for run in metrics.get("medium_runs", []):
-        if 10 <= run["distance_km"] <= 30:
-            intensity = run.get("intensity")
-            weight = 0.16 if intensity in {"tempo", "speed"} else 0.14 if intensity in {"marathon_specific", "steady"} else 0.10
-            exponent = 1.05 if intensity in {"tempo", "speed"} else 1.06
-            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
-
-    for run in metrics.get("marathon_specific_runs", []):
-        if run["distance_km"] >= 14 and run.get("pace_sec_per_km"):
-            exponent = 1.03 if run.get("intensity") in {"marathon_specific_long", "steady_long"} else 1.04
-            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), 0.22))
-
-    for run in metrics.get("race_simulation_runs", []):
-        candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** 1.03), 0.28))
-
-    for run in metrics.get("long_runs", []):
-        if run["distance_km"] >= 24 and run.get("pace_sec_per_km"):
-            marathon_pace = metrics.get("goal_marathon_pace_sec_per_km") or run["pace_sec_per_km"]
-            pace_gap = abs(run["pace_sec_per_km"] - marathon_pace) / max(1.0, marathon_pace)
-            if pace_gap <= 0.15:
-                weight = 0.24 if run.get("intensity") == "marathon_specific_long" else 0.18
-                exponent = 1.03 if run.get("intensity") == "marathon_specific_long" else 1.05
-                candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
-
-    if not candidate_signals:
-        return None
-
-    weight_total = sum(weight for _, weight in candidate_signals)
-    marathon_time = sum(value * weight for value, weight in candidate_signals) / max(1e-6, weight_total)
-
-    fri = metrics["endurance"]["fri"]
-    if fri is None:
-        fatigue_factor = 1.08
-    elif fri > 0.97:
-        fatigue_factor = 1.02
-    elif fri >= 0.94:
-        fatigue_factor = 1.05
-    elif fri >= 0.90:
-        fatigue_factor = 1.07
-    else:
-        fatigue_factor = 1.10
-
-    marathon_time *= fatigue_factor
-
-    weekly = metrics["weekly"]["prior_avg_km"] or metrics["weekly"]["completed_km"]
-    if weekly >= 65:
-        marathon_time *= 0.98
-    elif weekly < 45:
-        marathon_time *= 1.03
-
-    if metrics.get("rebuild_mode"):
-        marathon_time *= 1.05
-    fatigue_ratio = metrics.get("fatigue_ratio", 1.0)
-    if fatigue_ratio >= 1.35:
-        marathon_time *= 1.03
-    elif fatigue_ratio <= 0.95 and weekly >= 55:
-        marathon_time *= 0.99
-    if metrics.get("phase") == "recovery":
-        marathon_time *= 1.01
-    if metrics.get("phase") == "taper":
-        marathon_time *= 0.99
-
-    return marathon_time
+    return service_marathon_prediction_seconds(metrics)
 
 
 def _goal_probability(predicted_seconds, goal_seconds):
@@ -1239,10 +1055,11 @@ def performance_intelligence(user_id, user_timezone=None):
     }
 
     consistent_weeks = next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0)
-    consistency_pct = int(round((consistent_weeks / 3.0) * 100)) if consistent_weeks else 0
+    consistency_ratio = float(metrics["weekly"].get("training_consistency_ratio") or 0.0)
+    consistency_pct = int(round(consistency_ratio * 100))
     long_run_progress = min(1.0, (longest["distance_km"] / 32.0)) if longest else 0.0
     weekly_mileage_progress = min(1.0, weekly["completed_km"] / max(1.0, weekly.get("weekly_readiness_target_km") or 45.0))
-    consistency_progress = min(1.0, consistent_weeks / 3.0)
+    consistency_progress = min(1.0, consistency_ratio)
     fitness_progress = min(1.0, round(metrics["ctl_proxy"], 1) / max(1.0, target_ctl))
     marathon_readiness_pct = int(round((0.35 * long_run_progress + 0.30 * weekly_mileage_progress + 0.20 * consistency_progress + 0.15 * fitness_progress) * 100))
     goal_confidence_score = (0.4 * long_run_progress) + (0.3 * weekly_mileage_progress) + (0.2 * consistency_progress) + (0.1 * fitness_progress)
