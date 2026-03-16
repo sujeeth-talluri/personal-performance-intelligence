@@ -173,16 +173,18 @@ def _weekly_plan_template(weekly_goal, long_run):
 
 def _classify_run_completion(actual_km, target_km):
     if not target_km or target_km <= 0:
-        return "completed", 100
+        return "completed", 100, round(max(0.0, actual_km or 0.0), 1)
     if actual_km is None or actual_km <= 0:
-        return "missed", 0
+        return "missed", 0, 0.0
 
-    completion_pct = int(round((actual_km / target_km) * 100))
+    raw_pct = int(round((actual_km / target_km) * 100))
+    completion_pct = min(100, raw_pct)
+    extra_km = round(max(0.0, actual_km - target_km), 1)
     if actual_km >= 0.9 * target_km:
-        return "completed", completion_pct
+        return "completed", completion_pct, extra_km
     if actual_km >= 0.5 * target_km:
-        return "partial", completion_pct
-    return "missed", completion_pct
+        return "partial", completion_pct, extra_km
+    return "missed", completion_pct, extra_km
 
 
 def _status_label(status):
@@ -234,41 +236,41 @@ def _select_best_run_for_session(run_acts, session_name, weekly_goal):
 
 
 def _classify_quality_completion(session_name, actual_km, target_km, pace_sec_per_km, weekly_goal):
-    status, completion_pct = _classify_run_completion(actual_km, target_km)
+    status, completion_pct, extra_km = _classify_run_completion(actual_km, target_km)
     marathon_pace = _goal_marathon_pace(weekly_goal)
     if not pace_sec_per_km or marathon_pace <= 0:
-        return status, completion_pct
+        return status, completion_pct, extra_km
 
     if session_name == "Marathon Pace Run":
         pace_ok = abs(pace_sec_per_km - marathon_pace) / marathon_pace <= 0.05
         if actual_km >= 0.9 * target_km and pace_ok:
-            return "completed", completion_pct
+            return "completed", completion_pct, extra_km
         if actual_km >= 0.6 * target_km and abs(pace_sec_per_km - marathon_pace) / marathon_pace <= 0.08:
-            return "partial", completion_pct
-        return "missed", completion_pct
+            return "partial", completion_pct, extra_km
+        return "missed", completion_pct, extra_km
 
     if session_name == "Speed Session":
         if pace_sec_per_km <= marathon_pace * 0.95 and actual_km >= 0.85 * target_km:
-            return "completed", completion_pct
+            return "completed", completion_pct, extra_km
         if pace_sec_per_km <= marathon_pace * 1.00 and actual_km >= 0.6 * target_km:
-            return "partial", completion_pct
-        return "missed", completion_pct
+            return "partial", completion_pct, extra_km
+        return "missed", completion_pct, extra_km
 
     if session_name == "Steady Run":
         if pace_sec_per_km <= marathon_pace * 1.10 and actual_km >= 0.9 * target_km:
-            return "completed", completion_pct
+            return "completed", completion_pct, extra_km
         if actual_km >= 0.6 * target_km:
-            return "partial", completion_pct
-        return "missed", completion_pct
+            return "partial", completion_pct, extra_km
+        return "missed", completion_pct, extra_km
 
     if session_name == "Tempo Run":
         if pace_sec_per_km <= marathon_pace * 0.98 and actual_km >= 0.85 * target_km:
-            return "completed", completion_pct
+            return "completed", completion_pct, extra_km
         if pace_sec_per_km <= marathon_pace * 1.03 and actual_km >= 0.6 * target_km:
-            return "partial", completion_pct
-        return "missed", completion_pct
+            return "partial", completion_pct, extra_km
+        return "missed", completion_pct, extra_km
 
-    return status, completion_pct
+    return status, completion_pct, extra_km
 
 
 def _priority_rank(item):
@@ -331,7 +333,7 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
 
     missed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "missed"]
     partial_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "partial"]
-    overperformed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and (item["completion_pct"] or 0) >= 115]
+    overperformed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and (item.get("extra_km") or 0.0) >= 1.0]
     completed_run_km = sum(item["actual_km"] or 0.0 for item in plan_items if item["workout_type"] == "RUN" and item["actual_km"])
     fatigue_score = _fatigue_score(plan_items, weekly_goal_km, today_local)
 
@@ -495,9 +497,9 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
             target = float(log.target_distance_km or 0.0)
             if run_km > 0:
                 if log.session_name in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}:
-                    new_status, _ = _classify_quality_completion(log.session_name, run_km, target, run_pace, weekly_goal)
+                    new_status, _, _ = _classify_quality_completion(log.session_name, run_km, target, run_pace, weekly_goal)
                 else:
-                    new_status, _ = _classify_run_completion(run_km, target)
+                    new_status, _, _ = _classify_run_completion(run_km, target)
                 new_actual = run_km
             elif log.workout_date < today_local:
                 new_status = "missed"
@@ -537,8 +539,9 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
         planned_km = round(float(log.target_distance_km or 0.0), 1) if log.target_distance_km else None
         actual_km = round(float(log.actual_distance_km or 0.0), 1) if log.actual_distance_km is not None else None
         completion_pct = None
+        extra_km = 0.0
         if log.workout_type == "RUN" and planned_km and actual_km is not None:
-            completion_pct = int(round((actual_km / planned_km) * 100))
+            _, completion_pct, extra_km = _classify_run_completion(actual_km, planned_km)
         out.append({
             "day": log.workout_date.strftime("%a"),
             "date": log.workout_date,
@@ -551,6 +554,7 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
             "status": log.status,
             "status_label": _status_label(log.status),
             "completion_pct": completion_pct,
+            "extra_km": extra_km,
             "workout_type": log.workout_type,
             "intensity": planned_day.get("intensity"),
             "importance": planned_day.get("importance"),
@@ -621,8 +625,7 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
 
     if today_run:
         actual_km = float(today_run["distance"])
-        completion_pct = int(round((actual_km / planned_km) * 100)) if planned_km > 0 else 100
-        status_key, _ = _classify_run_completion(actual_km, planned_km)
+        status_key, completion_pct, extra_km = _classify_run_completion(actual_km, planned_km)
         return {
             "date": today_local.strftime("%a %b %d"),
             "workout": workout_name,
@@ -632,6 +635,7 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
             "distance": f"{today_run['distance']} km",
             "distance_actual": f"{today_run['distance']} km",
             "completion_pct": completion_pct,
+            "extra_distance": f"+{extra_km} km" if extra_km > 0 else None,
             "pace": today_run["pace"],
             "hr": str(today_run["hr"]) if today_run["hr"] else "--",
             "coach_insight": "Workout completed for today. Keep recovery and hydration on track.",
@@ -648,6 +652,7 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
         "distance": "--",
         "distance_actual": "--",
         "completion_pct": None,
+        "extra_distance": None,
         "pace": "--",
         "hr": "--",
         "coach_insight": "Today's session is assigned from your weekly plan.",
@@ -875,9 +880,10 @@ def dashboard():
     planned_runs = [item for item in weekly_plan if item["workout_type"] == "RUN"]
     completed_runs = [item for item in planned_runs if item["status"] == "completed"]
     weekly_plan_goal_km = round(sum(float(item.get("planned_km") or 0.0) for item in planned_runs), 1)
-    weekly_plan_completed_km = round(float(weekly_goal["completed_km"]), 1)
-    weekly_plan_remaining_km = round(max(0.0, weekly_plan_goal_km - weekly_plan_completed_km), 1)
-    weekly_plan_completion_pct = int(round((weekly_plan_completed_km / max(1.0, weekly_plan_goal_km)) * 100)) if weekly_plan_goal_km > 0 else 0
+    weekly_plan_completed_km = round(sum(float(item.get("actual_km") or 0.0) for item in planned_runs), 1)
+    weekly_extra_km = round(max(0.0, float(weekly_goal["completed_km"]) - weekly_plan_completed_km), 1)
+    weekly_plan_remaining_km = round(max(0.0, weekly_plan_goal_km - min(weekly_plan_completed_km, weekly_plan_goal_km)), 1)
+    weekly_plan_completion_pct = min(100, int(round((weekly_plan_completed_km / max(1.0, weekly_plan_goal_km)) * 100))) if weekly_plan_goal_km > 0 else 0
     consistency_score = int(round((len(completed_runs) / max(1, len(planned_runs))) * 100))
     week_closed = _now_local_datetime(user_tz) > datetime.combine(week_end, datetime.max.time()).replace(tzinfo=_now_local_datetime(user_tz).tzinfo)
     weekly_completion_pct = weekly_plan_completion_pct
@@ -901,8 +907,10 @@ def dashboard():
         key_session_importance=key_session_importance,
         consistency_score=consistency_score,
         goal_confidence_label=intel.get("goal_confidence", "Building"),
+        prediction_confidence_label=intel.get("prediction_confidence", "Building"),
         weekly_plan_goal_km=weekly_plan_goal_km,
         weekly_plan_completed_km=weekly_plan_completed_km,
+        weekly_extra_km=weekly_extra_km,
         weekly_plan_remaining_km=weekly_plan_remaining_km,
         weekly_completion_pct=weekly_completion_pct,
         weekly_status=weekly_status,
