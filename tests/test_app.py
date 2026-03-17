@@ -116,8 +116,8 @@ def test_training_phase_thresholds():
     assert _training_phase(7 * 20) == "base"
     assert _training_phase(7 * 15) == "build"
     assert _training_phase(7 * 8) == "peak"
-    assert _training_phase(7 * 4) == "peak"
-    assert _training_phase(7 * 2) == "taper"
+    assert _training_phase(7 * 6) == "peak"
+    assert _training_phase(7 * 5) == "taper"
 
 
 def test_long_run_ladder_requires_true_milestone_completion():

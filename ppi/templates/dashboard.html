@@ -127,7 +127,7 @@
       </div>
       <div class='sub'>{{ intel.prediction_note }}</div>
       <div class='metric'><span>{{ intel.goal_label }} Confidence</span><strong>{{ goal_confidence_label }}</strong></div>
-      <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }}</strong></div>
+      <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }} ({{ intel.prediction_confidence_pct }}%)</strong></div>
       {% if intel.probability is not none %}
         <div class='metric'><span>Goal Probability</span><strong>{{ intel.probability }}%</strong></div>
       {% else %}
@@ -192,6 +192,8 @@
       <div class='performance-number medium'>{{ intel.marathon_readiness_pct }}%</div>
       <div class='metric'><span>Status</span><strong>{{ intel.marathon_readiness_status }}</strong></div>
       <div class='metric'><span>Training Consistency</span><strong>{{ consistency_score }}%</strong></div>
+      <div class='metric'><span>Marathon Specificity</span><strong>{{ intel.marathon_specificity_pct }}%</strong></div>
+      <div class='metric'><span>Fatigue Control</span><strong>{{ intel.fatigue_control_pct }}%</strong></div>
       <div class='progress animated'><span style='width:{{ intel.marathon_readiness_pct }}%'></span></div>
       <div class='sub'><strong>Next Step:</strong> {{ intel.marathon_readiness_next_step }}</div>
     </section>

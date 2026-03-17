@@ -432,19 +432,23 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
 
 
 def _build_ai_summary(intel, weekly_plan):
-    # Priority: injury risk -> training imbalance -> missed key session -> long run readiness -> prediction readiness
+    # Priority: fatigue/injury risk -> missed key work -> long run readiness -> specificity -> prediction readiness
     bonk_label = (intel.get("bonk_risk", {}).get("label") or "").lower()
     next_run = next((u for u in weekly_plan if u.get("workout_type") == "RUN" and u.get("status") == "planned"), None)
     fatigue_flags = intel.get("fatigue_flags", {})
+    next_key = next((u for u in weekly_plan if u.get("workout_type") == "RUN" and u.get("status") == "planned" and u.get("session") in {"Race Day", "Long Run", "Marathon Pace Run", "Speed Session", "Tempo Run"}), next_run)
     if intel.get("weekly", {}).get("phase") == "taper":
-        if next_run:
-            return f"Taper week now. Keep {next_run['day']} {next_run['session']} controlled and protect freshness."
+        if next_key:
+            return f"Taper week now. Keep {next_key['day']} {next_key['session']} controlled and protect freshness for race day."
         return "Taper week now. Keep the effort light and arrive at race day fresh."
     if fatigue_flags.get("high_fatigue"):
-        if next_run:
-            return f"Fatigue is elevated. Keep {next_run['day']} {next_run['session']} controlled so you absorb the current load."
+        if next_key:
+            return f"Fatigue is elevated. Convert the focus to recovery, then keep {next_key['day']} {next_key['session']} controlled."
         return "Fatigue is elevated. Favor recovery and avoid adding extra intensity."
     if bonk_label == "high":
+        next_long = next((u for u in weekly_plan if u.get("session") == "Long Run" and u.get("status") == "planned"), None)
+        if next_long:
+            return f"Bonk risk is still high. Prioritize {next_long['day']} {next_long['planned']} {next_long['session']} and keep fueling practice consistent."
         if next_run:
             return f"Keep the next step simple. Complete {next_run['day']} {next_run['session']} to reduce fatigue risk."
         return "Keep the next step simple. Prioritize your next aerobic run and protect recovery."
@@ -471,6 +475,11 @@ def _build_ai_summary(intel, weekly_plan):
         if next_long:
             return f"Long-run readiness is building. Prioritize {next_long['day']} {next_long['planned']} {next_long['session']}."
         return "Long-run readiness is building. Schedule a qualifying long run this weekend."
+
+    if intel.get("marathon_specificity_pct", 0) < 60:
+        next_specific = next((u for u in upcoming_runs if u.get("session") == "Marathon Pace Run"), None)
+        if next_specific:
+            return f"Marathon specificity is still building. Hit {next_specific['day']} {next_specific['planned']} {next_specific['session']} at controlled goal pace."
 
     next_marathon_specific = next((u for u in upcoming_runs if u.get("session") == "Marathon Pace Run"), None)
     if next_marathon_specific:

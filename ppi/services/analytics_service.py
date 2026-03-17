@@ -115,9 +115,9 @@ def _confidence_label(score):
 
 def _training_phase(days_remaining):
     weeks_to_race = max(0.0, days_remaining / 7.0)
-    if weeks_to_race <= 3:
+    if weeks_to_race < 6:
         return "taper"
-    if weeks_to_race <= 10:
+    if weeks_to_race <= 12:
         return "peak"
     if weeks_to_race <= 18:
         return "build"
@@ -1071,11 +1071,33 @@ def performance_intelligence(user_id, user_timezone=None):
     consistent_weeks = next((i["done"] for i in metrics["readiness"]["items"] if i["title"] == "Consistent mileage weeks"), 0)
     consistency_ratio = float(metrics["weekly"].get("training_consistency_ratio") or 0.0)
     consistency_pct = int(round(consistency_ratio * 100))
+    tsb_today = round(metrics.get("tsb_proxy", 0.0), 1)
     long_run_progress = min(1.0, (longest["distance_km"] / 32.0)) if longest else 0.0
     weekly_mileage_progress = min(1.0, weekly["completed_km"] / max(1.0, weekly.get("weekly_readiness_target_km") or 45.0))
     consistency_progress = min(1.0, consistency_ratio)
     fitness_progress = min(1.0, round(metrics["ctl_proxy"], 1) / max(1.0, target_ctl))
-    marathon_readiness_pct = int(round((0.35 * long_run_progress + 0.30 * weekly_mileage_progress + 0.20 * consistency_progress + 0.15 * fitness_progress) * 100))
+    specificity_progress = min(
+        1.0,
+        (0.6 * min(len(metrics.get("marathon_specific_runs", [])) / 3.0, 1.0))
+        + (0.4 * min(len(metrics.get("race_simulation_runs", [])), 1.0)),
+    )
+    if tsb_today < -20:
+        fatigue_control_progress = 0.2
+    elif tsb_today < -10:
+        fatigue_control_progress = 0.5
+    elif tsb_today <= 5:
+        fatigue_control_progress = 0.8
+    else:
+        fatigue_control_progress = 1.0
+
+    marathon_readiness_pct = int(round((
+        0.28 * long_run_progress
+        + 0.22 * weekly_mileage_progress
+        + 0.16 * consistency_progress
+        + 0.14 * fitness_progress
+        + 0.12 * specificity_progress
+        + 0.08 * fatigue_control_progress
+    ) * 100))
     goal_confidence_score = (0.4 * long_run_progress) + (0.3 * weekly_mileage_progress) + (0.2 * consistency_progress) + (0.1 * fitness_progress)
 
     if marathon_readiness_pct >= 75:
@@ -1086,7 +1108,6 @@ def performance_intelligence(user_id, user_timezone=None):
         readiness_status = "Early Build"
 
     next_step = metrics["next_requirement"] or "Maintain this week and complete your scheduled long run."
-    tsb_today = round(metrics.get("tsb_proxy", 0.0), 1)
     if tsb_today < -20:
         fatigue_balance = "Fatigue risk"
         fatigue_balance_note = "Recent load is very high. Protect recovery before adding more intensity."
@@ -1114,6 +1135,7 @@ def performance_intelligence(user_id, user_timezone=None):
         "goal_confidence_score": round(goal_confidence_score, 2),
         "prediction_confidence": prediction["prediction_confidence"],
         "prediction_confidence_score": prediction["prediction_confidence_score"],
+        "prediction_confidence_pct": int(round(prediction["prediction_confidence_score"] * 100)),
         "prediction_note": prediction["note"],
         "goal_progress_pct": prediction["goal_progress_pct"],
         "insufficient_data": not prediction["valid"],
@@ -1147,6 +1169,8 @@ def performance_intelligence(user_id, user_timezone=None):
         "marathon_readiness_pct": marathon_readiness_pct,
         "marathon_readiness_status": readiness_status,
         "marathon_readiness_next_step": next_step,
+        "marathon_specificity_pct": int(round(specificity_progress * 100)),
+        "fatigue_control_pct": int(round(fatigue_control_progress * 100)),
         "charts": {
             "weekly_distance_14": metrics["distance_series_14"],
             "ctl_14": ctl_series_14,
