@@ -27,8 +27,29 @@ def test_plan_engine_respects_long_run_share():
     assert long_target <= planned_km * 0.35 + 0.2
 
 
+def test_base_plan_expands_week_to_support_long_run_share():
+    weekly_goal = {"weekly_goal_km": 40.0, "phase": "base", "rebuild_mode": False, "weeks_to_race": 23.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
+    long_target = float(plan[6]["target_km"])
+    assert planned_km >= round(long_target / 0.35, 1) - 0.2
+
+
+def test_base_plan_does_not_regress_long_run_for_established_runner():
+    weekly_goal = {"weekly_goal_km": 40.0, "phase": "base", "rebuild_mode": False, "weeks_to_race": 23.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert float(plan[6]["target_km"]) >= 18.3
+
+
 def test_training_consistency_score_uses_last_planned_runs():
     logs = [DummyLog("RUN", "completed"), DummyLog("RUN", "completed"), DummyLog("RUN", "missed"), DummyLog("STRENGTH", "completed")]
+    assert training_consistency_score(logs) == 67
+
+
+def test_training_consistency_counts_moved_session_as_completed():
+    logs = [DummyLog("RUN", "completed"), DummyLog("RUN", "moved"), DummyLog("RUN", "missed")]
     assert training_consistency_score(logs) == 67
 
 

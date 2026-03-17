@@ -134,6 +134,7 @@ def _classify_run_completion(actual_km, target_km):
 def _status_label(status):
     mapping = {
         "completed": "Completed",
+        "moved": "Moved",
         "partial": "Partial",
         "missed": "Missed",
         "skipped": "Missed",
@@ -239,38 +240,81 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
         by_day.setdefault(local_day, []).append(activity)
 
     logs = fetch_workout_logs(user_id, week_start, week_end)
-    for log in logs:
+    used_activity_ids = set()
+    notes_by_date = {}
+
+    def _run_candidates_for_session(day_acts, session_name):
+        if session_name == "Race Day":
+            return [a for a in day_acts if (a.activity_type or "").lower() in {"run", "trailrun"} and bool(a.is_race)]
+        return [a for a in day_acts if (a.activity_type or "").lower() in {"run", "trailrun"} and not a.is_race and getattr(a, "strava_activity_id", None) not in used_activity_ids]
+
+    def _match_session_on_day(day_acts, session_name):
+        candidates = _run_candidates_for_session(day_acts, session_name)
+        if not candidates:
+            return None, 0.0, None, []
+        if session_name in {"Race Day", "Long Run", "Medium Long Run", "Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}:
+            matched = _select_best_run_for_session(candidates, session_name, weekly_goal)
+            if not matched:
+                return None, 0.0, None, []
+            return matched, round(float(matched.distance_km), 1), _run_pace_sec_per_km(matched), [matched]
+        return None, round(sum(a.distance_km for a in candidates), 1), None, candidates
+
+    session_priority_logs = sorted(
+        logs,
+        key=lambda log: (
+            0 if log.workout_type == "RUN" else 1,
+            _priority_rank({"session": log.session_name}),
+            log.workout_date,
+        ),
+    )
+
+    computed = {}
+    movable_sessions = {"Long Run", "Medium Long Run", "Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run", "Aerobic Run"}
+
+    for log in session_priority_logs:
         acts = by_day.get(log.workout_date, [])
-        if log.session_name == "Race Day":
-            run_acts = [
-                a for a in acts
-                if (a.activity_type or "").lower() in {"run", "trailrun"} and bool(a.is_race)
-            ]
-        else:
-            run_acts = [
-                a for a in acts
-                if (a.activity_type or "").lower() in {"run", "trailrun"} and not a.is_race
-            ]
-        if log.session_name in {"Race Day", "Long Run", "Medium Long Run", "Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}:
-            matched_run = _select_best_run_for_session(run_acts, log.session_name, weekly_goal)
-            run_km = round(float(matched_run.distance_km), 1) if matched_run else 0.0
-            run_pace = _run_pace_sec_per_km(matched_run) if matched_run else None
-        else:
-            matched_run = None
-            run_km = round(sum(a.distance_km for a in run_acts), 1)
-            run_pace = None
         strength_done = any((a.activity_type or "").lower() in {"strength", "yoga"} for a in acts)
+        moved_note = None
+        moved_status = False
+        matched_items = []
+        matched_run, run_km, run_pace, matched_items = _match_session_on_day(acts, log.session_name)
+
+        if log.workout_type == "RUN" and run_km <= 0 and log.workout_date <= today_local and log.session_name in movable_sessions:
+            best_day = None
+            best_result = (None, 0.0, None, [])
+            for candidate_day in sorted(by_day.keys()):
+                if candidate_day == log.workout_date:
+                    continue
+                if not (week_start <= candidate_day <= min(today_local, week_end)):
+                    continue
+                candidate_result = _match_session_on_day(by_day.get(candidate_day, []), log.session_name)
+                candidate_km = candidate_result[1]
+                if candidate_km <= 0:
+                    continue
+                if best_day is None or candidate_km > best_result[1]:
+                    best_day = candidate_day
+                    best_result = candidate_result
+            if best_day is not None:
+                matched_run, run_km, run_pace, matched_items = best_result
+                moved_status = True
+                moved_note = f"Moved from {log.workout_date.strftime('%a')} to {best_day.strftime('%a')}"
 
         new_status = log.status
         new_actual = log.actual_distance_km
+        new_notes = log.notes
         if log.workout_type == "RUN":
             target = float(log.target_distance_km or 0.0)
             if run_km > 0:
                 if log.session_name in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}:
-                    new_status, _, _ = _classify_quality_completion(log.session_name, run_km, target, run_pace, weekly_goal)
+                    base_status, _, _ = _classify_quality_completion(log.session_name, run_km, target, run_pace, weekly_goal)
                 else:
-                    new_status, _, _ = _classify_run_completion(run_km, target)
+                    base_status, _, _ = _classify_run_completion(run_km, target)
+                new_status = "moved" if moved_status and base_status in {"completed", "partial"} else base_status
                 new_actual = run_km
+                new_notes = moved_note or log.notes
+                for item in matched_items:
+                    if getattr(item, "strava_activity_id", None) is not None:
+                        used_activity_ids.add(item.strava_activity_id)
             elif log.workout_date < today_local:
                 new_status = "missed"
                 new_actual = None
@@ -288,7 +332,11 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
         else:
             new_status = "planned"
 
-        if new_status != log.status or new_actual != log.actual_distance_km:
+        computed[log.workout_date] = (new_status, new_actual, new_notes)
+
+    for log in logs:
+        new_status, new_actual, new_notes = computed.get(log.workout_date, (log.status, log.actual_distance_km, log.notes))
+        if new_status != log.status or new_actual != log.actual_distance_km or new_notes != log.notes:
             upsert_workout_log(
                 user_id=user_id,
                 workout_date=log.workout_date,
@@ -297,7 +345,7 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
                 target_distance_km=log.target_distance_km,
                 status=new_status,
                 actual_distance_km=new_actual,
-                notes=log.notes,
+                notes=new_notes,
                 source=log.source,
                 auto_commit=False,
             )
@@ -321,16 +369,25 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
             "actual": f"{actual_km} km" if actual_km is not None else ("Gym" if log.status == "completed" and log.workout_type == "STRENGTH" else None),
             "actual_km": actual_km,
             "done": log.status == "completed",
+            "moved": log.status == "moved",
             "status": log.status,
             "status_label": _status_label(log.status),
             "completion_pct": completion_pct,
             "extra_km": extra_km,
+            "note": log.notes,
             "workout_type": log.workout_type,
             "intensity": planned_day.get("intensity"),
             "importance": planned_day.get("importance"),
             "purpose": planned_day.get("purpose"),
         })
-    out = _apply_adaptive_plan(out, today_local, weekly_goal)
+    planned_run_goal_km = round(sum(float(item.get("planned_km") or 0.0) for item in out if item["workout_type"] == "RUN" and item["session"] != "Race Day"), 1)
+    adaptive_weekly_goal = dict(weekly_goal)
+    adaptive_weekly_goal["weekly_goal_km"] = max(float(weekly_goal.get("weekly_goal_km") or 0.0), planned_run_goal_km)
+    adaptive_weekly_goal["max_safe_run"] = max(
+        float(weekly_goal.get("max_safe_run") or 0.0),
+        round(adaptive_weekly_goal["weekly_goal_km"] * 0.35, 1),
+    )
+    out = _apply_adaptive_plan(out, today_local, adaptive_weekly_goal)
 
     for item in out:
         if item["date"] >= today_local and item["status"] == "planned":
@@ -697,7 +754,6 @@ def dashboard():
         key_session=key_session or {"day": "--", "planned": "--", "session": "No session"},
         key_session_importance=key_session_importance,
         consistency_score=consistency_score,
-        goal_confidence_label=intel.get("goal_confidence", "Building"),
         prediction_confidence_label=intel.get("prediction_confidence", "Building"),
         weekly_plan_goal_km=weekly_plan_goal_km,
         weekly_plan_completed_km=weekly_plan_completed_km,

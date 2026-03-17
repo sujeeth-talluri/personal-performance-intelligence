@@ -8,6 +8,10 @@ activities.csv
 .vendor/
 vendor_pkgs/
 .pytest_cache/
+.pytest_local_cache*/
+.python311_embed/
+.sandbox_vendor/
+.tmp_pytest*/
 *.pyc
 
 instance/

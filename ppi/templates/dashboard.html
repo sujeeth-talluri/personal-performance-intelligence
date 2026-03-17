@@ -13,7 +13,7 @@
         <div>
           <h1>{{ goal.race_name }}</h1>
           <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
-          <div class='sub'>Phase {{ weekly_goal.phase|title }} | Fatigue {{ intel.fatigue_balance }}</div>
+          <div class='sub'>Phase {{ weekly_goal.display_phase|title }} | Week {{ weekly_goal.week_type }} | Fatigue {{ intel.fatigue_balance }} (TSB {{ intel.current_tsb }})</div>
           <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
         </div>
         <div class='icon-actions'>
@@ -33,10 +33,6 @@
       <div class='metric'><span>Workout Type</span><strong>{{ today_workout.workout_type }}</strong></div>
       {% if today_workout.completed %}
         <div class='metric'><span>Completed</span><strong>{{ today_workout.distance_actual }} (Target {{ today_workout.distance_target }})</strong></div>
-        <div class='metric'><span>Completion</span><strong>{{ today_workout.completion_pct }}%</strong></div>
-        {% if today_workout.extra_distance %}
-          <div class='metric'><span>Extra Distance</span><strong>{{ today_workout.extra_distance }}</strong></div>
-        {% endif %}
       {% else %}
         <div class='metric'><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
       {% endif %}
@@ -67,7 +63,7 @@
       <h2>Weekly Plan</h2>
       <div class='plan-list'>
         {% for p in weekly_plan %}
-          <div class='plan-row {{ 'done-row' if p.status == 'completed' else '' }} {{ 'skip-row' if p.status in ['missed', 'skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}'>
+          <div class='plan-row {{ 'done-row' if p.status in ['completed', 'moved'] else '' }} {{ 'skip-row' if p.status in ['missed', 'skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}'>
             <div class='plan-main'>
               <div class='plan-distance'>
                 {% if p.status in ['completed', 'overperformed'] and p.actual %}
@@ -83,6 +79,8 @@
             <div class='plan-status'>
                 {% if p.status == 'completed' %}
                   <strong class='status-green'>&#10003; done</strong>
+                {% elif p.status == 'moved' %}
+                  <strong class='status-green'>&#10003; moved</strong>
                 {% elif p.status == 'partial' %}
                   <strong class='status-orange'>partial</strong>
                 {% elif p.status in ['missed', 'skipped'] %}
@@ -114,19 +112,23 @@
     <section class='card'>
       <h2>Marathon Projection</h2>
       <div class='projection-frame'>
-        <div class='label'>Goal</div>
-        <div class='sub-strong'>{{ intel.goal_label }}</div>
+        <div class='label'>Goal Time</div>
+        <div class='sub-strong'>{{ intel.goal_time_display }}</div>
+        {% if intel.goal_milestone_label %}
+          <div class='sub'>{{ intel.goal_milestone_label }}</div>
+        {% endif %}
       </div>
       <div class='projection-frame'>
-        <div class='label'>Current capability</div>
+        <div class='label'>Current Capability</div>
         <div class='performance-number'>{{ intel.current_projection_range }}</div>
       </div>
       <div class='projection-frame'>
-        <div class='label'>Race day range</div>
+        <div class='label'>Race Day Projection</div>
         <div class='performance-number medium'>{{ intel.race_day_projection_range }}</div>
       </div>
       <div class='sub'>{{ intel.prediction_note }}</div>
-      <div class='metric'><span>{{ intel.goal_label }} Confidence</span><strong>{{ goal_confidence_label }}</strong></div>
+      <div class='metric'><span>Readiness</span><strong>{{ intel.marathon_readiness_pct }}% ({{ intel.marathon_readiness_status }})</strong></div>
+      <div class='metric'><span>Goal Alignment</span><strong>{{ intel.goal_alignment }}</strong></div>
       <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }} ({{ intel.prediction_confidence_pct }}%)</strong></div>
       {% if intel.probability is not none %}
         <div class='metric'><span>Goal Probability</span><strong>{{ intel.probability }}%</strong></div>

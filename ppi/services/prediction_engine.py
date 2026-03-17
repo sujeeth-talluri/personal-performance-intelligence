@@ -40,38 +40,39 @@ def marathon_prediction_seconds(metrics):
     candidate_signals = []
     half_equiv = fit_half_equivalent(metrics["pace_medium"], metrics["pace_long"])
     if half_equiv:
-        candidate_signals.append((half_equiv * 2.1, 0.25))
+        candidate_signals.append((half_equiv * 2.1, 0.14))
 
     vo2_projection = vo2max_marathon_projection(metrics.get("vo2max_estimate"))
     if vo2_projection:
-        candidate_signals.append((vo2_projection, 0.18))
+        candidate_signals.append((vo2_projection, 0.08))
 
     for run in metrics.get("recent_race_runs", []):
         projected = riegel_projection(run["moving_time_sec"], run["distance_km"])
         if projected:
-            candidate_signals.append((projected, 0.24))
+            candidate_signals.append((projected, 0.26))
 
     for run in metrics.get("medium_runs", []):
         if 10 <= run["distance_km"] <= 30:
             intensity = run.get("intensity")
-            weight = 0.16 if intensity in {"tempo", "speed"} else 0.14 if intensity in {"marathon_specific", "steady"} else 0.10
+            weight = 0.12 if intensity in {"tempo", "speed"} else 0.10 if intensity in {"marathon_specific", "steady"} else 0.06
             exponent = 1.05 if intensity in {"tempo", "speed"} else 1.06
             candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
 
     for run in metrics.get("marathon_specific_runs", []):
         if run["distance_km"] >= 14 and run.get("pace_sec_per_km"):
             exponent = 1.03 if run.get("intensity") in {"marathon_specific_long", "steady_long"} else 1.04
-            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), 0.22))
+            weight = 0.32 if run["distance_km"] >= 22 else 0.26
+            candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
 
     for run in metrics.get("race_simulation_runs", []):
-        candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** 1.03), 0.28))
+        candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** 1.03), 0.36))
 
     for run in metrics.get("long_runs", []):
         if run["distance_km"] >= 24 and run.get("pace_sec_per_km"):
             marathon_pace = metrics.get("goal_marathon_pace_sec_per_km") or run["pace_sec_per_km"]
             pace_gap = abs(run["pace_sec_per_km"] - marathon_pace) / max(1.0, marathon_pace)
             if pace_gap <= 0.15:
-                weight = 0.24 if run.get("intensity") == "marathon_specific_long" else 0.18
+                weight = 0.28 if run.get("intensity") == "marathon_specific_long" else 0.20
                 exponent = 1.03 if run.get("intensity") == "marathon_specific_long" else 1.05
                 candidate_signals.append((run["moving_time_sec"] * ((42.195 / run["distance_km"]) ** exponent), weight))
 
