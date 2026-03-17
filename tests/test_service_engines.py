@@ -1,7 +1,7 @@
 from datetime import date
 
 from ppi.services.load_engine import classify_run_intensity, load_model, running_stress_score
-from ppi.services.plan_engine import build_weekly_plan_template, classify_run_completion, training_consistency_score
+from ppi.services.plan_engine import apply_adaptive_plan, build_weekly_plan_template, classify_run_completion, training_consistency_score
 from ppi.services.prediction_engine import marathon_prediction_seconds
 
 
@@ -79,3 +79,75 @@ def test_prediction_engine_returns_projection_with_valid_metrics():
 def test_load_engine_classifies_marathon_specific_long_run():
     run = {"distance_km": 24.0, "pace_sec_per_km": 330.0, "avg_hr": 155}
     assert classify_run_intensity(run, 330.0) == "marathon_specific_long"
+
+
+def test_adaptive_plan_converts_next_run_to_recovery_when_tsb_low():
+    plan_items = [
+        {"date": date(2026, 3, 16), "workout_type": "RUN", "session": "Easy Run", "planned_km": 8.0, "planned": "8 km", "status": "planned", "actual_km": None},
+        {"date": date(2026, 3, 17), "workout_type": "RUN", "session": "Long Run", "planned_km": 20.0, "planned": "20 km", "status": "planned", "actual_km": None},
+    ]
+    weekly_goal = {"weekly_goal_km": 42.0, "phase": "build", "high_fatigue": False, "moderate_fatigue": True, "atl_spike": False, "allow_progression": False, "rebuild_mode": False, "max_safe_run": 20.0, "long_run_failed_recent": False}
+    adapted = apply_adaptive_plan(plan_items, date(2026, 3, 16), weekly_goal)
+    assert adapted[0]["session"] == "Recovery Run"
+
+
+def test_adaptive_plan_allows_small_progression_when_fresh():
+    plan_items = [
+        {"date": date(2026, 3, 16), "workout_type": "RUN", "session": "Aerobic Run", "planned_km": 10.0, "planned": "10 km", "status": "planned", "actual_km": None},
+        {"date": date(2026, 3, 17), "workout_type": "RUN", "session": "Long Run", "planned_km": 18.0, "planned": "18 km", "status": "planned", "actual_km": None},
+    ]
+    weekly_goal = {"weekly_goal_km": 46.0, "phase": "build", "high_fatigue": False, "moderate_fatigue": False, "atl_spike": False, "allow_progression": True, "rebuild_mode": False, "max_safe_run": 20.0, "long_run_failed_recent": False}
+    adapted = apply_adaptive_plan(plan_items, date(2026, 3, 16), weekly_goal)
+    assert adapted[0]["planned_km"] >= 10.0 or adapted[1]["planned_km"] >= 18.0
+
+
+def test_taper_plan_reduces_long_run_and_keeps_specificity():
+    weekly_goal = {"weekly_goal_km": 40.0, "phase": "taper", "rebuild_mode": False}
+    long_run = {"longest_km": 30.0, "next_milestone_km": 32.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[1]["session"] == "Marathon Pace Run"
+    assert plan[6]["target_km"] <= 20.0
+
+
+def test_peak_plan_can_progress_to_marathon_specific_long_run():
+    weekly_goal = {"weekly_goal_km": 84.0, "phase": "peak", "rebuild_mode": False, "weeks_to_race": 7.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 24.0, "next_milestone_km": 28.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert float(plan[6]["target_km"]) >= 28.0
+
+
+def test_peak_plan_can_progress_to_30k_when_volume_supports_it():
+    weekly_goal = {"weekly_goal_km": 88.0, "phase": "peak", "rebuild_mode": False, "weeks_to_race": 5.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 28.0, "next_milestone_km": 30.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert float(plan[6]["target_km"]) >= 30.0
+
+
+def test_peak_plan_can_progress_to_32k_when_runner_is_ready():
+    weekly_goal = {"weekly_goal_km": 94.0, "phase": "peak", "rebuild_mode": False, "weeks_to_race": 4.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 30.0, "next_milestone_km": 32.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert float(plan[6]["target_km"]) >= 32.0
+
+
+def test_recovery_week_cuts_back_long_run_after_peak():
+    weekly_goal = {"weekly_goal_km": 56.0, "phase": "recovery", "rebuild_mode": False, "weeks_to_race": 8.0, "race_distance_km": 42.195}
+    long_run = {"longest_km": 28.0, "next_milestone_km": 30.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert float(plan[6]["target_km"]) < 28.0
+
+
+def test_race_week_marks_race_day_on_actual_race_date():
+    weekly_goal = {
+        "weekly_goal_km": 32.0,
+        "phase": "taper",
+        "rebuild_mode": False,
+        "race_date": date(2026, 8, 30),
+        "race_distance_km": 42.195,
+        "week_start": date(2026, 8, 24),
+    }
+    long_run = {"longest_km": 30.0, "next_milestone_km": 32.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[6]["session"] == "Race Day"
+    assert plan[6]["workout_type"] == "RUN"
+    assert plan[6]["target_km"] == 42.195

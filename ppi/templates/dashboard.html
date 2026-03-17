@@ -13,6 +13,7 @@
         <div>
           <h1>{{ goal.race_name }}</h1>
           <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
+          <div class='sub'>Phase {{ weekly_goal.phase|title }} | Fatigue {{ intel.fatigue_balance }}</div>
           <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
         </div>
         <div class='icon-actions'>
@@ -100,6 +101,9 @@
         <div class='sub'><strong>Status:</strong> {{ weekly_status }}</div>
       {% else %}
         <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Done {{ weekly_plan_completed_km }} km | Remaining {{ weekly_plan_remaining_km }} km</div>
+      {% endif %}
+      {% if race_week_distance_km > 0 %}
+        <div class='sub'>Race distance this week: {{ race_week_distance_km }} km{% if race_week_completed_km > 0 %} | Completed {{ race_week_completed_km }} km{% endif %}</div>
       {% endif %}
       {% if weekly_extra_km > 0 %}
         <div class='sub'>Extra running outside the planned sessions: {{ weekly_extra_km }} km</div>

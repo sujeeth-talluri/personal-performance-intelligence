@@ -115,9 +115,9 @@ def _confidence_label(score):
 
 def _training_phase(days_remaining):
     weeks_to_race = max(0.0, days_remaining / 7.0)
-    if weeks_to_race <= 6:
+    if weeks_to_race <= 3:
         return "taper"
-    if weeks_to_race <= 12:
+    if weeks_to_race <= 10:
         return "peak"
     if weeks_to_race <= 18:
         return "build"
@@ -136,7 +136,7 @@ def _effective_phase(days_remaining, rebuild_mode):
     if rebuild_mode:
         return "rebuild", None
     cycle_week = _cycle_week(days_remaining, base_phase)
-    if base_phase in {"base", "build"} and cycle_week == 4:
+    if base_phase in {"base", "build", "peak"} and cycle_week == 4:
         return "recovery", cycle_week
     return base_phase, cycle_week
 
@@ -490,11 +490,13 @@ def build_goal_context(goal, today_local=None):
 
 def _baseline_weekly_goal(goal_seconds):
     if goal_seconds <= 3 * 3600:
-        return 90.0
+        return 100.0
     if goal_seconds <= 3 * 3600 + 30 * 60:
-        return 75.0
+        return 85.0
     if goal_seconds <= 4 * 3600:
-        return 60.0
+        return 80.0
+    if goal_seconds <= 4 * 3600 + 30 * 60:
+        return 65.0
     return 45.0
 
 
@@ -547,16 +549,20 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     load_model = _load_model(load_acts, today, goal_ctx["goal_seconds"] / 42.195, days=14)
     ctl_today = load_model["ctl_today"]
     ctl_series_14 = load_model["ctl_series"]
+    atl_series_14 = load_model["atl_series"]
     distance_series_14 = _daily_distance_series(run_distance_acts, today, days=14)
+    ctl_delta_14 = round(ctl_series_14[-1]["value"] - ctl_series_14[0]["value"], 1) if ctl_series_14 else 0.0
+    atl_recent_delta = round(atl_series_14[-1]["value"] - atl_series_14[max(0, len(atl_series_14) - 4)]["value"], 1) if atl_series_14 else 0.0
+    atl_spike = load_model["atl_today"] > (load_model["ctl_today"] + 8.0) or atl_recent_delta >= 6.0
 
     desired_peak = _baseline_weekly_goal(goal_ctx["goal_seconds"])
-    phase_cap_factor = {"base": 0.75, "build": 0.9, "peak": 1.0, "taper": 0.65, "recovery": 0.7, "rebuild": 0.6}.get(phase, 0.9)
+    phase_cap_factor = {"base": 0.78, "build": 0.92, "peak": 1.0, "taper": 0.55, "recovery": 0.72, "rebuild": 0.6}.get(phase, 0.9)
     if rebuild_mode:
         weekly_goal_km = round(max(18.0, min(desired_peak * 0.6, max(22.0, prior_avg * 0.65 if prior_avg else 22.0))), 1)
     elif phase == "recovery":
         weekly_goal_km = round(max(24.0, min(desired_peak * 0.7, max(24.0, prior_avg * 0.82 if prior_avg else 24.0))), 1)
     elif prior_avg > 0:
-        ramp_factor = 1.06 if phase == "base" else 1.08 if phase == "build" else 1.03 if phase == "peak" else 0.7
+        ramp_factor = 1.08 if phase == "base" else 1.10 if phase == "build" else 1.10 if phase == "peak" else 0.7
         weekly_goal_km = round(max(20.0, min(desired_peak * phase_cap_factor, prior_avg * ramp_factor)), 1)
     else:
         weekly_goal_km = round(max(24.0, desired_peak * 0.55), 1)
@@ -767,6 +773,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "high_fatigue": load_model["tsb_today"] < -20,
         "moderate_fatigue": -20 <= load_model["tsb_today"] < -10,
         "recovered": load_model["tsb_today"] > 0,
+        "allow_progression": load_model["tsb_today"] > 5 and not atl_spike,
+        "atl_spike": atl_spike,
         "fatigue_ratio": load_model["fatigue_ratio"],
         "tsb": load_model["tsb_today"],
     }
@@ -818,7 +826,13 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "rebuild_mode": rebuild_mode,
             "weekly_readiness_target_km": weekly_readiness_target,
             "fatigue_ratio": load_model["fatigue_ratio"],
+            "ctl_delta_14": ctl_delta_14,
+            "atl_spike": atl_spike,
+            "allow_progression": fatigue_flags["allow_progression"],
             "training_consistency_ratio": round(training_consistency_ratio, 2),
+            "race_date": goal_ctx["race_date"],
+            "race_distance_km": goal_ctx["distance_km"],
+            "weeks_to_race": max(0.0, goal_ctx["days_remaining"] / 7.0),
             "high_fatigue": fatigue_flags["high_fatigue"],
             "moderate_fatigue": fatigue_flags["moderate_fatigue"],
             "long_run_failed_recent": long_run_state.get("failed_recent", False),
