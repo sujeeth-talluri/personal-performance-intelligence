@@ -28,6 +28,24 @@ _10K_M = 10_000.0
 _HM_M  = 21_097.5
 _FM_M  = 42_195.0
 
+# ---------------------------------------------------------------------------
+# Hardcoded personal-best floors
+# These act as a guaranteed fitness floor regardless of Strava data quality.
+# When activities are sparse, unlabelled, or slow, predictions should never
+# go below times the athlete has demonstrably already run.
+# Update these whenever the athlete sets a new personal best.
+# ---------------------------------------------------------------------------
+PB_FLOORS = {
+    "FM":  {"seconds": 15780, "vdot": 33.87},   # 4:23:00
+    "HM":  {"seconds": 6040,  "vdot": 44.78},   # 1:40:40
+    "10K": {"seconds": 2833,  "vdot": 42.79},   # 47:13
+    "5K":  {"seconds": 1400,  "vdot": 41.56},   # 23:20
+}
+
+# The single best VDOT across all known PBs — used as the universal anchor
+# so every predicted distance reflects at least this level of fitness.
+_BEST_PB_FLOOR_VDOT: float = max(v["vdot"] for v in PB_FLOORS.values())  # 44.78
+
 # Wall model: km-32 split (how much the last 10.195 km slow down)
 # Overall factor = (32 + 10.195 × km32_factor) / 42.195
 _WALL_KM32_FACTOR = {"high": 1.14, "medium": 1.10, "low": 1.03, "unknown": 1.0}
@@ -424,13 +442,14 @@ def marathon_wall_analysis(
     by_dist = _vdot_by_distance(metrics, today)
     hm_vdot_strava = by_dist.get("hm") or by_dist.get("10k") or by_dist.get("short")
 
-    # Also derive VDOT from stored per-distance PBs (HM, 10K, 5K).
-    # This is the critical fallback when Strava data is sparse or all race
-    # activities are slow (e.g. training runs, not true races).
+    # Also derive VDOT from stored per-distance PBs (HM, 10K, 5K) and the
+    # hardcoded PB_FLOORS fallback.  This guarantees aerobic potential is
+    # never computed from a slow stale FM time when shorter-distance fitness
+    # is much higher (classic wall-hitter signature).
     best_pb_vdot = float(metrics.get("best_pb_vdot") or 0.0) or None
 
-    # Aerobic ceiling = highest VDOT from any source
-    best_vdot_candidates = [v for v in [hm_vdot_strava, best_pb_vdot] if v]
+    # Aerobic ceiling = highest VDOT from any source (Strava > DB PBs > hardcoded floors)
+    best_vdot_candidates = [v for v in [hm_vdot_strava, best_pb_vdot, _BEST_PB_FLOOR_VDOT] if v]
     best_vdot = max(best_vdot_candidates) if best_vdot_candidates else None
 
     # For wall-risk calculation, use the best HM-equivalent VDOT vs FM VDOT.
@@ -638,8 +657,9 @@ def marathon_prediction_seconds(metrics) -> float | None:
     # If the training-data estimate is >20% slower than the stored FM PB the
     # Strava data is stale or sparse.  Anchor to PB VDOT instead so the
     # prediction never regresses badly below demonstrated fitness.
-    fm_pb_sec = float(metrics.get("personal_best_fm_seconds") or 0.0) or None
-    if fm_pb_sec and marathon_time > fm_pb_sec * 1.20:
+    # Use stored FM PB if available, otherwise fall back to PB_FLOORS constant.
+    fm_pb_sec = float(metrics.get("personal_best_fm_seconds") or 0.0) or PB_FLOORS["FM"]["seconds"]
+    if marathon_time > fm_pb_sec * 1.20:
         pb_vdot = vdot_from_race(_FM_M, fm_pb_sec / 60.0)
         if pb_vdot:
             anchored = vdot_to_race_time_seconds(pb_vdot, _FM_M)
@@ -692,20 +712,17 @@ def predict_all_distances(metrics, today=None) -> dict | None:
     if not marathon_secs:
         return None
 
-    # Use the best VDOT across: recent Strava races + ALL stored PBs (5K/10K/HM/FM).
-    # best_pb_vdot is pre-computed in analytics_service from every stored PB field,
-    # so a fast HM PB correctly anchors 5K/10K/HM/FM predictions even when Strava
-    # data is sparse or the FM PB is much slower than shorter-distance fitness.
+    # Build the anchor VDOT from three sources in priority order:
+    #   1. Recent Strava race-labelled efforts  (best real-world signal)
+    #   2. Stored per-distance PBs via analytics (from goal settings form)
+    #   3. PB_FLOORS hardcoded constants         (always-on guarantee)
+    #
+    # Taking max() ensures a slow stale race or absent DB field never
+    # drags predictions below the athlete's demonstrated fitness ceiling.
     best_pb_vdot = float(metrics.get("best_pb_vdot") or 0.0) or None
 
-    if best_vdot and best_pb_vdot:
-        anchor_vdot = max(best_vdot, best_pb_vdot)
-    elif best_vdot:
-        anchor_vdot = best_vdot
-    elif best_pb_vdot:
-        anchor_vdot = best_pb_vdot
-    else:
-        anchor_vdot = None
+    candidates = [v for v in [best_vdot, best_pb_vdot, _BEST_PB_FLOOR_VDOT] if v]
+    anchor_vdot = max(candidates) if candidates else None
 
     if anchor_vdot:
         five_k = vdot_to_race_time_seconds(anchor_vdot, _5K_M)
