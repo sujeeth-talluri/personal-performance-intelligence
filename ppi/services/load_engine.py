@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 THRESHOLD_HR = 168
+STRESS_SCALE = 10.0
 DISTANCE_ACTIVITY_TYPES = {"run", "trailrun", "walk", "hike", "ride", "swim"}
 RUN_ACTIVITY_TYPES = {"run", "trailrun"}
 STRESS_TYPE_FACTOR = {
@@ -85,13 +86,13 @@ def running_stress_score(activity, marathon_pace_sec_per_km):
         intensity_factor = RUN_INTENSITY_FACTOR.get(intensity, 1.0)
         if distance_km < 3.0:
             return 0.0
-        return round(distance_km * intensity_factor * elevation_factor, 2)
+        return round(distance_km * intensity_factor * elevation_factor * STRESS_SCALE, 1)
 
     type_factor = STRESS_TYPE_FACTOR.get(activity_type, 0.5)
     if distance_km > 0:
-        return round(distance_km * type_factor * elevation_factor, 2)
+        return round(distance_km * type_factor * elevation_factor * STRESS_SCALE, 1)
     if duration_minutes > 0:
-        return round((duration_minutes / 10.0) * type_factor, 2)
+        return round((duration_minutes / 10.0) * type_factor * STRESS_SCALE, 1)
     return 0.0
 
 

@@ -117,7 +117,7 @@ def _confidence_label(score):
 
 def _goal_alignment_label(probability):
     if probability is None:
-        return "Calibrating"
+        return "Too early to compare"
     if probability >= 75:
         return "On Track"
     if probability >= 45:
@@ -159,10 +159,79 @@ def _week_type_label(effective_phase, base_phase, days_remaining):
     if effective_phase == "rebuild":
         return "Rebuild"
     if base_phase == "taper":
-        return "Race Week" if days_remaining <= 7 else "Taper"
+        return "Race Week" if days_remaining <= 7 else "Sharpening Week"
     if effective_phase == "recovery":
-        return "Recovery"
-    return "Build"
+        return "Cutback Week"
+    if base_phase == "base":
+        return "Endurance Build"
+    if base_phase == "build":
+        return "Specificity Build"
+    if base_phase == "peak":
+        return "Peak Specificity"
+    return "Build Week"
+
+
+def _freshness_label(tsb_today):
+    if tsb_today < -20:
+        return "Heavy fatigue", "You are carrying a lot of fatigue right now. Prioritize recovery before adding more quality."
+    if tsb_today < -10:
+        return "Loaded", "You are carrying useful training load. Keep the next quality session controlled."
+    if tsb_today <= 5:
+        return "Balanced", "You are carrying normal training fatigue for the current block."
+    return "Fresh", "You have enough freshness to absorb a quality session well."
+
+
+def _phase_minimum_goal(desired_peak, phase):
+    return round(
+        desired_peak
+        * {
+            "base": 0.45,
+            "build": 0.55,
+            "peak": 0.65,
+            "recovery": 0.40,
+            "taper": 0.30,
+            "rebuild": 0.28,
+        }.get(phase, 0.45),
+        1,
+    )
+
+
+def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, weekly_readiness_target, rolling_week_distance_km, phase):
+    actions = []
+    if need_long > 0:
+        actions.append(f"Complete {need_long} more long run{'s' if need_long > 1 else ''} of 18 km or longer")
+    if need_weekly > 0 and phase != "taper":
+        deficit = max(0.0, weekly_readiness_target - rolling_week_distance_km)
+        actions.append(f"Build this week to about {int(round(weekly_readiness_target))} km total ({round(deficit, 1)} km still to add)")
+    if need_medium > 0:
+        actions.append(f"Add {need_medium} more medium run{'s' if need_medium > 1 else ''} between 8 and 12 km")
+    if need_weeks > 0:
+        actions.append(f"String together {need_weeks} more consistent training week{'s' if need_weeks > 1 else ''}")
+    if not actions:
+        return "Keep this week steady and protect the scheduled long run."
+    if len(actions) == 1:
+        return actions[0] + "."
+    return f"{actions[0]}, then {actions[1].lower()}."
+
+
+def _projection_basis_summary(metrics):
+    parts = []
+    if metrics.get("recent_race_runs"):
+        parts.append("recent race efforts")
+    if metrics.get("race_simulation_runs"):
+        parts.append("marathon-specific simulation work")
+    elif metrics.get("marathon_specific_runs"):
+        parts.append("marathon-pace sessions")
+    if metrics.get("long_runs"):
+        parts.append("long runs")
+    if metrics.get("medium_runs"):
+        parts.append("steady medium runs")
+    parts.append("recent training volume")
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return f"{', '.join(parts[:-1])}, and {parts[-1]}"
 
 
 def _is_anomalous_run(raw):
@@ -573,7 +642,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     rolling_weeks, consistent_weeks = _rolling_week_consistency(run_distance_acts, today)
     recent_planned_logs = fetch_workout_logs(user_id, today - timedelta(days=27), today)
     planned_run_logs = [log for log in recent_planned_logs if log.workout_type == "RUN"]
-    completed_run_logs = [log for log in planned_run_logs if log.status == "completed"]
+    completed_run_logs = [log for log in planned_run_logs if log.status in {"completed", "moved"}]
     training_consistency_ratio = (len(completed_run_logs) / len(planned_run_logs)) if planned_run_logs else 0.0
     weekly_history = _weekly_distance_history(run_distance_acts, today, weeks=5)
     prior_weeks = weekly_history[1:] if len(weekly_history) > 1 else []
@@ -592,11 +661,12 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     atl_recent_delta = round(atl_series_14[-1]["value"] - atl_series_14[max(0, len(atl_series_14) - 4)]["value"], 1) if atl_series_14 else 0.0
     atl_spike = load_model["atl_today"] > (load_model["ctl_today"] + 8.0) or atl_recent_delta >= 6.0
 
+    provisional_longest_run = max((r["distance_km"] for r in runs_8w), default=0.0)
     desired_peak = _baseline_weekly_goal(goal_ctx["goal_seconds"])
-    established_runner = prior_avg >= (desired_peak * 0.4) or consistent_weeks >= 3
+    established_runner = prior_avg >= (desired_peak * 0.35) or consistent_weeks >= 3 or provisional_longest_run >= 18.0
     if phase == "recovery" and not established_runner:
         phase = base_phase
-        week_type = "Build"
+        week_type = "Endurance Build"
     phase_cap_factor = {"base": 0.78, "build": 0.92, "peak": 1.0, "taper": 0.55, "recovery": 0.72, "rebuild": 0.6}.get(phase, 0.9)
     if rebuild_mode:
         weekly_goal_km = round(max(18.0, min(desired_peak * 0.6, max(22.0, prior_avg * 0.65 if prior_avg else 22.0))), 1)
@@ -609,6 +679,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         weekly_goal_km = round(max(24.0, desired_peak * 0.55), 1)
     if established_runner and phase in {"base", "build", "peak"}:
         weekly_goal_km = max(weekly_goal_km, _phase_goal_floor(desired_peak, phase))
+    elif not rebuild_mode and phase in {"base", "build", "peak"}:
+        weekly_goal_km = max(weekly_goal_km, _phase_minimum_goal(desired_peak, phase))
     completed_km = rolling_week_distance_km
     remaining_km = round(max(0.0, weekly_goal_km - completed_km), 1)
 
@@ -685,13 +757,13 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         fri_status = "Weak endurance durability"
         fri_message = None
 
-    weekly_readiness_target = 45.0
+    weekly_readiness_target = max(38.0, round(min(55.0, weekly_goal_km * 0.9), 1))
     if phase == "taper":
-        weekly_readiness_target = min(45.0, max(25.0, round(prior_avg * 0.65, 1) if prior_avg else 25.0))
+        weekly_readiness_target = min(weekly_readiness_target, max(25.0, round(prior_avg * 0.65, 1) if prior_avg else 25.0))
     elif phase == "recovery":
-        weekly_readiness_target = min(45.0, max(25.0, round(prior_avg * 0.8, 1) if prior_avg else 25.0))
+        weekly_readiness_target = min(weekly_readiness_target, max(28.0, round(prior_avg * 0.8, 1) if prior_avg else 28.0))
     elif rebuild_mode:
-        weekly_readiness_target = min(45.0, max(20.0, round(weekly_goal_km * 0.8, 1)))
+        weekly_readiness_target = min(weekly_readiness_target, max(22.0, round(weekly_goal_km * 0.8, 1)))
 
     need_medium = max(0, 3 - len(medium_runs))
     need_long = max(0, 2 - len(long_runs))
@@ -731,7 +803,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "ready": need_weeks == 0,
             "line1": "Consistent mileage requirement satisfied" if need_weeks == 0 else "Consistent mileage weeks",
             "line2": f"{consistent_weeks} completed",
-            "line3": None if need_weeks == 0 else f"{need_weeks} more week required",
+            "line3": None if need_weeks == 0 else f"Keep the next {need_weeks} week{'s' if need_weeks > 1 else ''} consistent to build a stable training block.",
             "weight": 0.25,
             "score": min(consistent_weeks / 3.0, 1.0),
         },
@@ -756,7 +828,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
                 else (
                     "Taper week is intentionally lighter. Use prior consistency to protect prediction confidence."
                     if phase == "taper"
-                    else f"Need to reach {weekly_readiness_target} km weekly mileage."
+                    else f"Build this week toward about {weekly_readiness_target} km total running."
                 )
             ),
             "weight": 0.25,
@@ -765,9 +837,17 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     ]
 
     readiness_progress = int(round(sum(i["weight"] * i["score"] for i in readiness_items) * 100))
-    next_requirement = next((i["line3"] for i in readiness_items if not i["ready"] and i.get("line3")), None)
-    if week_closed and rolling_week_distance_km < 45.0:
-        next_requirement = "Prediction unlock expected after next qualifying week."
+    next_requirement = _readiness_next_action(
+        need_long,
+        need_medium,
+        need_weeks,
+        need_weekly,
+        weekly_readiness_target,
+        rolling_week_distance_km,
+        phase,
+    )
+    if week_closed and rolling_week_distance_km < weekly_readiness_target:
+        next_requirement = f"Start next week by rebuilding to about {int(round(weekly_readiness_target))} km and protecting the long run."
 
     unlock_requirements = []
     if need_long > 0:
@@ -948,11 +1028,12 @@ def _prediction_layer(user_id, goal_ctx, metrics):
                 "gap_to_goal_range": "--",
                 "probability": None,
                 "gap_to_goal": "--",
-                "goal_alignment": "Calibrating",
+                "goal_alignment": "Too early to compare",
                 "prediction_confidence": "Low",
                 "prediction_confidence_score": 0.0,
                 "goal_progress_pct": 0,
-                "note": "Not enough reliable running data for marathon projection.",
+                "note": "Not enough reliable running data for a trustworthy marathon projection yet.",
+                "goal_comparison": "Too early to compare to your goal",
             }
 
     prev = get_latest_prediction(user_id)
@@ -1007,6 +1088,18 @@ def _prediction_layer(user_id, goal_ctx, metrics):
     prediction_confidence = _confidence_label(confidence_score)
     probability = _goal_probability(race_proj, goal_ctx["goal_seconds"]) if metrics["readiness"]["ready"] and not provisional_prediction else None
     goal_alignment = _goal_alignment_label(probability)
+    if provisional_prediction:
+        goal_comparison = "Too early to compare to your goal"
+    elif probability is None:
+        goal_comparison = "Need a few more marathon-specific signals"
+    elif probability >= 75:
+        goal_comparison = "Goal is on track"
+    elif probability >= 45:
+        goal_comparison = "Goal is within reach"
+    elif probability >= 20:
+        goal_comparison = "Goal is building"
+    else:
+        goal_comparison = "Goal is still a stretch"
 
     return {
         "valid": metrics["readiness"]["ready"] and not provisional_prediction,
@@ -1018,14 +1111,15 @@ def _prediction_layer(user_id, goal_ctx, metrics):
         "probability": probability,
         "gap_to_goal": _fmt_gap(gap),
         "goal_alignment": goal_alignment,
+        "goal_comparison": goal_comparison,
         "prediction_confidence": prediction_confidence,
         "prediction_confidence_score": round(confidence_score, 2),
         "goal_progress_pct": int(max(0, min(100, (goal_ctx["goal_seconds"] / race_proj) * 100))),
         "note": (
-            "Based on current fitness and long-run progress."
+            f"Built from { _projection_basis_summary(metrics) }."
             if metrics["readiness"]["ready"] and not provisional_prediction
             else (
-                "Provisional range only. Complete a qualifying long run to compare reliably with your marathon goal."
+                f"Early estimate only. Built from { _projection_basis_summary(metrics) }. Add a qualifying long run to compare reliably with your goal."
                 if provisional_prediction
                 else (metrics["next_requirement"] or "Range shown with limited training signals. Complete key readiness sessions.")
             )
@@ -1054,7 +1148,7 @@ def performance_intelligence(user_id, user_timezone=None):
 
     training_status = {
         "title": "Training Status",
-        "summary": "Race prediction unlocking after next qualifying week." if not metrics["readiness"]["ready"] else "Prediction ready",
+        "summary": "Projection is ready for goal comparison." if prediction["valid"] else "Projection is still building.",
         "detail": prediction["note"],
         "progress_pct": metrics["readiness_progress_pct"],
         "next_requirement": metrics["next_requirement"],
@@ -1064,23 +1158,25 @@ def performance_intelligence(user_id, user_timezone=None):
 
     ctl_series_14 = metrics["ctl_series_14"]
     ctl_delta = round(ctl_series_14[-1]["value"] - ctl_series_14[0]["value"], 1) if ctl_series_14 else 0.0
-    if ctl_delta > 0.3:
-        ctl_trend_text = f"Trend: up +{ctl_delta} last 14 days"
+    if ctl_delta > 2.0:
+        ctl_trend_text = f"Your 6-week fitness load is rising by {ctl_delta:.1f} over the last 14 days."
         fitness_trend_label = "Building"
-    elif ctl_delta < -0.3:
-        ctl_trend_text = f"Trend: down {ctl_delta} last 14 days"
-        fitness_trend_label = "Declining"
+    elif ctl_delta < -2.0:
+        ctl_trend_text = f"Your 6-week fitness load has eased by {abs(ctl_delta):.1f} over the last 14 days."
+        fitness_trend_label = "Easing"
     else:
-        ctl_trend_text = "Trend: stable"
-        fitness_trend_label = "Stable"
+        ctl_trend_text = "Your 6-week fitness load is holding steady."
+        fitness_trend_label = "Steady"
 
-    momentum_score = round(weekly.get("weekly_mileage_change", 0.0) + ctl_delta, 1)
-    if momentum_score >= 3:
-        training_momentum = "Improving"
-    elif momentum_score <= -3:
-        training_momentum = "Declining"
+    atl_series = metrics["atl_series_14"]
+    recent_load_delta = round(atl_series[-1]["value"] - atl_series[0]["value"], 1) if atl_series else 0.0
+    momentum_score = recent_load_delta
+    if momentum_score >= 4:
+        training_momentum = "Building"
+    elif momentum_score <= -4:
+        training_momentum = "Easing"
     else:
-        training_momentum = "Stable"
+        training_momentum = "Steady"
 
     if metrics["weekly"]["completed_km"] >= 60:
         aerobic_base = "Strong"
@@ -1143,19 +1239,33 @@ def performance_intelligence(user_id, user_timezone=None):
     else:
         readiness_status = "Early Build"
 
-    next_step = metrics["next_requirement"] or "Maintain this week and complete your scheduled long run."
-    if tsb_today < -20:
-        fatigue_balance = "High Fatigue"
-        fatigue_balance_note = "Recent load is very high. Protect recovery before adding more intensity."
-    elif tsb_today < -10:
-        fatigue_balance = "Moderate Fatigue"
-        fatigue_balance_note = "Fatigue is elevated. Keep the next key session controlled."
-    elif tsb_today <= 5:
-        fatigue_balance = "Neutral"
-        fatigue_balance_note = "Training load and recovery are broadly balanced."
+    next_step = metrics["next_requirement"] or "Maintain this week and protect the scheduled long run."
+    fatigue_balance, fatigue_balance_note = _freshness_label(tsb_today)
+
+    if longest and longest["distance_km"] >= 28:
+        long_run_depth = "Strong"
+        long_run_note = f"Your longest recent run is {round(longest['distance_km'], 1)} km, which is strong marathon-specific depth."
+    elif longest and longest["distance_km"] >= 21:
+        long_run_depth = "Building"
+        long_run_note = f"Your longest recent run is {round(longest['distance_km'], 1)} km. The next big step is building toward 24-30 km."
+    elif longest:
+        long_run_depth = "Early"
+        long_run_note = f"Your longest recent run is {round(longest['distance_km'], 1)} km. Keep progressing the weekly long run before worrying about pace."
     else:
-        fatigue_balance = "Fresh"
-        fatigue_balance_note = "You are carrying enough freshness for the next key workout."
+        long_run_depth = "Not started"
+        long_run_note = "No qualifying long run yet. Start by locking in a consistent weekly long run."
+
+    durability_display = metrics["endurance"]["adi_status"]
+    durability_note = metrics["endurance"]["adi_message"]
+    if durability_display == "Unavailable":
+        durability_display = "Building"
+        durability_note = "We need a few more steady long runs to judge how well you hold pace late in the run."
+
+    fueling_risk = metrics["bonk_risk"]["label"]
+    if longest and longest["distance_km"] < 24:
+        fueling_note = "Keep extending the long run and practice fueling on every run over 90 minutes."
+    else:
+        fueling_note = "Keep fueling practice consistent on long runs so race-day pace stays sustainable."
 
     return {
         "goal": goal_ctx,
@@ -1169,6 +1279,7 @@ def performance_intelligence(user_id, user_timezone=None):
         "gap_to_goal": prediction["gap_to_goal"],
         "gap_to_goal_range": prediction["gap_to_goal_range"],
         "goal_alignment": prediction["goal_alignment"],
+        "goal_comparison": prediction["goal_comparison"],
         "prediction_confidence": prediction["prediction_confidence"],
         "prediction_confidence_score": prediction["prediction_confidence_score"],
         "prediction_confidence_pct": int(round(prediction["prediction_confidence_score"] * 100)),
@@ -1182,7 +1293,10 @@ def performance_intelligence(user_id, user_timezone=None):
         "ctl_progress_pct": ctl_progress_pct,
         "ctl_trend_text": ctl_trend_text,
         "fitness_trend_label": fitness_trend_label,
-        "fitness_load_label": f"CTL {round(metrics['ctl_proxy'], 1)} / ATL {round(metrics.get('atl_proxy', 0.0), 1)}",
+        "fitness_load_label": f"6-week fitness load {int(round(metrics['ctl_proxy']))}",
+        "recent_load_label": f"7-day load {int(round(metrics.get('atl_proxy', 0.0)))}",
+        "freshness_label": f"Freshness {tsb_today:+.1f}",
+        "load_terms_label": f"Advanced: CTL {round(metrics['ctl_proxy'], 1)} / ATL {round(metrics.get('atl_proxy', 0.0), 1)} / TSB {tsb_today:+.1f}",
         "training_consistency_label": f"{consistency_pct}%",
         "fatigue_balance": fatigue_balance,
         "fatigue_balance_note": fatigue_balance_note,
@@ -1207,6 +1321,14 @@ def performance_intelligence(user_id, user_timezone=None):
         "marathon_readiness_next_step": next_step,
         "marathon_specificity_pct": int(round(specificity_progress * 100)),
         "fatigue_control_pct": int(round(fatigue_control_progress * 100)),
+        "endurance_profile": {
+            "long_run_depth": long_run_depth,
+            "long_run_note": long_run_note,
+            "durability": durability_display,
+            "durability_note": durability_note,
+            "fueling_risk": fueling_risk,
+            "fueling_note": fueling_note,
+        },
         "charts": {
             "weekly_distance_14": metrics["distance_series_14"],
             "ctl_14": ctl_series_14,

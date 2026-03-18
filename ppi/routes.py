@@ -414,7 +414,7 @@ def _pick_key_session(today_local, weekly_plan):
     return min(upcoming, key=_priority_rank)
 
 
-def _next_key_workout_label(today_local, weekly_plan):
+def _next_upcoming_run_label(today_local, weekly_plan):
     for item in weekly_plan:
         if item["workout_type"] != "RUN":
             continue
@@ -423,8 +423,8 @@ def _next_key_workout_label(today_local, weekly_plan):
     return "No upcoming run scheduled this week."
 
 
-def _next_key_workout_from_plan(today_local, current_plan, next_week_plan=None):
-    current_next = _next_key_workout_label(today_local, current_plan)
+def _next_upcoming_run_from_plan(today_local, current_plan, next_week_plan=None):
+    current_next = _next_upcoming_run_label(today_local, current_plan)
     if current_next != "No upcoming run scheduled this week.":
         return current_next
 
@@ -440,7 +440,7 @@ def _next_key_workout_from_plan(today_local, current_plan, next_week_plan=None):
     selected = high_priority[0] if high_priority else future_candidates[0]
     return f"{selected['day']} - {selected['planned']} {selected['session']}"
 
-def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
+def _build_today_workout(today_local, runs, weekly_plan, upcoming_run):
     today_iso = today_local.isoformat()
     today_run = next((r for r in runs if r["date"] == today_iso), None)
     today_assignment = next((w for w in weekly_plan if w["date"].isoformat() == today_iso), None)
@@ -466,7 +466,7 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
             "pace": today_run["pace"],
             "hr": str(today_run["hr"]) if today_run["hr"] else "--",
             "coach_insight": "Workout completed for today. Keep recovery and hydration on track.",
-            "next_key_workout": next_key_workout,
+            "upcoming_run": upcoming_run,
             "completed": True,
         }
 
@@ -483,7 +483,7 @@ def _build_today_workout(today_local, runs, weekly_plan, next_key_workout):
         "pace": "--",
         "hr": "--",
         "coach_insight": "Today's session is assigned from your weekly plan.",
-        "next_key_workout": next_key_workout,
+        "upcoming_run": upcoming_run,
         "completed": False,
     }
 
@@ -551,7 +551,7 @@ def _build_ai_summary(intel, weekly_plan):
 
     next_req = intel.get("training_status", {}).get("next_requirement")
     if next_req:
-        return f"Prediction readiness: {next_req}"
+        return next_req
 
     next_long = next((u for u in upcoming_runs if u.get("session") == "Long Run"), None)
     if next_long:
@@ -716,8 +716,8 @@ def dashboard():
     next_week_plan = []
     next_week_start = week_start + timedelta(days=7)
     next_week_plan = _build_weekly_plan(user.id, today_local, user_tz, weekly_goal, intel["long_run"], week_start=next_week_start)
-    next_key_workout = _next_key_workout_from_plan(today_local, weekly_plan, next_week_plan)
-    today_workout = _build_today_workout(today_local, runs, weekly_plan, next_key_workout)
+    next_upcoming_run = _next_upcoming_run_from_plan(today_local, weekly_plan, next_week_plan)
+    today_workout = _build_today_workout(today_local, runs, weekly_plan, next_upcoming_run)
     ai_summary = _build_ai_summary(intel, weekly_plan)
     key_session = _pick_key_session(today_local, weekly_plan) if weekly_plan else None
     key_session_importance = key_session.get("importance", "Low") if key_session else "Low"
@@ -739,6 +739,10 @@ def dashboard():
     if key_session is None and next_week_plan:
         key_session = _pick_key_session(week_start + timedelta(days=7), next_week_plan)
         key_session_importance = "High" if key_session and key_session["session"] == "Long Run" else "Medium" if key_session and key_session["session"] == "Tempo Run" else "Low"
+    weekly_plan_note = (
+        "If you do both gym and a run on a strength day, the gym session counts as completed and the run counts toward weekly mileage."
+        " If you skip the gym and only run, the run still counts toward mileage, but the strength session stays incomplete."
+    )
 
     return render_template(
         "dashboard.html",
@@ -761,6 +765,7 @@ def dashboard():
         weekly_plan_remaining_km=weekly_plan_remaining_km,
         weekly_completion_pct=weekly_completion_pct,
         weekly_status=weekly_status,
+        weekly_plan_note=weekly_plan_note,
         week_closed=week_closed,
         race_week_distance_km=race_week_distance_km,
         race_week_completed_km=race_week_completed_km,

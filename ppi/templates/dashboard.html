@@ -13,7 +13,8 @@
         <div>
           <h1>{{ goal.race_name }}</h1>
           <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
-          <div class='sub'>Phase {{ weekly_goal.display_phase|title }} | Week {{ weekly_goal.week_type }} | Fatigue {{ intel.fatigue_balance }} (TSB {{ intel.current_tsb }})</div>
+          <div class='sub'>Phase {{ weekly_goal.display_phase|title }} | Focus {{ weekly_goal.week_type }} | Freshness {{ intel.fatigue_balance }}</div>
+          <div class='sub'>{{ intel.fatigue_balance_note }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})</div>
           <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
         </div>
         <div class='icon-actions'>
@@ -36,7 +37,7 @@
       {% else %}
         <div class='metric'><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
       {% endif %}
-      <div class='metric'><span>Next Key Workout</span><strong>{{ today_workout.next_key_workout }}</strong></div>
+      <div class='metric'><span>Coming Up</span><strong>{{ today_workout.upcoming_run }}</strong></div>
     </section>
 
     <section class='card key-session'>
@@ -106,6 +107,7 @@
       {% if weekly_extra_km > 0 %}
         <div class='sub'>Extra running outside the planned sessions: {{ weekly_extra_km }} km</div>
       {% endif %}
+      <div class='sub'>{{ weekly_plan_note }}</div>
       <div class='progress animated'><span style='width:{{ weekly_completion_pct }}%'></span></div>
     </section>
 
@@ -119,7 +121,7 @@
         {% endif %}
       </div>
       <div class='projection-frame'>
-        <div class='label'>Current Capability</div>
+        <div class='label'>Best Estimate Today</div>
         <div class='performance-number'>{{ intel.current_projection_range }}</div>
       </div>
       <div class='projection-frame'>
@@ -128,14 +130,9 @@
       </div>
       <div class='sub'>{{ intel.prediction_note }}</div>
       <div class='metric'><span>Readiness</span><strong>{{ intel.marathon_readiness_pct }}% ({{ intel.marathon_readiness_status }})</strong></div>
-      <div class='metric'><span>Goal Alignment</span><strong>{{ intel.goal_alignment }}</strong></div>
       <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }} ({{ intel.prediction_confidence_pct }}%)</strong></div>
-      {% if intel.probability is not none %}
-        <div class='metric'><span>Goal Probability</span><strong>{{ intel.probability }}%</strong></div>
-      {% else %}
-        <div class='metric'><span>Goal Probability</span><strong class='status-grey'>Calibrating</strong></div>
-      {% endif %}
-      <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal_range }}</strong></div>
+      <div class='metric'><span>Goal Comparison</span><strong>{{ intel.goal_comparison }}</strong></div>
+      <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal_range if intel.gap_to_goal_range != '--' else 'Too early to compare' }}</strong></div>
     </section>
 
     <section class='card'>
@@ -153,12 +150,13 @@
       <h2>Fitness Trend</h2>
       <div class='performance-number medium'>{{ intel.fitness_trend_label }}</div>
       <div class='metric'><span>Fitness Load</span><strong>{{ intel.fitness_load_label }}</strong></div>
+      <div class='metric'><span>Recent Load</span><strong>{{ intel.recent_load_label }}</strong></div>
       <div class='metric'><span>Training Consistency</span><strong>{{ intel.training_consistency_label }}</strong></div>
-      <div class='metric'><span>Fatigue Balance</span><strong>{{ intel.fatigue_balance }}</strong></div>
-      <div class='metric'><span>TSB</span><strong>{{ intel.current_tsb }}</strong></div>
+      <div class='metric'><span>Freshness</span><strong>{{ intel.fatigue_balance }} ({{ "%+.1f"|format(intel.current_tsb) }})</strong></div>
       <div class='metric'><span>Training Momentum</span><strong>{{ intel.training_momentum }}</strong></div>
       <div class='sub'>{{ intel.ctl_trend_text }}</div>
       <div class='sub'>{{ intel.fatigue_balance_note }}</div>
+      <div class='sub'>{{ intel.load_terms_label }}</div>
       <div class='line-chart-wrap'>
         <svg id='fitness-line' class='line-chart' viewBox='0 0 320 66' preserveAspectRatio='none' data-points='{{ intel.charts.ctl_14 | tojson }}'>
           <line class='line-chart-baseline' x1='0' y1='61' x2='320' y2='61'></line>
@@ -174,18 +172,16 @@
     <section class='card'>
       <h2>Endurance Profile</h2>
       <div class='endurance-block'>
-        <div class='metric'><span>Aerobic Durability</span><strong class='status-{{ endurance.adi_color }}'>{{ endurance.adi_status }}</strong></div>
-        <div class='sub'><span class='label'>Cause</span> {{ endurance.adi_message }}</div>
-        <div class='sub'><span class='label'>Fix</span> Add steady long aerobic running to improve late-run pace.</div>
+        <div class='metric'><span>Long-Run Depth</span><strong>{{ intel.endurance_profile.long_run_depth }}</strong></div>
+        <div class='sub'>{{ intel.endurance_profile.long_run_note }}</div>
       </div>
       <div class='endurance-block'>
-        <div class='metric'><span>Fatigue Resistance</span><strong class='status-{{ endurance.fri_color }}'>{{ endurance.fri_status }}</strong></div>
-        <div class='sub'>{{ endurance.fri_message }}</div>
+        <div class='metric'><span>Late-Run Durability</span><strong>{{ intel.endurance_profile.durability }}</strong></div>
+        <div class='sub'>{{ intel.endurance_profile.durability_note }}</div>
       </div>
       <div class='endurance-block'>
-        <div class='metric'><span>Bonk Risk</span><strong class='status-{{ 'green' if intel.bonk_risk.label in ['Low', 'Very Low'] else ('orange' if intel.bonk_risk.label == 'Moderate' else 'red') }}'>{{ intel.bonk_risk.label }}</strong></div>
-        <div class='sub'><span class='label'>Cause</span> Longest run: {{ long_run.longest_km }} km</div>
-        <div class='sub'><span class='label'>Fix</span> Complete 24 km and 28 km long runs.</div>
+        <div class='metric'><span>Fueling Risk</span><strong class='status-{{ 'green' if intel.endurance_profile.fueling_risk in ['Low', 'Very Low'] else ('orange' if intel.endurance_profile.fueling_risk == 'Moderate' else 'red') }}'>{{ intel.endurance_profile.fueling_risk }}</strong></div>
+        <div class='sub'>{{ intel.endurance_profile.fueling_note }}</div>
       </div>
     </section>
 
