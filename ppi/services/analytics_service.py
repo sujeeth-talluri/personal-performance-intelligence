@@ -25,6 +25,7 @@ from .load_engine import (
 from .prediction_engine import (
     fit_half_equivalent as service_fit_half_equivalent,
     marathon_prediction_seconds as service_marathon_prediction_seconds,
+    marathon_wall_analysis as service_marathon_wall_analysis,
     riegel_projection as service_riegel_projection,
     vo2max_estimate_from_runs as service_vo2max_estimate_from_runs,
     vo2max_marathon_projection as service_vo2max_marathon_projection,
@@ -578,6 +579,7 @@ def build_goal_context(goal, today_local=None):
         "elevation_type": goal.elevation_type,
         "elevation_factor": _elevation_factor(goal.elevation_type),
         "projection_label": f"{goal.race_name} Projection ({goal.elevation_type.title()} Course)",
+        "personal_best": goal.personal_best,  # H:MM:SS string or None
     }
 
 
@@ -603,6 +605,16 @@ def _phase_goal_floor(desired_peak, phase):
         "rebuild": 0.28,
     }.get(phase, 0.50)
     return round(desired_peak * floor_factor, 1)
+
+
+def _safe_pb_seconds(pb_str: str | None, distance_km: float) -> float | None:
+    """Parse a personal-best time string (H:MM:SS) to seconds for marathon goals."""
+    if not pb_str or distance_km < 40.0:
+        return None
+    try:
+        return _hms_to_seconds(pb_str)
+    except (ValueError, AttributeError):
+        return None
 
 
 def _metrics_layer(user_id, goal_ctx, user_timezone=None):
@@ -990,6 +1002,12 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "fri_color": _status_color(fri_status),
             "fri_message": fri_message,
         },
+        "personal_best_fm_seconds": _safe_pb_seconds(goal_ctx.get("personal_best"), goal_ctx["distance_km"]),
+        "goal": {
+            "goal_seconds": goal_ctx["goal_seconds"],
+            "distance_km": goal_ctx["distance_km"],
+            "goal_time": goal_ctx["goal_time"],
+        },
     }
 def _marathon_prediction_seconds(metrics):
     return service_marathon_prediction_seconds(metrics)
@@ -1134,6 +1152,11 @@ def performance_intelligence(user_id, user_timezone=None):
     goal_ctx = build_goal_context(goal, today_local=today_local)
     metrics = _metrics_layer(user_id, goal_ctx, user_timezone=user_timezone)
     prediction = _prediction_layer(user_id, goal_ctx, metrics)
+
+    # Wall analysis — marathon only
+    wall_analysis = None
+    if goal_ctx["distance_km"] >= 40.0:
+        wall_analysis = service_marathon_wall_analysis(metrics)
 
     if goal_ctx["distance_km"] <= 10:
         target_ctl = 45
@@ -1343,6 +1366,7 @@ def performance_intelligence(user_id, user_timezone=None):
             "failed_recent": long_run_state.get("failed_recent", False),
             "progress": min(100, int((weekly["completed_km"] / max(1.0, weekly["weekly_goal_km"])) * 100)),
         },
+        "wall_analysis": wall_analysis,
     }
 def weekly_training_summary(user_id):
     metrics = fetch_metrics(user_id)

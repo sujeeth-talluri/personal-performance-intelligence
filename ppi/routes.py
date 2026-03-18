@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .repositories import (
@@ -45,6 +45,8 @@ from .services.strava_oauth_service import (
     get_authorize_url,
     link_oauth_identity,
 )
+from .services.ai_recommendation_service import build_pace_strategy, generate_coaching_output
+from .services.prediction_engine import vdot_from_race, vdot_to_race_time_seconds
 from .services.strava_service import sync_strava_data
 
 web = Blueprint("web", __name__)
@@ -584,6 +586,196 @@ def login_required(fn):
     return wrapper
 
 
+# ---------------------------------------------------------------------------
+# /api/dashboard — structured JSON coaching output (login required)
+#
+# Explicit pipeline:
+#   1. load_engine  — fresh ATL/CTL/TSB via performance_intelligence
+#   2. prediction   — TSB-adjusted race time (embedded in intel)
+#   3. coaching     — all 3 structured sections via generate_coaching_output
+# ---------------------------------------------------------------------------
+
+@web.route("/api/dashboard")
+@login_required
+def api_dashboard():
+    user = _current_user()
+    user_tz = _user_timezone_name()
+    today_local = _today_local_date(user_tz)
+
+    # ── Step 1: Load engine ─────────────────────────────────────────────────
+    # performance_intelligence → _metrics_layer → load_model (load_engine)
+    # computes fresh ATL/CTL/TSB and embeds tsb_proxy into the metrics dict.
+    intel = performance_intelligence(user.id, user_timezone=user_tz)
+    if not intel or not intel.get("goal"):
+        return jsonify({"error": "no_goal", "message": "Complete onboarding first."}), 400
+
+    load_output = {
+        "ctl": intel["current_ctl"],
+        "atl": intel["current_atl"],
+        "tsb": intel["current_tsb"],
+        "fitness_trend": intel["fitness_trend_label"],
+        "fatigue_ratio": intel.get("fatigue_flags", {}).get("fatigue_ratio", 1.0),
+        "ctl_series": intel.get("charts", {}).get("ctl_14", []),
+    }
+
+    # ── Step 2: Prediction engine ───────────────────────────────────────────
+    # marathon_prediction_seconds already received tsb_proxy from step 1
+    # (passed through the metrics dict inside performance_intelligence).
+    prediction_output = {
+        "predicted_time": intel.get("race_day_projection", "--"),
+        "current_fitness_time": intel.get("current_projection", "--"),
+        "confidence": intel.get("prediction_confidence", "Low"),
+        "confidence_score": intel.get("prediction_confidence_score", 0.0),
+        "goal_time": (intel.get("goal") or {}).get("goal_time", "--"),
+        "gap_to_goal": intel.get("gap_to_goal", "--"),
+        "probability": intel.get("probability"),
+        "goal_alignment": intel.get("goal_alignment", "--"),
+        "note": intel.get("prediction_note", ""),
+    }
+
+    # ── Step 3: Coaching output ─────────────────────────────────────────────
+    # generate_coaching_output receives intel (containing both load and
+    # prediction data) and the weekly plan for context.
+    week_start, _ = _week_bounds(today_local)
+    weekly_plan = _build_weekly_plan(
+        user.id, today_local, user_tz,
+        intel["weekly"], intel["long_run"],
+        week_start=week_start,
+    )
+    coaching = generate_coaching_output(intel, weekly_plan)
+
+    # ── Step 4: Single JSON response with all 3 outputs ─────────────────────
+    return jsonify({
+        "load": load_output,
+        "prediction": prediction_output,
+        "pace_strategy": coaching["pace_strategy"],
+        "training_recommendations": coaching["training_recommendations"],
+        "coaching_summary": coaching["coaching_summary"],
+        "wall_analysis": coaching["wall_analysis"],
+    })
+
+
+# ---------------------------------------------------------------------------
+# /api/predict — standalone prediction (no auth required)
+#
+# Accepts a single recent race result and target distance; returns predicted
+# time, VDOT, pace strategy for all 4 distances, and confidence score.
+# ---------------------------------------------------------------------------
+
+_TARGET_DISTANCES = {
+    "5K":  5.0,
+    "10K": 10.0,
+    "HM":  21.0975,
+    "FM":  42.195,
+}
+
+
+def _predict_confidence(source_km: float, target_km: float, weekly_km: float, vdot: float) -> tuple:
+    """Return (confidence_score 0–1, label) for a standalone VDOT prediction.
+
+    Factors:
+      - Source/target distance ratio  (closer = more reliable Riegel/VDOT)
+      - VDOT plausibility             (realistic range for human runners)
+      - Weekly training volume        (proxy for current fitness validity)
+    """
+    score = 0.0
+
+    ratio = target_km / max(source_km, 0.001)
+    if ratio <= 1.5:
+        score += 0.40   # e.g. 10K → HM, HM → FM
+    elif ratio <= 3.0:
+        score += 0.30   # e.g. 5K → HM
+    elif ratio <= 6.0:
+        score += 0.18   # e.g. 5K → FM (significant extrapolation)
+    else:
+        score += 0.08
+
+    if 25.0 <= vdot <= 85.0:
+        score += 0.30   # plausible recreational → elite range
+    elif 20.0 <= vdot <= 90.0:
+        score += 0.15
+
+    if weekly_km >= 50:
+        score += 0.30
+    elif weekly_km >= 30:
+        score += 0.20
+    elif weekly_km >= 15:
+        score += 0.10
+
+    score = round(min(1.0, score), 2)
+    label = "High" if score >= 0.65 else "Medium" if score >= 0.40 else "Low"
+    return score, label
+
+
+@web.route("/api/predict", methods=["POST"])
+def api_predict():
+    data = request.get_json(silent=True) or {}
+
+    # ── Input validation ─────────────────────────────────────────────────────
+    try:
+        source_km = float(data["recent_race_distance_km"])
+        source_sec = float(data["recent_race_time_seconds"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({
+            "error": "missing_fields",
+            "message": "recent_race_distance_km and recent_race_time_seconds are required.",
+        }), 400
+
+    raw_target = str(data.get("target_race_distance", "FM")).upper().strip()
+    target_km = _TARGET_DISTANCES.get(raw_target)
+    if target_km is None:
+        return jsonify({
+            "error": "invalid_target",
+            "message": f"target_race_distance must be one of {list(_TARGET_DISTANCES)}.",
+        }), 400
+
+    if source_km <= 0 or source_sec <= 0:
+        return jsonify({
+            "error": "invalid_race",
+            "message": "Race distance and time must be positive.",
+        }), 400
+
+    weekly_km = float(data.get("current_weekly_km") or 0.0)
+
+    # ── VDOT from supplied race ──────────────────────────────────────────────
+    vdot = vdot_from_race(source_km * 1000.0, source_sec / 60.0)
+    if not vdot or vdot < 15:
+        return jsonify({
+            "error": "implausible_race",
+            "message": "Supplied race result produces an implausible VDOT. Check distance and time.",
+        }), 422
+
+    # ── Project to target distance ───────────────────────────────────────────
+    predicted_sec = vdot_to_race_time_seconds(vdot, target_km * 1000.0)
+    if not predicted_sec:
+        return jsonify({"error": "projection_failed"}), 500
+
+    # ── Pace strategy (all 4 distances, anchored on marathon equivalent) ─────
+    fm_sec = vdot_to_race_time_seconds(vdot, 42195.0)
+    pace_strategy = build_pace_strategy(fm_sec)
+
+    # ── Confidence ───────────────────────────────────────────────────────────
+    confidence_score, confidence_label = _predict_confidence(source_km, target_km, weekly_km, vdot)
+
+    h = int(predicted_sec // 3600)
+    m = int((predicted_sec % 3600) // 60)
+    s = int(round(predicted_sec % 60))
+
+    return jsonify({
+        "target_distance": raw_target,
+        "predicted_time": f"{h}:{m:02d}:{s:02d}",
+        "predicted_seconds": round(predicted_sec),
+        "vdot": round(vdot, 1),
+        "confidence_score": confidence_score,
+        "confidence": confidence_label,
+        "pace_strategy": pace_strategy,
+        "source_race": {
+            "distance_km": source_km,
+            "time_seconds": round(source_sec),
+        },
+    })
+
+
 def _send_reset_email(email, link):
     cfg = current_app.config
     if not cfg.get("SMTP_HOST"):
@@ -718,7 +910,8 @@ def dashboard():
     next_week_plan = _build_weekly_plan(user.id, today_local, user_tz, weekly_goal, intel["long_run"], week_start=next_week_start)
     next_upcoming_run = _next_upcoming_run_from_plan(today_local, weekly_plan, next_week_plan)
     today_workout = _build_today_workout(today_local, runs, weekly_plan, next_upcoming_run)
-    ai_summary = _build_ai_summary(intel, weekly_plan)
+    ai_coaching = generate_coaching_output(intel, weekly_plan)
+    ai_summary = ai_coaching["coaching_summary"]
     key_session = _pick_key_session(today_local, weekly_plan) if weekly_plan else None
     key_session_importance = key_session.get("importance", "Low") if key_session else "Low"
     planned_runs = [item for item in weekly_plan if item["workout_type"] == "RUN"]
@@ -770,6 +963,7 @@ def dashboard():
         race_week_distance_km=race_week_distance_km,
         race_week_completed_km=race_week_completed_km,
         ai_summary=ai_summary,
+        ai_coaching=ai_coaching,
         runs=runs[:5],
         sync_info=sync_info,
         today_date=_today_date_label(user_tz),

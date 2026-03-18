@@ -1,249 +1,879 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset='utf-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <title>StrideIQ AI Coach</title>
-  <link rel='stylesheet' href='/static/app.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StrideIQ — {{ user.name }}</title>
+  <style>
+    /* ─── Reset & Base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:    #00C853;
+      --green-d:  #009624;
+      --dark:     #0f1117;
+      --sidebar:  #161b27;
+      --card:     #ffffff;
+      --bg:       #f0f2f7;
+      --text:     #1a1d2e;
+      --muted:    #6b7280;
+      --border:   #e5e7eb;
+      --red:      #ef4444;
+      --amber:    #f59e0b;
+      --blue:     #3b82f6;
+      --radius:   12px;
+      --shadow:   0 2px 12px rgba(0,0,0,.08);
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px; min-height: 100vh; background: var(--sidebar);
+      display: flex; flex-direction: column; padding: 24px 16px;
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+    }
+    .sidebar-logo {
+      font-size: 1.3rem; font-weight: 800; color: var(--green);
+      letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .sidebar-tagline { font-size: .72rem; color: #64748b; margin-bottom: 32px; }
+    .sidebar nav { flex: 1; }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; color: #94a3b8;
+      text-decoration: none; font-size: .88rem; margin-bottom: 4px;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.07); color: #fff; }
+    .nav-link .icon { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-footer { border-top: 1px solid #1e2638; padding-top: 16px; }
+    .sidebar-user { font-size: .8rem; color: #94a3b8; margin-bottom: 8px; }
+    .sidebar-user strong { display: block; color: #e2e8f0; font-size: .85rem; }
+
+    .main { margin-left: 220px; padding: 28px; min-height: 100vh; }
+
+    /* ─── Cards ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+    }
+    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+
+    /* ─── Hero bar ───────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #161b27 0%, #1e2638 100%);
+      border-radius: var(--radius); padding: 22px 26px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .hero-left h1 { font-size: 1.4rem; font-weight: 800; color: #fff; }
+    .hero-left .sub { font-size: .83rem; color: #94a3b8; margin-top: 4px; }
+    .hero-right { display: flex; gap: 10px; align-items: center; }
+    .hero-badge {
+      background: rgba(0,200,83,.15); color: var(--green);
+      padding: 6px 14px; border-radius: 20px; font-size: .8rem; font-weight: 700;
+    }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.07);
+      color: #94a3b8; display: inline-flex; align-items: center; justify-content: center;
+      text-decoration: none; font-size: 1.1rem; transition: background .15s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+    /* ─── Grid ───────────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .col-span-2 { grid-column: span 2; }
+
+    /* ─── Distance tiles ─────────────────────────────────────────── */
+    .dist-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dist-tile {
+      background: var(--bg); border-radius: 10px; padding: 16px 14px;
+      text-align: center; position: relative;
+    }
+    .dist-tile.fm { background: linear-gradient(135deg, #e8fff1 0%, #f0fdf4 100%); }
+    .dist-tile .label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+    .dist-tile .time { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+    .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
+    .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
+    .confidence-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase; margin-top: 8px;
+    }
+    .conf-high   { background: #dcfce7; color: #16a34a; }
+    .conf-medium { background: #fef9c3; color: #a16207; }
+    .conf-low    { background: #fee2e2; color: #dc2626; }
+
+    /* ─── Wall analysis ──────────────────────────────────────────── */
+    .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .wall-risk-badge {
+      padding: 4px 14px; border-radius: 20px; font-size: .78rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .risk-high   { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+    .risk-medium { background: #fffbeb; color: #d97706; border: 1px solid #fed7aa; }
+    .risk-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .risk-unknown{ background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+
+    .wall-callout {
+      background: #fff7ed; border-left: 3px solid #f59e0b;
+      border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 16px;
+    }
+    .wall-callout.high { background: #fef2f2; border-left-color: #ef4444; }
+    .wall-callout .callout-num { font-size: 1.8rem; font-weight: 800; color: #ef4444; }
+    .wall-callout .callout-num.medium { color: #d97706; }
+    .wall-callout .callout-label { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
+    .vdot-bar-wrap { margin-bottom: 16px; }
+    .vdot-label-row { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 6px; }
+    .vdot-bars { display: flex; flex-direction: column; gap: 8px; }
+    .vdot-row { display: flex; align-items: center; gap: 10px; }
+    .vdot-row-label { font-size: .75rem; color: var(--muted); width: 28px; text-align: right; }
+    .vdot-track { flex: 1; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
+    .vdot-fill { height: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: .68rem; font-weight: 700; color: #fff; transition: width .6s ease; }
+    .vdot-fill.hm { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .vdot-fill.fm { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+    .fm-compare { display: flex; gap: 12px; margin-top: 12px; }
+    .fm-stat { flex: 1; background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; }
+    .fm-stat .fs-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .fm-stat .fs-val { font-size: 1.25rem; font-weight: 800; margin-top: 4px; }
+    .fm-stat .fs-val.green { color: var(--green-d); }
+    .fm-stat .fs-val.red   { color: var(--red); }
+
+    /* ─── Pace strategy table ────────────────────────────────────── */
+    .pace-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .pace-table th {
+      text-align: left; padding: 8px 12px; font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+      border-bottom: 2px solid var(--border);
+    }
+    .pace-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+    .pace-table tr:last-child td { border-bottom: none; }
+    .pace-table .seg-label { font-weight: 600; }
+    .pace-table .seg-pace  { font-family: monospace; font-size: .9rem; font-weight: 700; }
+    .pace-table tr.km32 { background: #fff7ed; }
+    .pace-table tr.km32 td { color: #92400e; }
+    .pace-table tr.km32 .seg-pace { color: #ef4444; font-weight: 800; }
+    .km32-warn { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: #92400e; margin-top: 12px; background: #fff7ed; padding: 10px 14px; border-radius: 8px; border: 1px solid #fde68a; }
+
+    /* ─── Fueling timeline ───────────────────────────────────────── */
+    .fuel-timeline { position: relative; padding-left: 28px; }
+    .fuel-timeline::before {
+      content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px;
+      width: 2px; background: var(--border);
+    }
+    .fuel-event { position: relative; margin-bottom: 14px; }
+    .fuel-event::before {
+      content: attr(data-icon); position: absolute; left: -22px; top: 0;
+      width: 20px; text-align: center; font-size: .95rem; line-height: 1.4;
+    }
+    .fuel-event .fe-time { font-size: .7rem; color: var(--muted); }
+    .fuel-event .fe-label { font-size: .83rem; font-weight: 600; margin: 1px 0; }
+    .fuel-event .fe-note  { font-size: .73rem; color: var(--muted); }
+    .fuel-rule { display: flex; gap: 10px; margin-top: 14px; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+    .fuel-rule .fr-icon { font-size: 1.1rem; }
+    .fuel-rule .fr-text  { font-size: .78rem; color: #1d4ed8; }
+    .fuel-rule .fr-text strong { display: block; font-size: .8rem; }
+
+    /* ─── Load tiles ─────────────────────────────────────────────── */
+    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .load-tile { background: var(--bg); border-radius: 10px; padding: 14px 12px; text-align: center; }
+    .load-tile .lt-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .load-tile .lt-val   { font-size: 2rem; font-weight: 800; line-height: 1; margin: 6px 0 4px; }
+    .load-tile .lt-sub   { font-size: .72rem; color: var(--muted); }
+    .lt-green { color: var(--green-d); }
+    .lt-amber { color: #d97706; }
+    .lt-red   { color: var(--red); }
+    .lt-blue  { color: var(--blue); }
+
+    /* ─── Mini chart ─────────────────────────────────────────────── */
+    .mini-chart-wrap { margin-top: 16px; }
+    .mini-chart-title { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
+    .mini-chart { width: 100%; height: 52px; }
+    .mini-chart .path { fill: none; stroke: var(--green); stroke-width: 1.5; }
+    .mini-chart .area { fill: rgba(0,200,83,.1); stroke: none; }
+
+    /* ─── Coaching card ──────────────────────────────────────────── */
+    .coaching-text {
+      font-size: .92rem; line-height: 1.65; color: var(--text);
+      background: #f8fafc; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px;
+      border-left: 3px solid var(--green);
+    }
+    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
+
+    /* ─── Weekly plan ────────────────────────────────────────────── */
+    .plan-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .84rem;
+    }
+    .plan-row:last-child { border-bottom: none; }
+    .plan-main { flex: 1; }
+    .plan-distance { font-weight: 700; font-size: .9rem; }
+    .plan-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .plan-status { font-size: .75rem; font-weight: 600; }
+    .done-row   .plan-distance { color: #16a34a; }
+    .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
+    .partial-row .plan-distance { color: #d97706; }
+    .status-green  { color: #16a34a; }
+    .status-orange { color: #d97706; }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+    .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
+
+    /* ─── Run items ──────────────────────────────────────────────── */
+    .run-item { display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: .82rem; }
+    .run-item:last-child { border-bottom: none; }
+    .run-date   { color: var(--muted); min-width: 56px; }
+    .run-dist   { font-weight: 700; min-width: 52px; }
+    .run-pace   { color: var(--muted); }
+    .run-time   { color: var(--muted); margin-left: auto; }
+
+    /* ─── Pills ──────────────────────────────────────────────────── */
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-green  { background: #dcfce7; color: #16a34a; }
+    .pill-yellow { background: #fef9c3; color: #a16207; }
+    .pill-orange { background: #ffedd5; color: #c2410c; }
+
+    /* ─── Ladder ─────────────────────────────────────────────────── */
+    .ladder { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ladder-step {
+      flex: 1; text-align: center; background: var(--bg); border-radius: 8px;
+      padding: 10px 6px; font-size: .8rem; font-weight: 600; color: var(--muted);
+      border: 2px solid transparent;
+    }
+    .ladder-step.done   { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+    .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
+    .ladder-step .km    { font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
+
+    /* ─── Loading / error states ─────────────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .sk-line { height: 14px; margin-bottom: 8px; }
+    .sk-big  { height: 36px; margin-bottom: 10px; }
+    .error-box { background: #fef2f2; border-radius: 8px; padding: 16px; color: #dc2626; font-size: .85rem; text-align: center; }
+
+    /* ─── Utility ────────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .83rem; }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-row span { color: var(--muted); }
+    .metric-row strong { font-weight: 600; }
+    .text-green { color: var(--green-d); }
+    .text-red   { color: var(--red); }
+    .text-amber { color: #d97706; }
+    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 14px; }
+
+    /* ─── Mobile ─────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main    { margin-left: 0; padding: 16px; }
+      .dist-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2  { grid-template-columns: 1fr; }
+      .load-tiles { grid-template-columns: repeat(3, 1fr); }
+      .fm-compare { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      .dist-grid  { grid-template-columns: repeat(2, 1fr); }
+      .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <main class='wrap'>
-    <section class='card hero compact'>
-      <div class='header-row'>
-        <div>
-          <h1>{{ goal.race_name }}</h1>
-          <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
-          <div class='sub'>Phase {{ weekly_goal.display_phase|title }} | Focus {{ weekly_goal.week_type }} | Freshness {{ intel.fatigue_balance }}</div>
-          <div class='sub'>{{ intel.fatigue_balance_note }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})</div>
-          <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
+<div class="app">
+
+  <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">StrideIQ</div>
+    <div class="sidebar-tagline">AI Marathon Coach</div>
+    <nav>
+      <a class="nav-link active" href="/"><span class="icon">🏃</span> Dashboard</a>
+      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span> Sync Strava</a>
+      <a class="nav-link" href="/settings"><span class="icon">⚙️</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <strong>{{ user.name }}</strong>
+        Signed in
+      </div>
+      <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══════════════════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+    <div class="hero">
+      <div class="hero-left">
+        <h1>{{ intel.goal.race_name }}</h1>
+        <div class="sub">
+          Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
+          &nbsp;·&nbsp; Target {{ intel.goal.target_pace }}
+          &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
+          &nbsp;·&nbsp; {{ today_date }}
         </div>
-        <div class='icon-actions'>
-          <a class='icon-btn' href='/settings' aria-label='Settings'>&#9881;</a>
-          <a class='icon-btn' href='/logout' aria-label='Logout'>&#128682;</a>
+        <div class="sub" style="margin-top:4px">
+          Phase: {{ weekly_goal.display_phase|title }} &nbsp;·&nbsp;
+          Freshness: {{ intel.fatigue_balance }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})
         </div>
       </div>
-    </section>
-
-    <section class='card coach-primary'>
-      <h2>Today's Training</h2>
-      <div class='sub'>{{ today_workout.date }}</div>
-      <div class='workout-head'>
-        <strong>{{ today_workout.workout }}</strong>
-        <span class='pill {{ "pill-green" if today_workout.status == "Completed" else ("pill-orange" if today_workout.status == "Partial" else "pill-yellow") }}'>{{ today_workout.status }}</span>
+      <div class="hero-right">
+        <span class="hero-badge">{{ intel.marathon_readiness_status }}</span>
+        <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
+        <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
+        <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
       </div>
-      <div class='metric'><span>Workout Type</span><strong>{{ today_workout.workout_type }}</strong></div>
-      {% if today_workout.completed %}
-        <div class='metric'><span>Completed</span><strong>{{ today_workout.distance_actual }} (Target {{ today_workout.distance_target }})</strong></div>
-      {% else %}
-        <div class='metric'><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
-      {% endif %}
-      <div class='metric'><span>Coming Up</span><strong>{{ today_workout.upcoming_run }}</strong></div>
-    </section>
+    </div>
 
-    <section class='card key-session'>
-      <h2>Key Session This Week</h2>
-      <div class='performance-number medium'>{{ key_session.day }} - {{ key_session.planned }} {{ key_session.session }}</div>
-      {% if key_session.planned_km %}
-        <div class='metric'><span>Target</span><strong>{{ key_session.planned }}</strong></div>
-        <div class='metric'><span>Completed</span><strong>{{ key_session.actual or "--" }}</strong></div>
-        <div class='metric'><span>Status</span><strong>{{ key_session.status_label }}</strong></div>
-      {% endif %}
-      <div class='split-2'>
-        <div>
-          <div class='label'>Purpose</div>
-          <div class='sub'>{{ key_session.purpose or 'Build marathon endurance' }}</div>
-        </div>
-        <div>
-          <div class='label'>Importance</div>
-          <div class='sub-strong'>{{ key_session_importance }}</div>
-        </div>
-      </div>
-    </section>
-
-    <section class='card'>
-      <h2>Weekly Plan</h2>
-      <div class='plan-list'>
-        {% for p in weekly_plan %}
-          <div class='plan-row {{ 'done-row' if p.status in ['completed', 'moved'] else '' }} {{ 'skip-row' if p.status in ['missed', 'skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}'>
-            <div class='plan-main'>
-              <div class='plan-distance'>
-                {% if p.status in ['completed', 'overperformed'] and p.actual %}
-                  {{ p.actual }}
-                {% elif p.workout_type == 'STRENGTH' %}
-                  Gym
-                {% else %}
-                  {{ p.planned }}
-                {% endif %}
-              </div>
-              <div class='plan-meta'>{{ p.day }} {{ p.session }}</div>
-            </div>
-            <div class='plan-status'>
-                {% if p.status == 'completed' %}
-                  <strong class='status-green'>&#10003; done</strong>
-                {% elif p.status == 'moved' %}
-                  <strong class='status-green'>&#10003; moved</strong>
-                {% elif p.status == 'partial' %}
-                  <strong class='status-orange'>partial</strong>
-                {% elif p.status in ['missed', 'skipped'] %}
-                  <strong class='status-orange'>&#9888; missed</strong>
-                {% elif p.workout_type == 'STRENGTH' %}
-                  <strong>&#127947; strength</strong>
-              {% else %}
-                <strong>planned</strong>
-              {% endif %}
-            </div>
+    <!-- ── Intelligence grid (fetched from /api/dashboard) ────────────── -->
+    <div id="intel-container">
+      <!-- skeleton while loading -->
+      <div id="intel-loading">
+        <div class="card">
+          <div class="card-title">Race Predictions</div>
+          <div class="dist-grid">
+            {% for _ in range(4) %}
+              <div class="dist-tile"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>
+            {% endfor %}
           </div>
-        {% endfor %}
-      </div>
-      {% if week_closed %}
-        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Completed {{ weekly_plan_completed_km }} km | Completion {{ weekly_completion_pct }}%</div>
-        <div class='sub'><strong>Status:</strong> {{ weekly_status }}</div>
-      {% else %}
-        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Done {{ weekly_plan_completed_km }} km | Remaining {{ weekly_plan_remaining_km }} km</div>
-      {% endif %}
-      {% if race_week_distance_km > 0 %}
-        <div class='sub'>Race distance this week: {{ race_week_distance_km }} km{% if race_week_completed_km > 0 %} | Completed {{ race_week_completed_km }} km{% endif %}</div>
-      {% endif %}
-      {% if weekly_extra_km > 0 %}
-        <div class='sub'>Extra running outside the planned sessions: {{ weekly_extra_km }} km</div>
-      {% endif %}
-      <div class='sub'>{{ weekly_plan_note }}</div>
-      <div class='progress animated'><span style='width:{{ weekly_completion_pct }}%'></span></div>
-    </section>
-
-    <section class='card'>
-      <h2>Marathon Projection</h2>
-      <div class='projection-frame'>
-        <div class='label'>Goal Time</div>
-        <div class='sub-strong'>{{ intel.goal_time_display }}</div>
-        {% if intel.goal_milestone_label %}
-          <div class='sub'>{{ intel.goal_milestone_label }}</div>
-        {% endif %}
-      </div>
-      <div class='projection-frame'>
-        <div class='label'>Best Estimate Today</div>
-        <div class='performance-number'>{{ intel.current_projection_range }}</div>
-      </div>
-      <div class='projection-frame'>
-        <div class='label'>Race Day Projection</div>
-        <div class='performance-number medium'>{{ intel.race_day_projection_range }}</div>
-      </div>
-      <div class='sub'>{{ intel.prediction_note }}</div>
-      <div class='metric'><span>Readiness</span><strong>{{ intel.marathon_readiness_pct }}% ({{ intel.marathon_readiness_status }})</strong></div>
-      <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }} ({{ intel.prediction_confidence_pct }}%)</strong></div>
-      <div class='metric'><span>Goal Comparison</span><strong>{{ intel.goal_comparison }}</strong></div>
-      <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal_range if intel.gap_to_goal_range != '--' else 'Too early to compare' }}</strong></div>
-    </section>
-
-    <section class='card'>
-      <h2>Long Run Ladder</h2>
-      {% set longest = long_run.longest_km %}
-      <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}&#10003;{% endif %}<span>Half Marathon</span></div>
-      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}NEXT{% endif %}<span>Next Step</span></div>
-      <div class='ladder-item {{ 'next' if longest >= 24 and longest < 28 else ('done' if longest >= 28 else '') }}'>28 km {% if longest >= 28 %}&#10003;{% endif %}<span>Endurance Builder</span></div>
-      <div class='ladder-item {{ 'next' if longest >= 28 and longest < 32 else ('done' if longest >= 32 else '') }}'>32 km {% if longest >= 32 %}&#10003;{% endif %}<span>Marathon Simulation</span></div>
-      <div class='sub'>Latest long run: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
-      <div class='sub'>32 km long run typically indicates full marathon readiness.</div>
-    </section>
-
-    <section class='card'>
-      <h2>Fitness Trend</h2>
-      <div class='performance-number medium'>{{ intel.fitness_trend_label }}</div>
-      <div class='metric'><span>Fitness Load</span><strong>{{ intel.fitness_load_label }}</strong></div>
-      <div class='metric'><span>Recent Load</span><strong>{{ intel.recent_load_label }}</strong></div>
-      <div class='metric'><span>Training Consistency</span><strong>{{ intel.training_consistency_label }}</strong></div>
-      <div class='metric'><span>Freshness</span><strong>{{ intel.fatigue_balance }} ({{ "%+.1f"|format(intel.current_tsb) }})</strong></div>
-      <div class='metric'><span>Training Momentum</span><strong>{{ intel.training_momentum }}</strong></div>
-      <div class='sub'>{{ intel.ctl_trend_text }}</div>
-      <div class='sub'>{{ intel.fatigue_balance_note }}</div>
-      <div class='sub'>{{ intel.load_terms_label }}</div>
-      <div class='line-chart-wrap'>
-        <svg id='fitness-line' class='line-chart' viewBox='0 0 320 66' preserveAspectRatio='none' data-points='{{ intel.charts.ctl_14 | tojson }}'>
-          <line class='line-chart-baseline' x1='0' y1='61' x2='320' y2='61'></line>
-          <polyline class='line-chart-path' points=''></polyline>
-        </svg>
-        <div class='chart-labels'>
-          <span>{{ intel.charts.ctl_14[0].label if intel.charts.ctl_14 else '' }}</span>
-          <span>{{ intel.charts.ctl_14[-1].label if intel.charts.ctl_14 else '' }}</span>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:70%"></div></div>
+          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:80%"></div></div>
         </div>
       </div>
-    </section>
+      <div id="intel-content" style="display:none"></div>
+      <div id="intel-error"   style="display:none"></div>
+    </div>
 
-    <section class='card'>
-      <h2>Endurance Profile</h2>
-      <div class='endurance-block'>
-        <div class='metric'><span>Long-Run Depth</span><strong>{{ intel.endurance_profile.long_run_depth }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.long_run_note }}</div>
+    <!-- ── Weekly Plan (server-rendered) ──────────────────────────────── -->
+    <div class="section-label">This Week</div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Weekly Plan</h2>
+        <div>
+          {% for p in weekly_plan %}
+            <div class="plan-row {{ 'done-row' if p.status in ['completed','moved'] else '' }} {{ 'skip-row' if p.status in ['missed','skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}">
+              <div class="plan-main">
+                <div class="plan-distance">
+                  {% if p.status in ['completed','overperformed'] and p.actual %}{{ p.actual }}
+                  {% elif p.workout_type == 'STRENGTH' %}Gym
+                  {% else %}{{ p.planned }}{% endif %}
+                </div>
+                <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
+              </div>
+              <div class="plan-status">
+                {% if p.status == 'completed' %}<span class="status-green">✓ done</span>
+                {% elif p.status == 'moved' %}<span class="status-green">✓ moved</span>
+                {% elif p.status == 'partial' %}<span class="status-orange">partial</span>
+                {% elif p.status in ['missed','skipped'] %}<span class="status-orange">⚠ missed</span>
+                {% elif p.workout_type == 'STRENGTH' %}<span>💪 strength</span>
+                {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% if week_closed %}
+          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
+        {% endif %}
+        <div class="metric-row"><span>Goal</span><strong>{{ weekly_plan_goal_km }} km</strong></div>
+        <div class="metric-row"><span>Completed</span><strong>{{ weekly_plan_completed_km }} km</strong></div>
+        <div class="metric-row"><span>Remaining</span><strong>{{ weekly_plan_remaining_km }} km</strong></div>
+        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ weekly_completion_pct }}%"></span></div>
       </div>
-      <div class='endurance-block'>
-        <div class='metric'><span>Late-Run Durability</span><strong>{{ intel.endurance_profile.durability }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.durability_note }}</div>
+
+      <div class="card">
+        <h2>Today's Session</h2>
+        <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
+        <div class="metric-row">
+          <span>Workout</span>
+          <strong>{{ today_workout.workout }}
+            <span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}" style="margin-left:6px">{{ today_workout.status }}</span>
+          </strong>
+        </div>
+        <div class="metric-row"><span>Type</span><strong>{{ today_workout.workout_type }}</strong></div>
+        {% if today_workout.completed %}
+          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
+        {% else %}
+          <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+        {% endif %}
+        <div class="metric-row"><span>Coming Up</span><strong>{{ today_workout.upcoming_run }}</strong></div>
+
+        <div class="divider"></div>
+        <h2 style="margin-bottom:12px">Long Run Ladder</h2>
+        {% set lk = long_run.longest_km %}
+        <div class="ladder">
+          <div class="ladder-step {{ 'done' if lk >= 21 else ('next' if lk < 21 else '') }}">
+            {% if lk >= 21 %}✓{% else %}NEXT{% endif %}<span class="km">21 km</span>
+          </div>
+          <div class="ladder-step {{ 'done' if lk >= 24 else ('next' if lk >= 21 else '') }}">
+            {% if lk >= 24 %}✓{% elif lk >= 21 %}NEXT{% endif %}<span class="km">24 km</span>
+          </div>
+          <div class="ladder-step {{ 'done' if lk >= 28 else ('next' if lk >= 24 else '') }}">
+            {% if lk >= 28 %}✓{% elif lk >= 24 %}NEXT{% endif %}<span class="km">28 km</span>
+          </div>
+          <div class="ladder-step {{ 'done' if lk >= 32 else ('next' if lk >= 28 else '') }}">
+            {% if lk >= 32 %}✓{% elif lk >= 28 %}NEXT{% endif %}<span class="km">32 km</span>
+          </div>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted)">Latest long run: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
       </div>
-      <div class='endurance-block'>
-        <div class='metric'><span>Fueling Risk</span><strong class='status-{{ 'green' if intel.endurance_profile.fueling_risk in ['Low', 'Very Low'] else ('orange' if intel.endurance_profile.fueling_risk == 'Moderate' else 'red') }}'>{{ intel.endurance_profile.fueling_risk }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.fueling_note }}</div>
-      </div>
-    </section>
+    </div>
 
-    <section class='card'>
-      <h2>Marathon Readiness</h2>
-      <div class='performance-number medium'>{{ intel.marathon_readiness_pct }}%</div>
-      <div class='metric'><span>Status</span><strong>{{ intel.marathon_readiness_status }}</strong></div>
-      <div class='metric'><span>Training Consistency</span><strong>{{ consistency_score }}%</strong></div>
-      <div class='metric'><span>Marathon Specificity</span><strong>{{ intel.marathon_specificity_pct }}%</strong></div>
-      <div class='metric'><span>Fatigue Control</span><strong>{{ intel.fatigue_control_pct }}%</strong></div>
-      <div class='progress animated'><span style='width:{{ intel.marathon_readiness_pct }}%'></span></div>
-      <div class='sub'><strong>Next Step:</strong> {{ intel.marathon_readiness_next_step }}</div>
-    </section>
-
-    <section class='card coaching'>
-      <h2>Coach Insight</h2>
-      <div class='sub'>{{ ai_summary }}</div>
-    </section>
-
-    <section class='card'>
+    <!-- ── Recent Runs ─────────────────────────────────────────────────── -->
+    <div class="section-label">Recent Activity</div>
+    <div class="card">
       <h2>Recent Runs</h2>
       {% if runs %}
         {% for run in runs %}
-          <div class='run-item'>
-            <div class='run-date'>{{ run.date_label }}</div>
-            <div class='run-stat strong'>{{ run.distance }} km</div>
-            <div class='run-stat'>{{ run.pace }}</div>
-            <div class='run-stat'>{% if run.hr %}HR {{ run.hr }}{% else %}HR --{% endif %}</div>
-            <div class='run-stat'>{{ run.time }}</div>
+          <div class="run-item">
+            <div class="run-date">{{ run.date_label }}</div>
+            <div class="run-dist">{{ run.distance }} km</div>
+            <div class="run-pace">{{ run.pace }}/km</div>
+            {% if run.hr %}<div class="run-pace">HR {{ run.hr }}</div>{% endif %}
+            <div class="run-time">{{ run.time }}</div>
           </div>
         {% endfor %}
       {% else %}
-        <p class='sub'>No synced runs yet.</p>
+        <p style="color:var(--muted);font-size:.85rem">No synced runs yet. <a href="/?sync=1">Sync from Strava</a></p>
       {% endif %}
-    </section>
-  </main>
+    </div>
 
-  <script>
-    (function () {
-      const svg = document.getElementById('fitness-line');
-      if (!svg) return;
-      const raw = svg.dataset.points;
-      if (!raw) return;
-      let points = [];
-      try { points = JSON.parse(raw); } catch (_) { return; }
-      const values = points.map(p => Number(p.value || 0));
-      if (!values.length) return;
-      const min = Math.min.apply(null, values);
-      const max = Math.max.apply(null, values);
-      const range = Math.max(1, max - min);
-      const viewBox = (svg.getAttribute('viewBox') || '0 0 320 66').split(' ');
-      const w = Number(viewBox[2] || 320);
-      const h = Number(viewBox[3] || 66);
-      const step = values.length > 1 ? (w / (values.length - 1)) : 0;
-      const coords = values.map((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 10) - 5;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      }).join(' ');
-      const line = svg.querySelector('.line-chart-path');
-      if (line) line.setAttribute('points', coords);
-    })();
-  </script>
+  </main>
+</div>
+
+<!-- ═══ INTELLIGENCE SECTIONS TEMPLATE ═════════════════════════════════ -->
+<!-- Rendered client-side from /api/dashboard JSON -->
+<template id="intel-template">
+  <!-- 1. RACE PREDICTIONS -->
+  <div class="card" id="card-predictions">
+    <div class="card-title">Race Predictions — All Distances</div>
+    <div class="dist-grid" id="dist-tiles"></div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:12px" id="pred-note"></div>
+  </div>
+
+  <div class="grid-2">
+    <!-- 2. WALL ANALYSIS -->
+    <div class="card" id="card-wall">
+      <div class="card-title">Wall Risk Analysis</div>
+      <div id="wall-content"></div>
+    </div>
+
+    <!-- 5. TRAINING LOAD -->
+    <div class="card" id="card-load">
+      <div class="card-title">Training Load — PMC</div>
+      <div class="load-tiles">
+        <div class="load-tile">
+          <div class="lt-label">Fitness (CTL)</div>
+          <div class="lt-val lt-blue" id="lt-ctl">—</div>
+          <div class="lt-sub">42-day load</div>
+        </div>
+        <div class="load-tile">
+          <div class="lt-label">Fatigue (ATL)</div>
+          <div class="lt-val" id="lt-atl" style="color:var(--red)">—</div>
+          <div class="lt-sub">7-day load</div>
+        </div>
+        <div class="load-tile">
+          <div class="lt-label">Form (TSB)</div>
+          <div class="lt-val" id="lt-tsb">—</div>
+          <div class="lt-sub">CTL − ATL</div>
+        </div>
+      </div>
+      <div class="metric-row"><span>Phase</span><strong id="lt-phase">—</strong></div>
+      <div class="metric-row"><span>Key Session</span><strong id="lt-key-session">—</strong></div>
+      <div class="metric-row"><span>Weekly Target</span><strong id="lt-weekly">—</strong></div>
+      <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
+      <div class="mini-chart-wrap">
+        <div class="mini-chart-title">CTL — 14-day trend</div>
+        <svg class="mini-chart" viewBox="0 0 300 52" preserveAspectRatio="none" id="ctl-svg">
+          <path class="area" id="ctl-area" d=""/>
+          <path class="path" id="ctl-path" d=""/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PACE STRATEGY TABLE -->
+  <div class="card" id="card-pace">
+    <div class="card-title">Marathon Pace Strategy — Wall Prevention</div>
+    <table class="pace-table" id="pace-table">
+      <thead>
+        <tr>
+          <th>Segment</th>
+          <th>Target Pace</th>
+          <th>Segment Time</th>
+          <th>Elapsed</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="pace-tbody"></tbody>
+    </table>
+    <div id="km32-advisory" class="km32-warn" style="display:none">
+      ⚠️ <span id="km32-text"></span>
+    </div>
+  </div>
+
+  <!-- 4. FUELING SCHEDULE -->
+  <div class="card" id="card-fuel">
+    <div class="card-title">Race-Day Fueling Plan</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Gel Schedule</div>
+        <div class="fuel-timeline" id="gel-timeline"></div>
+      </div>
+      <div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Hydration & Electrolytes</div>
+        <div class="fuel-timeline" id="elec-timeline"></div>
+        <div id="hydration-rules" style="margin-top:14px"></div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:.8rem;font-weight:600;margin-bottom:10px">Pre-Race Protocol</div>
+    <div id="prerace-rules"></div>
+    <div id="km32-fuel-note" style="display:none;margin-top:12px"></div>
+  </div>
+
+  <!-- 6. AI COACHING SUMMARY -->
+  <div class="card" id="card-coaching">
+    <div class="card-title">AI Coaching Insight</div>
+    <div class="coaching-text" id="coaching-text"></div>
+    <div class="coaching-badge">
+      <span>🤖</span>
+      <span id="coaching-source">Powered by StrideIQ coaching engine</span>
+    </div>
+  </div>
+</template>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function el(id) { return document.getElementById(id); }
+
+  function confClass(c) {
+    if (!c) return 'conf-low';
+    const l = c.toLowerCase();
+    return l === 'high' ? 'conf-high' : l === 'medium' ? 'conf-medium' : 'conf-low';
+  }
+
+  function riskClass(r) {
+    if (!r) return 'risk-unknown';
+    return { high: 'risk-high', medium: 'risk-medium', low: 'risk-low' }[r.toLowerCase()] || 'risk-unknown';
+  }
+
+  function tsb_color(tsb) {
+    if (tsb > 5)   return 'lt-green';
+    if (tsb > -10) return 'lt-amber';
+    return 'lt-red';
+  }
+
+  function pct_of(val, max) { return Math.min(100, Math.max(2, (val / max) * 100)).toFixed(1); }
+
+  // ── Build the intelligence DOM ───────────────────────────────────────────
+  function render(data) {
+    const tmpl = document.getElementById('intel-template');
+    const clone = tmpl.content.cloneNode(true);
+    el('intel-content').appendChild(clone);
+
+    const pred  = data.prediction  || {};
+    const ps    = data.pace_strategy || {};
+    const tr    = data.training_recommendations || {};
+    const load  = data.load || {};
+    const wall  = data.wall_analysis || null;
+    const coach = data.coaching_summary || '';
+
+    // ── 1. Race Predictions ──────────────────────────────────────────────
+    const tiles = [
+      { key: '5k',           label: '5K',            fm: false },
+      { key: '10k',          label: '10K',           fm: false },
+      { key: 'half_marathon',label: 'Half Marathon', fm: false },
+      { key: 'marathon',     label: 'Full Marathon', fm: true  },
+    ];
+    const conf    = pred.confidence || 'Low';
+    const distTiles = el('dist-tiles');
+    if (distTiles) {
+      tiles.forEach(({ key, label, fm }) => {
+        const d = ps[key] || {};
+        const ptime = fm ? (pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
+        const div = document.createElement('div');
+        div.className = 'dist-tile' + (fm ? ' fm' : '');
+        let inner = `
+          <div class="label">${label}</div>
+          <div class="time">${ptime}</div>
+          <div class="sub-time">${d.avg_pace ? d.avg_pace + ' avg' : ''}</div>
+          <div><span class="confidence-badge ${confClass(conf)}">${conf}</span></div>
+        `;
+        if (fm && wall && wall.optimal_fm_potential_display) {
+          inner += `<div class="potential">${wall.optimal_fm_potential_display}<span>Aerobic Potential</span></div>`;
+        }
+        div.innerHTML = inner;
+        distTiles.appendChild(div);
+      });
+    }
+    const noteEl = el('pred-note');
+    if (noteEl && pred.note) noteEl.textContent = pred.note;
+
+    // ── 2. Wall Analysis ─────────────────────────────────────────────────
+    const wallEl = el('wall-content');
+    if (wallEl) {
+      if (wall) {
+        const risk = wall.wall_risk || 'unknown';
+        const gap  = wall.vdot_gap != null ? wall.vdot_gap.toFixed(2) : null;
+        const hmv  = wall.hm_vdot  || 0;
+        const fmv  = wall.fm_vdot  || 0;
+        const maxV = Math.max(hmv, fmv, 20) * 1.1;
+        const cost = wall.wall_cost_minutes;
+        const costAbs = cost != null ? Math.abs(cost).toFixed(0) : null;
+
+        let wallHTML = `
+          <div class="wall-header">
+            <span class="wall-risk-badge ${riskClass(risk)}">${risk.toUpperCase()} WALL RISK</span>
+            ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
+          </div>`;
+
+        if (costAbs) {
+          const isHigh = risk === 'high';
+          wallHTML += `
+            <div class="wall-callout ${isHigh ? 'high' : ''}">
+              <div class="callout-num ${risk === 'medium' ? 'medium' : ''}">${costAbs} min</div>
+              <div class="callout-label">estimated time lost to the wall on race day</div>
+            </div>`;
+        }
+
+        if (hmv || fmv) {
+          wallHTML += `
+            <div class="vdot-bar-wrap">
+              <div class="vdot-label-row"><span>VDOT Score</span><span>${maxV.toFixed(0)} max shown</span></div>
+              <div class="vdot-bars">
+                <div class="vdot-row">
+                  <div class="vdot-row-label">HM</div>
+                  <div class="vdot-track"><div class="vdot-fill hm" style="width:${pct_of(hmv,maxV)}%">${hmv ? hmv.toFixed(1) : ''}</div></div>
+                </div>
+                <div class="vdot-row">
+                  <div class="vdot-row-label">FM</div>
+                  <div class="vdot-track"><div class="vdot-fill fm" style="width:${pct_of(fmv,maxV)}%">${fmv ? fmv.toFixed(1) : ''}</div></div>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        const opt = wall.optimal_fm_potential_display || '--';
+        const cur = wall.current_predicted_fm_display || '--';
+        wallHTML += `
+          <div class="fm-compare">
+            <div class="fm-stat">
+              <div class="fs-label">Aerobic Potential</div>
+              <div class="fs-val green">${opt}</div>
+            </div>
+            <div class="fm-stat">
+              <div class="fs-label">Wall-Adjusted Prediction</div>
+              <div class="fs-val red">${cur}</div>
+            </div>
+          </div>`;
+
+        wallEl.innerHTML = wallHTML;
+      } else {
+        wallEl.innerHTML = '<div style="color:var(--muted);font-size:.83rem">Wall analysis requires a marathon PB entered in settings.</div>';
+      }
+    }
+
+    // ── 3. Pace Strategy Table ───────────────────────────────────────────
+    const fmPs = ps.marathon || {};
+    const tbody = el('pace-tbody');
+    if (tbody && fmPs.segments) {
+      fmPs.segments.forEach(seg => {
+        const is32 = seg.start_km === 32.0 || seg.label === 'km 32–42';
+        const tr_el = document.createElement('tr');
+        if (seg.start_km === 32.0) tr_el.className = 'km32';
+        tr_el.innerHTML = `
+          <td class="seg-label">${seg.label}${is32 ? ' <span style="font-size:1rem">⚠️</span>' : ''}</td>
+          <td class="seg-pace">${seg.pace_display || ''}</td>
+          <td>${seg.segment_time || ''}</td>
+          <td>${seg.elapsed_at_end || ''}</td>
+          <td style="font-size:.75rem;color:var(--muted)">${seg.note || ''}</td>
+        `;
+        tbody.appendChild(tr_el);
+      });
+    } else if (tbody && fmPs.splits) {
+      // fallback: simple splits from pace_strategy
+      const ap = fmPs.avg_pace || '';
+      [[0, 10], [10, 21], [21, 32], [32, 42]].forEach(([a, b], i) => {
+        const tr_el = document.createElement('tr');
+        if (a === 32) tr_el.className = 'km32';
+        tr_el.innerHTML = `<td class="seg-label">km ${a}–${b}${a===32?' ⚠️':''}</td><td class="seg-pace">${ap}</td><td>—</td><td>—</td><td style="font-size:.75rem;color:var(--muted)">—</td>`;
+        tbody.appendChild(tr_el);
+      });
+    }
+
+    // km 32 checkpoint advisory
+    const wallPacing = wall && wall.wall_prevention_pacing;
+    const km32adv = el('km32-advisory');
+    const km32txt = el('km32-text');
+    if (km32adv && km32txt && wallPacing && wallPacing.km_32_checkpoint) {
+      const ck = wallPacing.km_32_checkpoint;
+      km32txt.textContent = `${ck.description} If feeling strain: ${ck.if_strain}`;
+      km32adv.style.display = 'flex';
+    }
+
+    // ── 4. Fueling Schedule ──────────────────────────────────────────────
+    const fueling = wall && wall.fueling_plan;
+    if (fueling) {
+      const gelTL = el('gel-timeline');
+      if (gelTL && fueling.gel_schedule) {
+        fueling.gel_schedule.forEach((g, i) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-event';
+          div.dataset.icon = '🍬';
+          div.innerHTML = `
+            <div class="fe-time">${g.elapsed} · ~km ${g.approx_km}</div>
+            <div class="fe-label">Gel #${g.gel}</div>
+            <div class="fe-note">${g.note}</div>`;
+          gelTL.appendChild(div);
+        });
+        // Summary
+        const sumDiv = document.createElement('div');
+        sumDiv.className = 'fuel-rule';
+        sumDiv.innerHTML = `<div class="fr-icon">📊</div><div class="fr-text"><strong>${fueling.gel_count} gels total · ~${fueling.approx_carbs_per_hour_actual_g}g carbs/hr</strong>${fueling.gel_note}</div>`;
+        gelTL.parentNode.appendChild(sumDiv);
+      }
+
+      const elecTL = el('elec-timeline');
+      if (elecTL && fueling.electrolyte_stops) {
+        fueling.electrolyte_stops.forEach(e => {
+          const div = document.createElement('div');
+          div.className = 'fuel-event';
+          div.dataset.icon = '💧';
+          div.innerHTML = `
+            <div class="fe-time">${e.elapsed} · km ${e.km}</div>
+            <div class="fe-label">Electrolytes</div>
+            <div class="fe-note">${e.action}</div>`;
+          elecTL.appendChild(div);
+        });
+      }
+
+      const hydRules = el('hydration-rules');
+      if (hydRules && fueling.hydration) {
+        const h = fueling.hydration;
+        [
+          { icon: '💧', text: h.every_aid_station },
+          { icon: '⚡', text: h.electrolytes },
+          { icon: '⚠️', text: h.warning },
+        ].forEach(({ icon, text }) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-rule';
+          div.innerHTML = `<div class="fr-icon">${icon}</div><div class="fr-text">${text}</div>`;
+          hydRules.appendChild(div);
+        });
+      }
+
+      const preRace = el('prerace-rules');
+      if (preRace && fueling.pre_race_protocol) {
+        const pr = fueling.pre_race_protocol;
+        [
+          ['🌙', 'Night Before', pr.night_before],
+          ['🌅', 'Race Morning', pr.morning_of],
+          ['⏱️', 'Final 30 Min', pr.final_30_min],
+        ].forEach(([icon, label, text]) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-rule';
+          div.innerHTML = `<div class="fr-icon">${icon}</div><div class="fr-text"><strong>${label}</strong>${text}</div>`;
+          preRace.appendChild(div);
+        });
+      }
+
+      const km32FuelNote = el('km32-fuel-note');
+      if (km32FuelNote && fueling.km_32_fueling_note) {
+        km32FuelNote.innerHTML = `<div class="km32-warn">⚠️ ${fueling.km_32_fueling_note}</div>`;
+        km32FuelNote.style.display = 'block';
+      }
+    } else {
+      const cardFuel = el('card-fuel');
+      if (cardFuel) {
+        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div style="color:var(--muted);font-size:.83rem">Fueling plan available once a marathon PB is saved in settings.</div>';
+      }
+    }
+
+    // ── 5. Training Load ─────────────────────────────────────────────────
+    const ltCtl  = el('lt-ctl');
+    const ltAtl  = el('lt-atl');
+    const ltTsb  = el('lt-tsb');
+    const ltPhase = el('lt-phase');
+    const ltKey  = el('lt-key-session');
+    const ltWeekly = el('lt-weekly');
+    const ltTrend  = el('lt-trend');
+
+    if (ltCtl)    ltCtl.textContent = (load.ctl || tr.ctl || 0).toFixed(1);
+    if (ltAtl)    ltAtl.textContent = (load.atl || tr.atl || 0).toFixed(1);
+    const tsbVal  = load.tsb != null ? load.tsb : (tr.tsb || 0);
+    if (ltTsb) {
+      ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
+      ltTsb.className = 'lt-val ' + tsb_color(tsbVal);
+    }
+    if (ltPhase)   ltPhase.textContent  = tr.phase_label || '—';
+    if (ltKey && tr.key_workout)   ltKey.textContent = tr.key_workout.name + ' — ' + tr.key_workout.description;
+    if (ltWeekly)  ltWeekly.textContent = tr.weekly_target_km ? tr.weekly_target_km + ' km target this week' : '—';
+    if (ltTrend)   ltTrend.textContent  = load.fitness_trend || '—';
+
+    // Mini CTL chart
+    const ctlSeries = load.ctl_series || [];
+    if (ctlSeries.length > 1) {
+      const vals = ctlSeries.map(p => +p.value);
+      const min  = Math.min(...vals);
+      const max  = Math.max(...vals);
+      const rng  = Math.max(1, max - min);
+      const W    = 300, H = 52, PAD = 4;
+      const pts  = vals.map((v, i) => {
+        const x = i * (W / (vals.length - 1));
+        const y = H - PAD - ((v - min) / rng) * (H - PAD * 2);
+        return [x.toFixed(1), y.toFixed(1)];
+      });
+      const pathD = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+      const areaD = `${pathD} L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`;
+      const pathEl = el('ctl-path');
+      const areaEl = el('ctl-area');
+      if (pathEl) pathEl.setAttribute('d', pathD);
+      if (areaEl) areaEl.setAttribute('d', areaD);
+    }
+
+    // ── 6. AI Coaching Summary ───────────────────────────────────────────
+    const coachText = el('coaching-text');
+    if (coachText) coachText.textContent = coach || 'Coaching insight loading…';
+  }
+
+  // ── Fetch & orchestrate ──────────────────────────────────────────────────
+  function showError(msg) {
+    const errEl = el('intel-error');
+    if (errEl) {
+      errEl.innerHTML = `<div class="error-box">⚠️ ${msg}</div>`;
+      errEl.style.display = 'block';
+    }
+    const loadEl = el('intel-loading');
+    if (loadEl) loadEl.style.display = 'none';
+  }
+
+  fetch('/api/dashboard')
+    .then(r => {
+      if (!r.ok) return r.json().then(j => { throw new Error(j.message || `HTTP ${r.status}`); });
+      return r.json();
+    })
+    .then(data => {
+      const loadEl = el('intel-loading');
+      const contentEl = el('intel-content');
+      if (loadEl) loadEl.style.display = 'none';
+      if (contentEl) contentEl.style.display = 'block';
+      render(data);
+    })
+    .catch(err => {
+      showError('Could not load intelligence data: ' + err.message);
+    });
+
+})();
+</script>
 </body>
 </html>

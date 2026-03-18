@@ -21,3 +21,13 @@
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: "gpt-4.1-mini"
+      - key: STRAVA_SYNC_COOLDOWN_MIN
+        value: "15"
+      - key: STRAVA_SCOPES
+        value: "activity:read_all,profile:read_all"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_HTTPONLY
+        value: "true"

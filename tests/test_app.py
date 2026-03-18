@@ -83,8 +83,8 @@ def test_onboarding_then_dashboard(client):
 
     dash = client.get("/", follow_redirects=False)
     assert dash.status_code == 200
-    assert b"Marathon Projection" in dash.data
-    assert b"Goal Time" in dash.data
+    assert b"StrideIQ" in dash.data
+    assert b"Weekly Plan" in dash.data
 
 
 def test_oauth_login_redirect(client):
