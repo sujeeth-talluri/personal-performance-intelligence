@@ -18,22 +18,24 @@ def test_plan_engine_caps_completion_and_tracks_extra_distance():
     assert extra == 2.3
 
 
-def test_plan_engine_respects_long_run_share():
+def test_plan_engine_advances_long_run_to_next_ladder_step():
+    # With longest=18.3km completed, ladder should target 21km next step.
+    # The CTL-based template does not cap the long run by weekly volume.
     weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
     long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
     long_target = float(plan[6]["target_km"])
-    assert long_target <= planned_km * 0.35 + 0.2
+    assert long_target >= 18.3  # never regresses below current longest
+    assert long_target >= 21.0  # advances to next step in ladder
 
 
-def test_base_plan_expands_week_to_support_long_run_share():
+def test_base_plan_targets_next_milestone_regardless_of_weekly_volume():
+    # Long run advances to next milestone (21km) even if weekly target < long/0.35.
     weekly_goal = {"weekly_goal_km": 40.0, "phase": "base", "rebuild_mode": False, "weeks_to_race": 23.0, "race_distance_km": 42.195}
     long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
     long_target = float(plan[6]["target_km"])
-    assert planned_km >= round(long_target / 0.35, 1) - 0.2
+    assert long_target >= 21.0
 
 
 def test_base_plan_does_not_regress_long_run_for_established_runner():
@@ -126,7 +128,9 @@ def test_taper_plan_reduces_long_run_and_keeps_specificity():
     weekly_goal = {"weekly_goal_km": 40.0, "phase": "taper", "rebuild_mode": False}
     long_run = {"longest_km": 30.0, "next_milestone_km": 32.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    assert plan[1]["session"] == "Marathon Pace Run"
+    # Fixed template: TUE is always Tempo Run regardless of phase
+    assert plan[1]["session"] == "Tempo Run"
+    # Taper phase still cuts the long run down
     assert plan[6]["target_km"] <= 20.0
 
 

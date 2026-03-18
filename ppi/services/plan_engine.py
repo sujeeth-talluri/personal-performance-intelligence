@@ -154,15 +154,43 @@ def select_best_run_for_session(run_acts, session_name, weekly_goal, run_pace_fn
 
 
 def build_weekly_plan_template(weekly_goal, long_run):
-    base_weekly_target = max(18.0, float(weekly_goal.get("weekly_goal_km", 18.0)))
-    weekly_target = base_weekly_target
+    """Build a fixed 7-day training template.
+
+    Weekly structure (Mon=0 … Sun=6):
+        MON: Easy Run    — weekly_target × 0.20
+        TUE: Tempo Run   — weekly_target × 0.15  (marathon pace + 20 s/km)
+        WED: Strength    — gym / cross-training
+        THU: Easy Run    — weekly_target × 0.20
+        FRI: Strength    — gym / cross-training
+        SAT: Easy Run    — weekly_target × 0.20
+        SUN: Long Run    — next ladder distance
+
+    Weekly target is driven by CTL (chronic training load):
+        CTL < 30   →  45 km
+        CTL 30–45  →  55 km
+        CTL 45–60  →  65 km
+        CTL ≥ 60   →  75 km
+    """
+    ctl = float(weekly_goal.get("ctl_proxy") or 0.0)
+    if ctl < 30:
+        weekly_target = 45.0
+    elif ctl < 45:
+        weekly_target = 55.0
+    elif ctl < 60:
+        weekly_target = 65.0
+    else:
+        weekly_target = 75.0
+
     phase = weekly_goal.get("phase", "build")
     rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
-    cycle_week = weekly_goal.get("cycle_week")
     longest_km = float(long_run.get("longest_km") or 0.0)
     next_milestone = float(long_run.get("next_milestone_km") or max(22.0, min(32.0, longest_km + 2.0)))
 
-    long_run_progress_target = _next_long_run_target(
+    # Long run target from progression ladder — not capacity-capped.
+    # The CTL-based weekly_target drives easy/tempo volume only; the long
+    # run is determined purely by the progression ladder so it always
+    # advances to the next milestone regardless of total weekly km.
+    long_target = _next_long_run_target(
         "rebuild" if rebuild_mode else phase,
         longest_km,
         next_milestone,
@@ -170,141 +198,18 @@ def build_weekly_plan_template(weekly_goal, long_run):
         weekly_goal,
         apply_capacity_cap=False,
     )
-    if phase != "taper":
-        expansion_factor = {
-            "base": 1.25,
-            "build": 1.20,
-            "peak": 1.15,
-            "recovery": 1.0,
-            "rebuild": 1.0,
-        }.get(phase, 1.15)
-        target_needed_for_long_run = round(long_run_progress_target / 0.35, 1)
-        max_allowed_expansion = round(base_weekly_target * expansion_factor, 1)
-        weekly_target = max(weekly_target, min(target_needed_for_long_run, max_allowed_expansion))
-        if phase in {"base", "build", "peak"} and longest_km >= 16.0:
-            weekly_target = max(weekly_target, round(longest_km / 0.35, 1))
 
-    def phase_targets(target):
-        long_target_hint = _next_long_run_target(
-            "rebuild" if rebuild_mode else phase,
-            longest_km,
-            next_milestone,
-            target,
-            weekly_goal,
-            apply_capacity_cap=True,
-        )
-        if rebuild_mode:
-            return {
-                "long_target": max(14.0, min(long_target_hint, target * 0.32)),
-                "quality_target": max(6.0, min(8.0, round(target * 0.12, 1))),
-                "aerobic_target": max(6.0, min(10.0, round(target * 0.16, 1))),
-                "medium_long_target": max(0.0, round(target * 0.14, 1)),
-                "easy_one": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "easy_two": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "tuesday_session": "Aerobic Run",
-                "thursday_session": "Aerobic Run",
-                "friday_session": "Easy Run",
-                "saturday_session": "Easy Run",
-            }
-        if phase == "recovery":
-            cutback_long = max(14.0, min(long_target_hint, 22.0))
-            return {
-                "long_target": cutback_long,
-                "quality_target": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "aerobic_target": max(6.0, min(10.0, round(target * 0.15, 1))),
-                "medium_long_target": max(0.0, round(min(cutback_long * 0.6, target * 0.12), 1)),
-                "easy_one": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "easy_two": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "tuesday_session": "Aerobic Run",
-                "thursday_session": "Steady Run",
-                "friday_session": "Easy Run",
-                "saturday_session": "Easy Run",
-            }
-        if phase == "taper":
-            taper_long = long_target_hint
-            return {
-                "long_target": taper_long,
-                "quality_target": max(6.0, min(10.0, round(target * 0.14, 1))),
-                "aerobic_target": max(6.0, min(10.0, round(target * 0.12, 1))),
-                "medium_long_target": 0.0,
-                "easy_one": max(5.0, min(8.0, round(target * 0.10, 1))),
-                "easy_two": max(4.0, min(6.0, round(target * 0.08, 1))),
-                "tuesday_session": "Marathon Pace Run",
-                "thursday_session": "Recovery Run",
-                "friday_session": "Recovery Run",
-                "saturday_session": "Easy Run",
-            }
-        if phase == "base":
-            return {
-                "long_target": max(16.0, min(long_target_hint, target * 0.35)),
-                "quality_target": max(6.0, min(8.0, round(target * 0.12, 1))),
-                "aerobic_target": max(8.0, min(14.0, round(target * 0.18, 1))),
-                "medium_long_target": max(8.0, min(16.0, round(target * 0.18, 1))),
-                "easy_one": max(6.0, min(10.0, round(target * 0.10, 1))),
-                "easy_two": max(6.0, min(10.0, round(target * 0.10, 1))),
-                "tuesday_session": "Aerobic Run",
-                "thursday_session": "Steady Run",
-                "friday_session": "Easy Run",
-                "saturday_session": "Medium Long Run",
-            }
-        if phase == "peak":
-            return {
-                "long_target": max(20.0, min(long_target_hint, target * 0.35)),
-                "quality_target": max(8.0, min(16.0, round(target * 0.16, 1))),
-                "aerobic_target": max(8.0, min(14.0, round(target * 0.14, 1))),
-                "medium_long_target": max(12.0, min(max(16.0, round((long_target_hint * 0.6), 1)), round(target * 0.22, 1))),
-                "easy_one": max(6.0, min(10.0, round(target * 0.08, 1))),
-                "easy_two": max(6.0, min(10.0, round(target * 0.08, 1))),
-                "tuesday_session": "Speed Session",
-                "thursday_session": "Marathon Pace Run",
-                "friday_session": "Recovery Run",
-                "saturday_session": "Medium Long Run",
-            }
-        return {
-            "long_target": max(18.0, min(long_target_hint, target * 0.35)),
-            "quality_target": max(8.0, min(14.0, round(target * 0.16, 1))),
-            "aerobic_target": max(8.0, min(14.0, round(target * 0.16, 1))),
-            "medium_long_target": max(10.0, min(max(14.0, round((long_target_hint * 0.55), 1)), round(target * 0.20, 1))),
-            "easy_one": max(6.0, min(10.0, round(target * 0.09, 1))),
-            "easy_two": max(6.0, min(10.0, round(target * 0.09, 1))),
-            "tuesday_session": "Speed Session",
-            "thursday_session": "Marathon Pace Run",
-            "friday_session": "Easy Run",
-            "saturday_session": "Medium Long Run",
-        }
+    easy_km  = round(weekly_target * 0.20, 1)
+    tempo_km = round(weekly_target * 0.15, 1)
 
-    targets = phase_targets(weekly_target)
-    long_target = targets["long_target"]
-    quality_target = targets["quality_target"]
-    aerobic_target = targets["aerobic_target"]
-    medium_long_target = targets["medium_long_target"]
-    easy_one = targets["easy_one"]
-    easy_two = targets["easy_two"]
-    tuesday_session = targets["tuesday_session"]
-    thursday_session = targets["thursday_session"]
-    friday_session = targets["friday_session"]
-    saturday_session = targets["saturday_session"]
-    planned_without_second_easy = long_target + quality_target + aerobic_target + medium_long_target + easy_one
-    remaining = max(easy_two, weekly_target - planned_without_second_easy)
-    easy_two = max(4.0 if phase == "taper" else 6.0, round(remaining, 1))
-    required_run_total = weekly_target if phase == "taper" else max(weekly_target, round(long_target / 0.35, 1))
-    planned_run_total = long_target + quality_target + aerobic_target + medium_long_target + easy_one + easy_two
-    if phase != "taper" and planned_run_total < required_run_total:
-        shortfall = round(required_run_total - planned_run_total, 1)
-        if saturday_session == "Medium Long Run":
-            medium_long_target = round(medium_long_target + (shortfall * 0.55), 1)
-            easy_two = round(easy_two + (shortfall * 0.45), 1)
-        else:
-            aerobic_target = round(aerobic_target + (shortfall * 0.5), 1)
-            easy_two = round(easy_two + (shortfall * 0.5), 1)
     template = {
-        0: {"workout_type": "RUN", "session": "Easy Run", "target_km": easy_one, **plan_meta_for_session("Easy Run")},
-        1: {"workout_type": "RUN", "session": tuesday_session, "target_km": aerobic_target if tuesday_session == "Aerobic Run" else quality_target, **plan_meta_for_session(tuesday_session)},
-        2: {"workout_type": "STRENGTH", "session": "Strength", "target_km": None, **plan_meta_for_session("Strength")},
-        3: {"workout_type": "RUN", "session": thursday_session, "target_km": quality_target, **plan_meta_for_session(thursday_session)},
-        4: {"workout_type": "RUN" if friday_session != "Strength" else "STRENGTH", "session": friday_session, "target_km": easy_two if friday_session != "Strength" else None, **plan_meta_for_session(friday_session)},
-        5: {"workout_type": "RUN", "session": saturday_session, "target_km": medium_long_target if saturday_session == "Medium Long Run" else easy_two, **plan_meta_for_session(saturday_session)},
-        6: {"workout_type": "RUN", "session": "Long Run", "target_km": long_target, **plan_meta_for_session("Long Run")},
+        0: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
+        1: {"workout_type": "RUN",      "session": "Tempo Run", "target_km": tempo_km,  **plan_meta_for_session("Tempo Run")},
+        2: {"workout_type": "STRENGTH", "session": "Strength",  "target_km": None,      **plan_meta_for_session("Strength")},
+        3: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
+        4: {"workout_type": "STRENGTH", "session": "Strength",  "target_km": None,      **plan_meta_for_session("Strength")},
+        5: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
+        6: {"workout_type": "RUN",      "session": "Long Run",  "target_km": long_target, **plan_meta_for_session("Long Run")},
     }
     return apply_race_week_overrides(template, weekly_goal)
 

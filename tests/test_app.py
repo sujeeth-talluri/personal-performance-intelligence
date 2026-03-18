@@ -128,10 +128,11 @@ def test_long_run_ladder_requires_true_milestone_completion():
     assert state["next_step"] == 21
 
 
-def test_weekly_plan_keeps_long_run_within_35_percent_of_week():
+def test_weekly_plan_advances_long_run_to_next_ladder_step():
+    # CTL-based template does not cap long run by weekly volume —
+    # it always advances to the next ladder milestone.
     weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
     long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
     plan = _weekly_plan_template(weekly_goal, long_run)
-    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
     long_target = float(plan[6]["target_km"])
-    assert long_target <= planned_km * 0.35 + 0.2
+    assert long_target >= 21.0  # next step after 18km in ladder
