@@ -413,12 +413,12 @@
 
         <div class="divider"></div>
         <h2 style="margin-bottom:12px">Long Run Ladder</h2>
-        {# ±10% rule: "done" only if a run of at least 90% of that distance exists #}
+        {# ±5% rule: "done" only if a run of at least 95% of that distance exists #}
         {% set lk = long_run.longest_km %}
-        {% set d21 = 21 * 0.9 %}
-        {% set d24 = 24 * 0.9 %}
-        {% set d28 = 28 * 0.9 %}
-        {% set d32 = 32 * 0.9 %}
+        {% set d21 = 21 * 0.95 %}
+        {% set d24 = 24 * 0.95 %}
+        {% set d28 = 28 * 0.95 %}
+        {% set d32 = 32 * 0.95 %}
         <div class="ladder">
           <div class="ladder-step {{ 'done' if lk >= d21 else 'next' }}">
             {% if lk >= d21 %}✓{% else %}NEXT{% endif %}<span class="km">21 km</span>

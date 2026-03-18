@@ -27,6 +27,7 @@ from .prediction_engine import (
     marathon_prediction_seconds as service_marathon_prediction_seconds,
     marathon_wall_analysis as service_marathon_wall_analysis,
     riegel_projection as service_riegel_projection,
+    vdot_from_race as service_vdot_from_race,
     vo2max_estimate_from_runs as service_vo2max_estimate_from_runs,
     vo2max_marathon_projection as service_vo2max_marathon_projection,
 )
@@ -579,7 +580,10 @@ def build_goal_context(goal, today_local=None):
         "elevation_type": goal.elevation_type,
         "elevation_factor": _elevation_factor(goal.elevation_type),
         "projection_label": f"{goal.race_name} Projection ({goal.elevation_type.title()} Course)",
-        "personal_best": goal.personal_best,  # H:MM:SS string or None
+        "personal_best": goal.personal_best,  # FM PB H:MM:SS string or None
+        "pb_hm":  getattr(goal, "pb_hm",  None),
+        "pb_10k": getattr(goal, "pb_10k", None),
+        "pb_5k":  getattr(goal, "pb_5k",  None),
     }
 
 
@@ -615,6 +619,32 @@ def _safe_pb_seconds(pb_str: str | None, distance_km: float) -> float | None:
         return _hms_to_seconds(pb_str)
     except (ValueError, AttributeError):
         return None
+
+
+def _parse_time_str(pb_str: str | None) -> float | None:
+    """Parse H:MM:SS or MM:SS time string to seconds (no distance restriction)."""
+    if not pb_str:
+        return None
+    try:
+        return _hms_to_seconds(pb_str)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _best_pb_vdot(goal_ctx: dict) -> float | None:
+    """Return the highest VDOT derivable from any stored personal best."""
+    # Race distances in metres (mirrors prediction_engine constants)
+    _D = {"pb_hm": 21_097.5, "pb_10k": 10_000.0, "pb_5k": 5_000.0, "personal_best": 42_195.0}
+    best = None
+    for field, dist_m in _D.items():
+        pb_str = goal_ctx.get(field)
+        sec = _parse_time_str(pb_str)
+        if not sec or sec <= 0:
+            continue
+        v = service_vdot_from_race(dist_m, sec / 60.0)
+        if v and v >= 20:
+            best = max(best, v) if best is not None else v
+    return round(best, 2) if best is not None else None
 
 
 def _metrics_layer(user_id, goal_ctx, user_timezone=None):
@@ -1003,6 +1033,10 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "fri_message": fri_message,
         },
         "personal_best_fm_seconds": _safe_pb_seconds(goal_ctx.get("personal_best"), goal_ctx["distance_km"]),
+        "pb_hm_seconds":  _parse_time_str(goal_ctx.get("pb_hm")),
+        "pb_10k_seconds": _parse_time_str(goal_ctx.get("pb_10k")),
+        "pb_5k_seconds":  _parse_time_str(goal_ctx.get("pb_5k")),
+        "best_pb_vdot":   _best_pb_vdot(goal_ctx),
         "goal": {
             "goal_seconds": goal_ctx["goal_seconds"],
             "distance_km": goal_ctx["distance_km"],

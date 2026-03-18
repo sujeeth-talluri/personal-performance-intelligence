@@ -33,7 +33,10 @@
               <option value='mountain' {% if goal and goal.elevation_type=='mountain' %}selected{% endif %}>Mountain</option>
             </select>
           </div>
-          <div class='row'><label>Current PB (optional)</label><input name='current_pb' value='{{ goal.personal_best if goal else "" }}'></div>
+          <div class='row'><label>Marathon PB (optional, HH:MM:SS)</label><input name='current_pb' placeholder='e.g. 4:23:00' value='{{ goal.personal_best if goal else "" }}'></div>
+          <div class='row'><label>Half Marathon PB (optional)</label><input name='pb_hm'  placeholder='e.g. 1:40:40' value='{{ goal.pb_hm  if goal else "" }}'></div>
+          <div class='row'><label>10K PB (optional)</label><input name='pb_10k' placeholder='e.g. 47:13'  value='{{ goal.pb_10k if goal else "" }}'></div>
+          <div class='row'><label>5K PB (optional)</label><input name='pb_5k'  placeholder='e.g. 23:20'  value='{{ goal.pb_5k  if goal else "" }}'></div>
         </div>
         <datalist id='race-distance-options'>
           <option value='5'>5K</option>

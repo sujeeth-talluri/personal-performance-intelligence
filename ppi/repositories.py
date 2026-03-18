@@ -34,7 +34,8 @@ def update_user_name(user_id, name):
         _commit()
 
 
-def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation_type, personal_best):
+def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation_type,
+              personal_best, pb_5k=None, pb_10k=None, pb_hm=None):
     goal = Goal.query.filter_by(user_id=user_id).order_by(Goal.id.desc()).first()
     race_date_obj = datetime.strptime(race_date, "%Y-%m-%d").date()
 
@@ -45,6 +46,9 @@ def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation
         goal.race_date = race_date_obj
         goal.elevation_type = elevation_type
         goal.personal_best = personal_best
+        goal.pb_5k  = pb_5k  or None
+        goal.pb_10k = pb_10k or None
+        goal.pb_hm  = pb_hm  or None
     else:
         goal = Goal(
             user_id=user_id,
@@ -54,6 +58,9 @@ def save_goal(user_id, race_name, race_distance, goal_time, race_date, elevation
             race_date=race_date_obj,
             elevation_type=elevation_type,
             personal_best=personal_best,
+            pb_5k=pb_5k   or None,
+            pb_10k=pb_10k or None,
+            pb_hm=pb_hm   or None,
         )
         db.session.add(goal)
 

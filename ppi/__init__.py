@@ -1,4 +1,5 @@
 from flask import Flask, request
+from sqlalchemy import text
 
 from .config import Config
 from .extensions import db
@@ -31,6 +32,16 @@ def create_app(config_object=Config):
             return
         with app.app_context():
             db.create_all()
+            # Migrate: add per-distance PB columns (no-op if they already exist)
+            for col in ("pb_5k", "pb_10k", "pb_hm"):
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(text(
+                            f"ALTER TABLE goals ADD COLUMN IF NOT EXISTS {col} VARCHAR(16)"
+                        ))
+                        conn.commit()
+                except Exception:
+                    pass
         app.extensions["schema_ready"] = True
 
     if app.config.get("TESTING"):

@@ -30,6 +30,9 @@ class Goal(db.Model):
     goal_time = db.Column(db.String(16), nullable=False)
     elevation_type = db.Column(db.String(24), nullable=False)
     personal_best = db.Column(db.String(16), nullable=True)
+    pb_5k  = db.Column(db.String(16), nullable=True)
+    pb_10k = db.Column(db.String(16), nullable=True)
+    pb_hm  = db.Column(db.String(16), nullable=True)
 
 
 class StravaToken(db.Model):

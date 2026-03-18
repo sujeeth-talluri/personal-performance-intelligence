@@ -984,6 +984,9 @@ def onboarding():
         goal_time = request.form.get("goal_time", "").strip()
         elevation_type = request.form.get("elevation_type", "moderate").strip()
         personal_best = request.form.get("current_pb", "").strip()
+        pb_5k  = request.form.get("pb_5k",  "").strip()
+        pb_10k = request.form.get("pb_10k", "").strip()
+        pb_hm  = request.form.get("pb_hm",  "").strip()
 
         try:
             race_distance = float(request.form.get("race_distance", "0"))
@@ -1001,6 +1004,9 @@ def onboarding():
                     race_date=race_date,
                     elevation_type=elevation_type,
                     personal_best=personal_best,
+                    pb_5k=pb_5k,
+                    pb_10k=pb_10k,
+                    pb_hm=pb_hm,
                 )
                 return redirect(url_for("web.dashboard"))
             except Exception:
@@ -1022,6 +1028,9 @@ def settings():
         goal_time = request.form.get("goal_time", "").strip()
         elevation_type = request.form.get("elevation_type", "moderate").strip()
         personal_best = request.form.get("current_pb", "").strip()
+        pb_5k  = request.form.get("pb_5k",  "").strip()
+        pb_10k = request.form.get("pb_10k", "").strip()
+        pb_hm  = request.form.get("pb_hm",  "").strip()
 
         try:
             race_distance = float(request.form.get("race_distance", "0"))
@@ -1038,6 +1047,9 @@ def settings():
                     race_date=race_date,
                     elevation_type=elevation_type,
                     personal_best=personal_best,
+                    pb_5k=pb_5k,
+                    pb_10k=pb_10k,
+                    pb_hm=pb_hm,
                 )
                 return redirect(url_for("web.dashboard"))
             except Exception:
