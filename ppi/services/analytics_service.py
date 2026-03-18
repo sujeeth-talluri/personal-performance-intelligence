@@ -26,6 +26,7 @@ from .prediction_engine import (
     fit_half_equivalent as service_fit_half_equivalent,
     marathon_prediction_seconds as service_marathon_prediction_seconds,
     marathon_wall_analysis as service_marathon_wall_analysis,
+    predict_all_distances as service_predict_all_distances,
     riegel_projection as service_riegel_projection,
     vdot_from_race as service_vdot_from_race,
     vo2max_estimate_from_runs as service_vo2max_estimate_from_runs,
@@ -1188,6 +1189,11 @@ def performance_intelligence(user_id, user_timezone=None):
     metrics = _metrics_layer(user_id, goal_ctx, user_timezone=user_timezone)
     prediction = _prediction_layer(user_id, goal_ctx, metrics)
 
+    # Per-distance predictions via VDOT anchor (5K/10K/HM/FM).
+    # Uses PB_FLOORS as a guaranteed floor so predictions are never
+    # dragged below demonstrated fitness by sparse Strava data.
+    all_distances = service_predict_all_distances(metrics, today_local)
+
     # Wall analysis — marathon only
     wall_analysis = None
     if goal_ctx["distance_km"] >= 40.0:
@@ -1402,6 +1408,7 @@ def performance_intelligence(user_id, user_timezone=None):
             "progress": min(100, int((weekly["completed_km"] / max(1.0, weekly["weekly_goal_km"])) * 100)),
         },
         "wall_analysis": wall_analysis,
+        "all_distances": all_distances,
     }
 def weekly_training_summary(user_id):
     metrics = fetch_metrics(user_id)

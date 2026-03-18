@@ -134,15 +134,21 @@ def _pace_strategy_for_distance(key: str, pred_secs: float, dist_km: float) -> d
     }
 
 
-def build_pace_strategy(predicted_marathon_seconds: float | None) -> dict:
-    """Derive pace strategy for all four distances from the marathon prediction."""
+def build_pace_strategy(predicted_marathon_seconds: float | None, all_distances: dict | None = None) -> dict:
+    """Derive pace strategy for all four distances.
+
+    Uses VDOT-accurate per-distance predictions from *all_distances* when
+    available (anchored to the best known PB floor), falling back to Riegel
+    projection from the marathon time only when those are absent.
+    """
     if not predicted_marathon_seconds or predicted_marathon_seconds <= 0:
         return {}
 
     fm = predicted_marathon_seconds
-    hm = _riegel(fm, 42.195, 21.0975)
-    ten = _riegel(fm, 42.195, 10.0)
-    five = _riegel(fm, 42.195, 5.0)
+    ad = all_distances or {}
+    hm  = float(ad.get("half_marathon") or 0) or _riegel(fm, 42.195, 21.0975)
+    ten = float(ad.get("10k")           or 0) or _riegel(fm, 42.195, 10.0)
+    five= float(ad.get("5k")            or 0) or _riegel(fm, 42.195, 5.0)
 
     return {
         "marathon":      _pace_strategy_for_distance("marathon",      fm,   42.195),
@@ -363,7 +369,10 @@ def generate_coaching_output(intel: dict, weekly_plan: list) -> dict:
         }
     """
     race_prediction = _build_race_prediction(intel)
-    pace_strategy = build_pace_strategy(race_prediction.get("predicted_seconds"))
+    pace_strategy = build_pace_strategy(
+        race_prediction.get("predicted_seconds"),
+        all_distances=intel.get("all_distances"),
+    )
     training_recs = _build_training_recommendations(intel)
 
     api_key = None
