@@ -300,6 +300,14 @@
         <strong>{{ user.name }}</strong>
         Signed in
       </div>
+      {% if session.get('last_sync_at') %}
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px;line-height:1.4">
+          Last synced<br>
+          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:#64748b">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
+        </div>
+      {% else %}
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px">Not yet synced</div>
+      {% endif %}
       <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
     </div>
   </aside>
@@ -311,19 +319,18 @@
     <div class="hero">
       <div class="hero-left">
         <h1>{{ intel.goal.race_name }}</h1>
-        <div class="sub">
+        <div class="sub" style="margin-top:5px">
           Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
-          &nbsp;·&nbsp; Target {{ intel.goal.target_pace }}
           &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
           &nbsp;·&nbsp; {{ today_date }}
         </div>
-        <div class="sub" style="margin-top:4px">
-          Phase: {{ weekly_goal.display_phase|title }} &nbsp;·&nbsp;
-          Freshness: {{ intel.fatigue_balance }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})
+        <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
+          Phase: {{ weekly_goal.display_phase|title }}
+          &nbsp;·&nbsp; Freshness: {{ intel.fatigue_balance }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})
+          &nbsp;·&nbsp; Target pace {{ intel.goal.target_pace }}
         </div>
       </div>
       <div class="hero-right">
-        <span class="hero-badge">{{ intel.marathon_readiness_status }}</span>
         <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
         <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
         <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
@@ -406,22 +413,27 @@
 
         <div class="divider"></div>
         <h2 style="margin-bottom:12px">Long Run Ladder</h2>
+        {# ±10% rule: "done" only if a run of at least 90% of that distance exists #}
         {% set lk = long_run.longest_km %}
+        {% set d21 = 21 * 0.9 %}
+        {% set d24 = 24 * 0.9 %}
+        {% set d28 = 28 * 0.9 %}
+        {% set d32 = 32 * 0.9 %}
         <div class="ladder">
-          <div class="ladder-step {{ 'done' if lk >= 21 else ('next' if lk < 21 else '') }}">
-            {% if lk >= 21 %}✓{% else %}NEXT{% endif %}<span class="km">21 km</span>
+          <div class="ladder-step {{ 'done' if lk >= d21 else 'next' }}">
+            {% if lk >= d21 %}✓{% else %}NEXT{% endif %}<span class="km">21 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 24 else ('next' if lk >= 21 else '') }}">
-            {% if lk >= 24 %}✓{% elif lk >= 21 %}NEXT{% endif %}<span class="km">24 km</span>
+          <div class="ladder-step {{ 'done' if lk >= d24 else ('next' if lk >= d21 else '') }}">
+            {% if lk >= d24 %}✓{% elif lk >= d21 %}NEXT{% endif %}<span class="km">24 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 28 else ('next' if lk >= 24 else '') }}">
-            {% if lk >= 28 %}✓{% elif lk >= 24 %}NEXT{% endif %}<span class="km">28 km</span>
+          <div class="ladder-step {{ 'done' if lk >= d28 else ('next' if lk >= d24 else '') }}">
+            {% if lk >= d28 %}✓{% elif lk >= d24 %}NEXT{% endif %}<span class="km">28 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 32 else ('next' if lk >= 28 else '') }}">
-            {% if lk >= 32 %}✓{% elif lk >= 28 %}NEXT{% endif %}<span class="km">32 km</span>
+          <div class="ladder-step {{ 'done' if lk >= d32 else ('next' if lk >= d28 else '') }}">
+            {% if lk >= d32 %}✓{% elif lk >= d28 %}NEXT{% endif %}<span class="km">32 km</span>
           </div>
         </div>
-        <div style="font-size:.75rem;color:var(--muted)">Latest long run: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
+        <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km &nbsp;·&nbsp; Latest: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
       </div>
     </div>
 
@@ -486,7 +498,6 @@
       </div>
       <div class="metric-row"><span>Phase</span><strong id="lt-phase">—</strong></div>
       <div class="metric-row"><span>Key Session</span><strong id="lt-key-session">—</strong></div>
-      <div class="metric-row"><span>Weekly Target</span><strong id="lt-weekly">—</strong></div>
       <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
       <div class="mini-chart-wrap">
         <div class="mini-chart-title">CTL — 14-day trend</div>
@@ -619,37 +630,42 @@
     const noteEl = el('pred-note');
     if (noteEl && pred.note) noteEl.textContent = pred.note;
 
-    // ── 2. Wall Analysis ─────────────────────────────────────────────────
+    // ── 2. Wall Analysis — 2-column layout ───────────────────────────────
+    // Left:  risk badge + callout + VDOT bars
+    // Right: aerobic vs actual comparison + fueling teaser
     const wallEl = el('wall-content');
     if (wallEl) {
       if (wall) {
-        const risk = wall.wall_risk || 'unknown';
-        const gap  = wall.vdot_gap != null ? wall.vdot_gap.toFixed(2) : null;
-        const hmv  = wall.hm_vdot  || 0;
-        const fmv  = wall.fm_vdot  || 0;
-        const maxV = Math.max(hmv, fmv, 20) * 1.1;
-        const cost = wall.wall_cost_minutes;
+        const risk    = wall.wall_risk || 'unknown';
+        const gap     = wall.vdot_gap != null ? wall.vdot_gap.toFixed(2) : null;
+        const hmv     = wall.hm_vdot  || 0;
+        const fmv     = wall.fm_vdot  || 0;
+        const maxV    = Math.max(hmv, fmv, 20) * 1.1;
+        const cost    = wall.wall_cost_minutes;
         const costAbs = cost != null ? Math.abs(cost).toFixed(0) : null;
+        const opt     = wall.optimal_fm_potential_display || '--';
+        const cur     = wall.current_predicted_fm_display || '--';
+        const fueling = wall.fueling_plan || null;
 
-        let wallHTML = `
+        // ── Left column ─────────────────────────────────────────────────
+        let leftHTML = `
           <div class="wall-header">
             <span class="wall-risk-badge ${riskClass(risk)}">${risk.toUpperCase()} WALL RISK</span>
             ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
           </div>`;
 
         if (costAbs) {
-          const isHigh = risk === 'high';
-          wallHTML += `
-            <div class="wall-callout ${isHigh ? 'high' : ''}">
+          leftHTML += `
+            <div class="wall-callout ${risk === 'high' ? 'high' : ''}">
               <div class="callout-num ${risk === 'medium' ? 'medium' : ''}">${costAbs} min</div>
               <div class="callout-label">estimated time lost to the wall on race day</div>
             </div>`;
         }
 
         if (hmv || fmv) {
-          wallHTML += `
+          leftHTML += `
             <div class="vdot-bar-wrap">
-              <div class="vdot-label-row"><span>VDOT Score</span><span>${maxV.toFixed(0)} max shown</span></div>
+              <div class="vdot-label-row"><span>VDOT Score</span><span>${maxV.toFixed(0)} max</span></div>
               <div class="vdot-bars">
                 <div class="vdot-row">
                   <div class="vdot-row-label">HM</div>
@@ -663,10 +679,9 @@
             </div>`;
         }
 
-        const opt = wall.optimal_fm_potential_display || '--';
-        const cur = wall.current_predicted_fm_display || '--';
-        wallHTML += `
-          <div class="fm-compare">
+        // ── Right column ────────────────────────────────────────────────
+        let rightHTML = `
+          <div class="fm-compare" style="flex-direction:column;gap:10px">
             <div class="fm-stat">
               <div class="fs-label">Aerobic Potential</div>
               <div class="fs-val green">${opt}</div>
@@ -677,7 +692,24 @@
             </div>
           </div>`;
 
-        wallEl.innerHTML = wallHTML;
+        if (fueling) {
+          rightHTML += `
+            <div style="margin-top:14px;background:#f0fdf4;border-radius:8px;padding:12px 14px;border:1px solid #bbf7d0">
+              <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#16a34a;margin-bottom:8px">Fueling Plan</div>
+              <div style="font-size:.82rem;color:var(--text)">
+                🍬 <strong>${fueling.gel_count}</strong> gels &nbsp;·&nbsp;
+                ~<strong>${fueling.approx_carbs_per_hour_actual_g}g</strong> carbs/hr
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:4px">First gel at km 10 · every 45 min</div>
+              <a href="#card-fuel" style="font-size:.75rem;color:#16a34a;text-decoration:none;display:block;margin-top:8px;font-weight:600">→ See full schedule below</a>
+            </div>`;
+        }
+
+        wallEl.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div>${leftHTML}</div>
+            <div>${rightHTML}</div>
+          </div>`;
       } else {
         wallEl.innerHTML = '<div style="color:var(--muted);font-size:.83rem">Wall analysis requires a marathon PB entered in settings.</div>';
       }
@@ -686,27 +718,65 @@
     // ── 3. Pace Strategy Table ───────────────────────────────────────────
     const fmPs = ps.marathon || {};
     const tbody = el('pace-tbody');
-    if (tbody && fmPs.segments) {
-      fmPs.segments.forEach(seg => {
-        const is32 = seg.start_km === 32.0 || seg.label === 'km 32–42';
+    const wallSegs = wall && wall.wall_prevention_pacing && wall.wall_prevention_pacing.segments;
+
+    function fmtPaceSec(secPerKm) {
+      const s = Math.round(secPerKm);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '/km';
+    }
+    function fmtMmss(totalSec) {
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    if (tbody && wallSegs && wallSegs.length) {
+      // PRIMARY: wall prevention pacing segments from wall analysis
+      wallSegs.forEach(seg => {
+        const is32 = seg.start_km >= 32.0;
         const tr_el = document.createElement('tr');
-        if (seg.start_km === 32.0) tr_el.className = 'km32';
+        if (is32) tr_el.className = 'km32';
+        const endKm = seg.end_km !== undefined ? seg.end_km : (seg.start_km + 10);
+        const label = `km ${seg.start_km}–${Math.round(endKm)}`;
         tr_el.innerHTML = `
-          <td class="seg-label">${seg.label}${is32 ? ' <span style="font-size:1rem">⚠️</span>' : ''}</td>
+          <td class="seg-label">${label}${is32 ? ' ⚠️' : ''}</td>
           <td class="seg-pace">${seg.pace_display || ''}</td>
-          <td>${seg.segment_time || ''}</td>
-          <td>${seg.elapsed_at_end || ''}</td>
+          <td>${seg.segment_time || '—'}</td>
+          <td>${seg.elapsed_at_end || '—'}</td>
           <td style="font-size:.75rem;color:var(--muted)">${seg.note || ''}</td>
         `;
         tbody.appendChild(tr_el);
       });
-    } else if (tbody && fmPs.splits) {
-      // fallback: simple splits from pace_strategy
-      const ap = fmPs.avg_pace || '';
-      [[0, 10], [10, 21], [21, 32], [32, 42]].forEach(([a, b], i) => {
+    } else if (tbody) {
+      // FALLBACK: compute differentiated segments from predicted_seconds
+      const predSec = fmPs.predicted_seconds || 0;
+      const avgPaceSec = predSec > 0 ? predSec / 42.195 : 0;
+      const segments = [
+        { a: 0,  b: 10, offset: +20, note: 'Conservative start' },
+        { a: 10, b: 21, offset: +10, note: 'Settle into pace' },
+        { a: 21, b: 32, offset:   0, note: 'Race pace' },
+        { a: 32, b: 42, offset:  -5, note: 'Push if able' },
+      ];
+      let elapsed = 0;
+      segments.forEach(({ a, b, offset, note }) => {
+        const paceSec = avgPaceSec > 0 ? avgPaceSec + offset : 0;
+        const distKm = b - a;
+        const segSec = Math.round(paceSec * distKm);
+        elapsed += segSec;
         const tr_el = document.createElement('tr');
         if (a === 32) tr_el.className = 'km32';
-        tr_el.innerHTML = `<td class="seg-label">km ${a}–${b}${a===32?' ⚠️':''}</td><td class="seg-pace">${ap}</td><td>—</td><td>—</td><td style="font-size:.75rem;color:var(--muted)">—</td>`;
+        const paceStr = avgPaceSec > 0 ? fmtPaceSec(paceSec) : '—';
+        const segStr  = avgPaceSec > 0 ? fmtMmss(segSec) : '—';
+        const elStr   = avgPaceSec > 0 ? fmtMmss(elapsed) : '—';
+        tr_el.innerHTML = `
+          <td class="seg-label">km ${a}–${b}${a===32?' ⚠️':''}</td>
+          <td class="seg-pace">${paceStr}</td>
+          <td>${segStr}</td>
+          <td>${elStr}</td>
+          <td style="font-size:.75rem;color:var(--muted)">${note}</td>
+        `;
         tbody.appendChild(tr_el);
       });
     }

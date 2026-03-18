@@ -120,11 +120,18 @@ def compute_wall_risk(hm_vdot: float | None, fm_vdot: float | None) -> dict:
 
 
 def _vdot_by_distance(metrics, today) -> dict:
-    """Return best VDOT per distance bucket from recent_race_runs.
+    """Return best VDOT per distance bucket.
+
+    Primary source: recent_race_runs (is_race=True activities).
+    Fallback for HM bucket: any training run of 16–23 km, Riegel-projected
+    to 21.0975 km.  This catches HM races mis-labelled as training runs and
+    genuine long-effort runs that give a conservative HM VDOT estimate.
 
     Buckets:  "short" (< 10 km),  "10k" (10–15 km),  "hm" (15–25 km)
     """
     best: dict[str, float] = {}
+
+    # ── Primary: labelled race efforts ───────────────────────────────────
     for run in metrics.get("recent_race_runs", []):
         dist_m = float(run.get("distance_km") or 0.0) * 1000.0
         time_sec = float(run.get("moving_time_sec") or 0.0)
@@ -139,6 +146,35 @@ def _vdot_by_distance(metrics, today) -> dict:
         bucket = "hm" if dist_m >= 15_000 else "10k" if dist_m >= 8_000 else "short"
         if best.get(bucket, 0) < v:
             best[bucket] = v
+
+    # ── Fallback: training runs 16–23 km → estimate HM VDOT via Riegel ──
+    # Only used when no race-labelled HM effort was found.
+    if "hm" not in best:
+        candidates = (
+            metrics.get("long_runs", [])
+            + metrics.get("marathon_specific_runs", [])
+        )
+        seen_ids: set = set()
+        for run in candidates:
+            rid = id(run)
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
+            dist_km = float(run.get("distance_km") or 0.0)
+            if not (16.0 <= dist_km <= 23.0):
+                continue
+            time_sec = float(run.get("moving_time_sec") or 0.0)
+            if time_sec <= 0:
+                continue
+            run_date = run.get("date")
+            if run_date and (today - run_date).days > 180:
+                continue
+            # Riegel project actual run to HM distance
+            hm_proj_sec = time_sec * ((21.0975 / dist_km) ** 1.06)
+            v = vdot_from_race(_HM_M, hm_proj_sec / 60.0)
+            if v and v >= 20 and best.get("hm", 0) < v:
+                best["hm"] = v
+
     return best
 
 
@@ -586,10 +622,19 @@ def marathon_prediction_seconds(metrics) -> float | None:
     else:
         return None
 
-    # --- Wall risk adjustment ---
-    # Requires personal_best_fm_seconds in metrics (populated by analytics_service
-    # from goal.personal_best when race_distance >= 40 km).
+    # --- Personal-best floor ---
+    # If the training-data estimate is >20% slower than the stored FM PB the
+    # Strava data is stale or sparse.  Anchor to PB VDOT instead so the
+    # prediction never regresses badly below demonstrated fitness.
     fm_pb_sec = float(metrics.get("personal_best_fm_seconds") or 0.0) or None
+    if fm_pb_sec and marathon_time > fm_pb_sec * 1.20:
+        pb_vdot = vdot_from_race(_FM_M, fm_pb_sec / 60.0)
+        if pb_vdot:
+            anchored = vdot_to_race_time_seconds(pb_vdot, _FM_M)
+            if anchored:
+                marathon_time = anchored
+
+    # --- Wall risk adjustment ---
     if fm_pb_sec:
         fm_vdot = vdot_from_race(42195.0, fm_pb_sec / 60.0)
         by_dist = _vdot_by_distance(metrics, today)
@@ -635,10 +680,27 @@ def predict_all_distances(metrics, today=None) -> dict | None:
     if not marathon_secs:
         return None
 
-    if best_vdot:
-        five_k = vdot_to_race_time_seconds(best_vdot, _5K_M)
-        ten_k  = vdot_to_race_time_seconds(best_vdot, _10K_M)
-        half_m = vdot_to_race_time_seconds(best_vdot, _HM_M)
+    # Derive PB VDOT from stored personal best — used as anchor when race
+    # data is absent or shows lower fitness than demonstrated capability.
+    fm_pb_sec = float(metrics.get("personal_best_fm_seconds") or 0.0) or None
+    pb_vdot = vdot_from_race(_FM_M, fm_pb_sec / 60.0) if fm_pb_sec else None
+
+    # Use the best available VDOT: race-labelled effort > PB > nothing.
+    # Taking max() ensures a slow stale race never drags predictions below
+    # the athlete's demonstrated fitness ceiling.
+    if best_vdot and pb_vdot:
+        anchor_vdot = max(best_vdot, pb_vdot)
+    elif best_vdot:
+        anchor_vdot = best_vdot
+    elif pb_vdot:
+        anchor_vdot = pb_vdot
+    else:
+        anchor_vdot = None
+
+    if anchor_vdot:
+        five_k = vdot_to_race_time_seconds(anchor_vdot, _5K_M)
+        ten_k  = vdot_to_race_time_seconds(anchor_vdot, _10K_M)
+        half_m = vdot_to_race_time_seconds(anchor_vdot, _HM_M)
     else:
         five_k = riegel_projection(marathon_secs, 42.195, 5.0,      1.06)
         ten_k  = riegel_projection(marathon_secs, 42.195, 10.0,     1.06)
