@@ -991,10 +991,12 @@ def dashboard():
     week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
 
-    # BUG 1 FIX: case-insensitive query — DB stores lowercase ("run"), Strava API sends "Run"
-    # Production Strava types confirmed: run, strength, walk, yoga, ride
-    _STRENGTH_TYPES = {"strength", "weight_training", "strength_training", "crossfit", "yoga", "pilates", "workout"}
-    _RUN_TYPES      = ["run", "virtualrun", "trail run", "trail_run", "treadmill"]
+    # Activity type sets — confirmed from production Strava data
+    _RUN_TYPES            = {"run", "virtualrun", "trail run", "trail_run", "treadmill", "track"}
+    _STRENGTH_TYPES       = {"strength", "weight_training", "strength_training", "crossfit", "yoga", "pilates", "workout", "core", "flexibility"}
+    _CROSS_TRAINING_TYPES = {"ride", "virtualride", "cycling", "swim", "swimming", "rowing", "elliptical", "stairstepper", "hiit", "aerobics"}
+    _RECOVERY_TYPES       = {"walk", "hike", "stretching", "massage", "icebath", "meditation"}
+    _ALL_TRACKED          = _RUN_TYPES | _STRENGTH_TYPES | _CROSS_TRAINING_TYPES | _RECOVERY_TYPES
 
     week_activities = (
         Activity.query
@@ -1002,25 +1004,31 @@ def dashboard():
             Activity.user_id == user.id,
             Activity.date >= week_cutoff_dt,
             Activity.date <= week_end_dt,
-            db.func.lower(Activity.activity_type).in_(_RUN_TYPES + list(_STRENGTH_TYPES)),
         )
         .order_by(Activity.date.asc())
         .all()
     )
 
-    # Separate run vs strength activities, keyed by date
-    _run_by_date      = {}
-    _strength_by_date = {}
+    # Bucket all week activities by date and type-category
+    _acts_by_date: dict[date, list] = {}
     for _a in week_activities:
-        _d   = _a.date.date() if isinstance(_a.date, datetime) else _a.date
-        _typ = (_a.activity_type or "").lower()
-        if _typ in _STRENGTH_TYPES:
-            _strength_by_date.setdefault(_d, []).append(_a)
-        else:
-            _run_by_date[_d] = _a  # keep longest if multiple (last writer wins — ordered asc)
+        _d = _a.date.date() if isinstance(_a.date, datetime) else _a.date
+        _acts_by_date.setdefault(_d, []).append(_a)
+
+    def _day_acts(d):
+        return _acts_by_date.get(d, [])
+
+    def _run_acts(acts):
+        return [a for a in acts if (a.activity_type or "").lower() in _RUN_TYPES]
+
+    def _strength_acts(acts):
+        return [a for a in acts if (a.activity_type or "").lower() in _STRENGTH_TYPES]
+
+    def _cross_acts(acts):
+        return [a for a in acts if (a.activity_type or "").lower() in _CROSS_TRAINING_TYPES]
 
     week_actual_km = round(
-        sum(a.distance_km or 0 for a in week_activities if (a.activity_type or "").lower() not in _STRENGTH_TYPES),
+        sum(a.distance_km or 0 for a in week_activities if (a.activity_type or "").lower() in _RUN_TYPES),
         1,
     )
 
@@ -1041,8 +1049,12 @@ def dashboard():
         day_info     = _daily_plan.get(day_name, {"type": "rest", "km": 0, "notes": ""})
         session_type = day_info.get("type", "rest")
         planned_km   = float(day_info.get("km", 0) or 0)
-        actual_act   = _run_by_date.get(day_date)
-        actual_km    = round(float(actual_act.distance_km or 0), 1) if actual_act else 0.0
+        is_today     = day_date == today_local
+        is_past      = day_date < today_local
+        acts          = _day_acts(day_date)
+        runs          = _run_acts(acts)
+        strengths     = _strength_acts(acts)
+        crosses       = _cross_acts(acts)
 
         if session_type == "strength":
             workout_type = "STRENGTH"
@@ -1054,20 +1066,36 @@ def dashboard():
             workout_type = "RUN"
             session_name = _SESSION_NAMES.get(session_type, session_type.replace("_", " ").title())
 
-        is_today = day_date == today_local
-        is_past  = day_date < today_local
-
+        # Status + actual_km logic per workout type
         if workout_type == "RUN":
-            done   = actual_km > 0
-            status = "completed" if done else ("missed" if is_past else ("today" if is_today else "planned"))
+            actual_km = round(sum(a.distance_km or 0 for a in runs), 1)
+            if runs:
+                done   = True
+                status = "completed" if actual_km >= planned_km * 0.80 else "partial"
+            elif is_past:
+                done, status = False, "missed"
+            elif is_today:
+                done, status = False, "today"
+            else:
+                done, status = False, "planned"
+
         elif workout_type == "STRENGTH":
-            # BUG 2 FIX: verify strength against Strava, don't auto-mark as done
-            strength_acts = _strength_by_date.get(day_date, [])
-            done   = bool(strength_acts)
-            status = "completed" if done else ("missed" if is_past else ("today" if is_today else "planned"))
-        else:
-            done   = True
-            status = "rest"
+            actual_km = 0.0
+            if strengths:
+                done, status = True, "completed"
+            elif crosses:
+                done, status = True, "completed"  # cross-training counts on strength day
+            elif is_past:
+                done, status = False, "missed"
+            elif is_today:
+                done, status = False, "today"
+            else:
+                done, status = False, "planned"
+
+        else:  # REST
+            actual_km = round(sum(a.distance_km or 0 for a in acts), 1)
+            done      = True
+            status    = "bonus" if acts else "rest"
 
         weekly_plan.append({
             "day":           day_name.capitalize(),
@@ -1136,8 +1164,62 @@ def dashboard():
         "notes":           today_item["notes"]        if today_item else "",
     }
 
-    runs             = recent_runs(user.id, limit=20, user_timezone=user_tz)
     consistency_score = _training_consistency_score(user.id, today_local)
+
+    # ── Recent Activities (all types) ────────────────────────────────────────
+    _TYPE_ICONS = {
+        "run": "🏃", "trail run": "🏃", "trail_run": "🏃", "track": "🏃",
+        "virtualrun": "🏃", "treadmill": "🏃",
+        "strength": "💪", "weight_training": "💪", "strength_training": "💪",
+        "crossfit": "💪", "core": "💪", "workout": "💪", "flexibility": "🧘",
+        "yoga": "🧘", "pilates": "🧘",
+        "walk": "🚶", "hike": "🥾",
+        "ride": "🚴", "virtualride": "🚴", "cycling": "🚴",
+        "swim": "🏊", "swimming": "🏊",
+        "rowing": "🚣", "elliptical": "⚡", "stairstepper": "⚡",
+        "hiit": "🔥", "aerobics": "🔥",
+    }
+
+    def _fmt_pace(moving_time, distance_km):
+        if not distance_km or distance_km <= 0 or not moving_time:
+            return None
+        sec_per_km = moving_time / distance_km
+        return f"{int(sec_per_km // 60)}:{int(sec_per_km % 60):02d}"
+
+    def _fmt_dur(moving_time):
+        if not moving_time:
+            return None
+        t = int(moving_time)
+        h, m = divmod(t // 60, 60)
+        return f"{h}h {m:02d}m" if h else f"{m}m"
+
+    _recent_acts_raw = (
+        Activity.query
+        .filter(Activity.user_id == user.id)
+        .order_by(Activity.date.desc())
+        .limit(10)
+        .all()
+    )
+    recent_activities = []
+    for _a in _recent_acts_raw:
+        _typ  = (_a.activity_type or "unknown").lower()
+        _dt   = _a.date.strftime("%b %d") if hasattr(_a.date, "strftime") else str(_a.date)[:10]
+        recent_activities.append({
+            "date":        _dt,
+            "type":        _a.activity_type or "unknown",
+            "icon":        _TYPE_ICONS.get(_typ, "⚡"),
+            "distance_km": round(_a.distance_km or 0, 1),
+            "pace":        _fmt_pace(_a.moving_time, _a.distance_km),
+            "duration":    _fmt_dur(_a.moving_time),
+            "hr":          int(float(_a.avg_hr)) if _a.avg_hr else None,
+            "elevation":   int(round(float(_a.elevation_gain))) if _a.elevation_gain and float(_a.elevation_gain) > 0 else None,
+            "is_run":      _typ in _RUN_TYPES,
+            "is_strength": _typ in _STRENGTH_TYPES,
+            "is_cross":    _typ in _CROSS_TRAINING_TYPES,
+            "is_recovery": _typ in _RECOVERY_TYPES,
+        })
+
+    runs = recent_runs(user.id, limit=5, user_timezone=user_tz)  # kept for backwards compat
     weekly_summary   = weekly_training_summary(user.id)
     weekly_plan_note = (
         "If you do both gym and a run on a strength day, the gym session counts as completed"
@@ -1166,7 +1248,8 @@ def dashboard():
         weekly_status=weekly_status,
         weekly_plan_note=weekly_plan_note,
         week_closed=week_closed,
-        runs=runs[:5],
+        recent_activities=recent_activities,
+        runs=runs,
         sync_info=sync_info,
         today_date=_today_date_label(user_tz),
         long_run=intel["long_run"],

@@ -468,22 +468,35 @@
       </div>
     </div>
 
-    <!-- ── Recent Runs ─────────────────────────────────────────────────── -->
-    <div class="section-label">Recent Runs</div>
+    <!-- ── Recent Activities ────────────────────────────────────────────── -->
+    <div class="section-label">Recent Activities</div>
     <div class="card">
-      {% if runs %}
-        {% for run in runs %}
+      {% if recent_activities %}
+        {% for act in recent_activities %}
           <div class="run-item">
-            <div class="run-date">{{ run.date_label }}</div>
-            <div class="run-dist">{{ run.distance }} km</div>
-            <div class="run-pace">{{ run.pace }}/km</div>
-            {% if run.hr %}<div class="run-pace">HR {{ run.hr }}</div>{% endif %}
-            {% if run.elevation %}<div class="run-pace">+{{ run.elevation }}m</div>{% endif %}
-            <div class="run-time">{{ run.time }}</div>
+            <div class="run-date">{{ act.icon }} {{ act.date }}</div>
+            {% if act.is_run %}
+              <div class="run-dist">{{ act.distance_km }} km</div>
+              {% if act.pace %}<div class="run-pace">{{ act.pace }}/km</div>{% endif %}
+              {% if act.hr %}<div class="run-pace">HR {{ act.hr }}</div>{% endif %}
+              {% if act.elevation %}<div class="run-pace">+{{ act.elevation }}m</div>{% endif %}
+              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
+            {% elif act.is_strength %}
+              <div class="run-dist" style="color:var(--muted)">{{ act.type|title }}</div>
+              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
+            {% elif act.is_cross %}
+              <div class="run-dist">{{ act.distance_km }} km</div>
+              <div class="run-pace" style="color:var(--muted)">{{ act.type|title }}</div>
+              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
+            {% else %}
+              <div class="run-dist" style="color:var(--muted)">{{ act.type|title }}</div>
+              {% if act.distance_km > 0 %}<div class="run-pace">{{ act.distance_km }} km</div>{% endif %}
+              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
+            {% endif %}
           </div>
         {% endfor %}
       {% else %}
-        <p style="color:var(--muted);font-size:.85rem">No synced runs yet. <a href="/?sync=1">Sync from Strava</a></p>
+        <p style="color:var(--muted);font-size:.85rem">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
       {% endif %}
     </div>
 
