@@ -107,7 +107,7 @@ class AICoachEngine:
             .first()
         )
         key_str = (
-            f"v2"  # bump to invalidate all existing caches
+            f"v3"  # bump to invalidate all existing caches
             f":{user_id}"
             f":{goal.id if goal else 'none'}"
             f":{goal.goal_time if goal else ''}"
@@ -460,6 +460,26 @@ COACHING RULES (non-negotiable):
 7. If compliance last week < 70% — adjust this week DOWN not up
 8. If consecutive_good_weeks >= 3 — can step up 10%
 9. Base weekly volume on recent ACTUAL km, not planned
+
+HARD CONSTRAINTS — never violate these:
+1. Training days = {profile.get('training_days_per_week', 5)}, so rest days = {7 - profile.get('training_days_per_week', 5)} maximum
+2. If typical_run_days has >= 4 days, never assign 3+ consecutive rest days
+3. Strength counts as a training day — never mark a strength day as rest
+4. The daily_plan must have exactly {profile.get('training_days_per_week', 5)} non-rest days
+5. Long run day ({pattern.get('resolved_long_run_day', profile.get('long_run_day', 'sunday'))}) must ALWAYS have a long run — never rest on long run day
+6. Today is {date.today().strftime('%A').lower()} — if runner typically runs today, assign a run
+
+BUILD DAILY PLAN USING THIS EXACT LOGIC:
+Typical run days: {pattern.get('typical_run_days', [])}
+Typical strength days: {pattern.get('typical_strength_days', [])}
+Rest days: {pattern.get('rest_days', [])}
+
+For each day of the week:
+- If day is in typical_run_days → assign run (long/tempo/easy based on week structure)
+- If day is in typical_strength_days → assign strength
+- If day is in rest_days AND we still need more rest days → assign rest
+- NEVER assign rest to a day in typical_run_days
+- NEVER assign a run to a day in rest_days
 
 Respond ONLY with valid JSON, no markdown:
 {{
