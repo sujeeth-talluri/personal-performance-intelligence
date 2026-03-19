@@ -337,8 +337,10 @@
     .strip-orange { border-color: #f97316; }
     .strip-red    { border-color: #ef4444; }
     .strip-grey   { border-color: #9ca3af; }
-    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; }
+    .fs-out   { display: flex; flex-direction: column; gap: 2px; }
+    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; line-height: 1; }
     .fs-label { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
+    .fs-score-explain { font-size: 11px; color: #888; white-space: nowrap; }
     .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
     .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
 
@@ -465,8 +467,13 @@
     <!-- ── Feasibility strip ────────────────────────────────────────────── -->
     {% if canonical_feasibility_score %}
     <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
-      <span class="fs-score">{{ canonical_feasibility_score|int }}</span>
-      <span class="fs-label">{{ canonical_feasibility_label }}</span>
+      <div class="fs-out">
+        <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
+        <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
+        {% if canonical_feasibility_factor_scores %}
+        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+        {% endif %}
+      </div>
       {% if canonical_honest_assessment %}
       <span class="fs-text">{{ canonical_honest_assessment }}</span>
       {% endif %}
@@ -710,9 +717,9 @@
   <!-- 7. COLLAPSIBLE: Race Day Prep (Pace + Fueling) -->
   <div class="collapsible-header" onclick="toggleSection('race-day-prep')">
     <div class="section-label">Race Day Prep</div>
-    <button class="collapsible-toggle" id="btn-race-day-prep">▲ Hide</button>
+    <button class="collapsible-toggle" id="btn-race-day-prep">▼ Show</button>
   </div>
-  <div class="collapsible-body" id="race-day-prep">
+  <div class="collapsible-body collapsed" id="race-day-prep">
     <!-- PACE STRATEGY TABLE -->
     <div class="card" id="card-pace">
       <div class="card-title">Marathon Pace Strategy — <span class="tooltip-wrap">Wall Prevention<span class="tooltip-icon">?</span><span class="tooltip-text">The wall = severe energy crash at km 30–35 when glycogen stores run out. This pace strategy prevents it by starting conservatively and building pace through the race (negative split).</span></span></div>
@@ -912,7 +919,7 @@
             <div class="fs-val red">${wm.adjustedDisplay}</div>
             <div style="font-size:.72rem;color:var(--muted);margin-top:3px">
               Base ${wm.baseDisplay} × ${wm.factor.toFixed(2)} = ${wm.adjustedDisplay}
-              <span style="color:#ef4444;font-weight:600">(${sign}${wm.costMinutes} min)</span>
+              <span style="color:#ef4444;font-weight:600">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
             </div>`;
         } else {
           wallAdjHTML = `<div class="fs-val red">${cur}</div>`;

@@ -1057,7 +1057,7 @@ def dashboard():
     else:
         show_wall_estimate = True
         canonical_wall_adjusted_seconds = round(_base_pred_seconds * _wall_factor)
-        canonical_wall_cost_minutes = round((_base_pred_seconds * _wall_factor - _base_pred_seconds) / 60, 1)
+        canonical_wall_cost_minutes = abs(round((_base_pred_seconds * _wall_factor - _base_pred_seconds) / 60, 1))
 
     def _fmt_hms(total_sec):
         total_sec = int(total_sec)
@@ -1092,7 +1092,7 @@ def dashboard():
     for _a in _all_acts_raw:
         _d = float(_a.distance_km or 0)
         _t = float(_a.moving_time or 0)
-        _a_date = _a.date.date() if hasattr(_a.date, 'date') else _a.date
+        _a_date = _activity_local_date(_a.date, user_tz)
         _act_dict = {
             "type": (_a.activity_type or "").lower(),
             "moving_time_sec": _t,
@@ -1461,6 +1461,7 @@ def dashboard():
         canonical_honest_assessment=canonical_feasibility.get("honest_assessment", ""),
         canonical_show_revised_goal=canonical_feasibility.get("show_revised_goal", False),
         canonical_revised_goal=canonical_feasibility.get("revised_goal") or {},
+        canonical_feasibility_factor_scores=canonical_feasibility.get("factor_scores") or {},
         tsb_volume_cap=_coaching_plan.get("validation", {}).get("tsb_volume_cap", 1.0),
         tsb_quality_allowed=not _coaching_plan.get("validation", {}).get("quality_replaced", False),
         canonical_long_run_day=canonical_long_run_day,

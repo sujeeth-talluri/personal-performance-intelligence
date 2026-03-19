@@ -270,9 +270,22 @@ class AICoachEngine:
         _atl = feas_dict.get("readiness", {}).get("atl", 0) or 0
         tsb_enforcement = self._tsb_enforcement(float(_tsb), float(_atl))
 
+        _comp_dict      = compliance.to_dict()
+        _readiness      = feas_dict.get("readiness", {}) or {}
+        _last_actual_km = float(_comp_dict.get("actual_run_km") or 0)
+        _curr_weekly    = float(_readiness.get("current_weekly_avg_km") or _last_actual_km or 0)
+        _peak_weekly    = float(_readiness.get("required_peak_weekly_km") or 80)
+        _curr_long      = float(_readiness.get("current_long_run_km") or 0)
+        _req_long       = float(_readiness.get("required_long_run_km") or 32)
+        training_targets = {
+            "estimated_weekly_target": round(min(_curr_weekly * 1.10, _peak_weekly), 1),
+            "estimated_long_run_km":   round(min(_curr_long + 3, _req_long), 1),
+        }
+
         return {
-            "runner_profile":  profile_data,
-            "tsb_enforcement": tsb_enforcement,
+            "runner_profile":   profile_data,
+            "tsb_enforcement":  tsb_enforcement,
+            "training_targets": training_targets,
             "goal": {
                 "race_name":        goal.race_name,
                 "race_date":        goal.race_date.strftime("%Y-%m-%d"),
@@ -541,6 +554,11 @@ RECENT 4 WEEKS:
 
 RECENT LONG RUNS:
 {json.dumps(long_run_history, indent=2)}
+
+FACTUAL CONSTRAINTS (use these exact numbers — do not invent or approximate):
+- This week's target volume: {context.get('training_targets', {}).get('estimated_weekly_target', 0)}km
+- This week's long run target: {context.get('training_targets', {}).get('estimated_long_run_km', 0)}km
+- When you mention weekly km or long run distance in your response, use these numbers exactly.
 
 LOAD-BASED HARD CONSTRAINTS (TSB-driven — override coaching rules if they conflict):
 - Current Form (TSB): {feasibility.get('readiness', {}).get('tsb', 0) or 0:+.1f}
