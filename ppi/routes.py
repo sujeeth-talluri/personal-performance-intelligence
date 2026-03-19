@@ -992,8 +992,9 @@ def dashboard():
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
 
     # BUG 1 FIX: case-insensitive query — DB stores lowercase ("run"), Strava API sends "Run"
-    _RUN_TYPES      = ["run", "virtualrun", "trail run", "trail_run", "treadmill", "workout"]
-    _STRENGTH_TYPES = {"workout", "weight_training", "strength_training", "crossfit", "yoga", "pilates"}
+    # Production Strava types confirmed: run, strength, walk, yoga, ride
+    _STRENGTH_TYPES = {"strength", "weight_training", "strength_training", "crossfit", "yoga", "pilates", "workout"}
+    _RUN_TYPES      = ["run", "virtualrun", "trail run", "trail_run", "treadmill"]
 
     week_activities = (
         Activity.query
