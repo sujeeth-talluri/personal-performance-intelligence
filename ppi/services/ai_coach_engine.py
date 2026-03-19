@@ -107,7 +107,7 @@ class AICoachEngine:
             .first()
         )
         key_str = (
-            f"v5"  # bump to invalidate all existing caches
+            f"v6"  # bump to invalidate all existing caches
             f":{user_id}"
             f":{goal.id if goal else 'none'}"
             f":{goal.goal_time if goal else ''}"
