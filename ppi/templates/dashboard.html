@@ -324,6 +324,24 @@
     .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
     .ladder-step .km    { font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
 
+    /* ─── Feasibility strip ──────────────────────────────────────── */
+    .feasibility-strip {
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 20px; border-radius: 8px;
+      background: white; border-left: 4px solid;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .strip-green  { border-color: #00C853; }
+    .strip-amber  { border-color: #f59e0b; }
+    .strip-orange { border-color: #f97316; }
+    .strip-red    { border-color: #ef4444; }
+    .strip-grey   { border-color: #9ca3af; }
+    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; }
+    .fs-label { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
+    .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
+    .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
+
     /* ─── Collapsible sections ───────────────────────────────────── */
     .collapsible-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -418,7 +436,7 @@
           &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
           {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
           <span class="tooltip-wrap">
-            {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}
+            {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
             <span class="tooltip-icon">?</span>
             <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
           </span>
@@ -441,6 +459,20 @@
       <a href="{{ banner.action_url }}" class="banner-action">{{ banner.action }}</a>
       {% endif %}
       <button class="banner-close" onclick="this.parentElement.style.display='none'">✕</button>
+    </div>
+    {% endif %}
+
+    <!-- ── Feasibility strip ────────────────────────────────────────────── -->
+    {% if canonical_feasibility_score %}
+    <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
+      <span class="fs-score">{{ canonical_feasibility_score|int }}</span>
+      <span class="fs-label">{{ canonical_feasibility_label }}</span>
+      {% if canonical_honest_assessment %}
+      <span class="fs-text">{{ canonical_honest_assessment }}</span>
+      {% endif %}
+      {% if canonical_show_revised_goal and canonical_revised_goal %}
+      <span class="fs-revised">Realistic target: {{ canonical_revised_goal.revised_goal_time }}</span>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -846,12 +878,11 @@
             ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
           </div>`;
 
-        if (costAbs) {
-          leftHTML += `
-            <div class="wall-callout ${risk === 'high' ? 'high' : ''}">
-              <div class="callout-num ${risk === 'medium' ? 'medium' : ''}">${costAbs} min</div>
-              <div class="callout-label">estimated time lost to the wall on race day</div>
-            </div>`;
+        const _wm = window._wallMath || {};
+        if (_wm.showEstimate && _wm.baseDisplay && _wm.adjustedDisplay) {
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px"><strong>${_wm.baseDisplay}</strong> base → <strong style="color:#ef4444">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
+        } else if (costAbs) {
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px">~<strong style="color:#ef4444">${costAbs} min</strong> estimated time lost to the wall</div>`;
         }
 
         if (hmv || fmv) {

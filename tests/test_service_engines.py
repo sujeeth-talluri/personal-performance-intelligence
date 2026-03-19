@@ -1518,12 +1518,21 @@ def test_weekly_volumes_aggregates_same_week_runs():
     Runs on Mon + Wed of same week should be bucketed together, not as separate weeks.
     Bug: using datetime key meant each run got its own bucket.
     """
-    import datetime as _dt
-    today_weekday = _dt.date.today().weekday()
-    mon_days_ago = today_weekday          # days since this Monday
-    wed_days_ago = max(0, today_weekday - 2)
+    from datetime import date, datetime, timedelta
+    from unittest.mock import MagicMock
 
-    acts = _make_run_activities([(mon_days_ago, 15.0), (wed_days_ago, 18.0)])
+    today = date.today()
+    mon = today - timedelta(days=today.weekday())   # this week's Monday
+    wed = mon + timedelta(days=2)                    # this week's Wednesday
+
+    acts = []
+    for d, km in [(mon, 15.0), (wed, 18.0)]:
+        a = MagicMock()
+        a.date = datetime.combine(d, datetime.min.time())
+        a.distance_km = km
+        a.activity_type = "Run"
+        acts.append(a)
+
     fe = _fe_instance()
     vols = fe._weekly_volumes(acts, 8)
 
