@@ -122,9 +122,12 @@ def test_training_phase_thresholds():
 
 
 def test_long_run_ladder_requires_true_milestone_completion():
+    # Ladder is now [21, 24, 28, ...]. A run of 18.3 km has not yet cleared
+    # the 21 km milestone (needs >= 21 * 0.95 = 19.95 km), so completed_step
+    # is 0 and the runner is targeting 21 km next.
     runs = [{"date": date(2026, 3, 1), "distance_km": 18.3}]
     state = _long_run_progress_state(runs, date(2026, 3, 16))
-    assert state["completed_step"] == 18
+    assert state["completed_step"] == 0.0
     assert state["next_step"] == 21
 
 

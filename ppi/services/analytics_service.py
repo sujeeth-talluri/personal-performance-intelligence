@@ -448,21 +448,17 @@ def _daily_distance_series(distance_activities, today, days=14):
 
 
 def _long_run_progress_state(runs, today):
-    ladder = [16, 18, 21, 24, 26, 28, 30, 32]
+    # Milestone ladder: a step is "done" when the runner has covered ≥ 95% of it.
+    # next_step is derived purely from the longest completed run so that a run of
+    # e.g. 21.8 km correctly advances to 24 km rather than staying at 21 km.
+    LADDER = [21, 24, 28, 32, 35, 38, 42]
     recent = [r for r in runs if r["date"] >= today - timedelta(days=70)]
-    completed_step = 0.0
-    completed_count = 0
-    latest_target_attempt = None
-    for step in ladder:
-        qualified = [r for r in recent if r["distance_km"] >= step]
-        if qualified:
-            completed_step = step
-            completed_count += 1
-        else:
-            latest_target_attempt = step
-            break
-    next_step = latest_target_attempt or 32
     last_long = max(recent, key=lambda r: (r["date"], r["distance_km"]), default=None)
+    longest_km = last_long["distance_km"] if last_long else 0.0
+    # Count how many ladder milestones are fully covered (>= 95% threshold)
+    completed_count = sum(1 for step in LADDER if longest_km >= step * 0.95)
+    completed_step  = max((step for step in LADDER if longest_km >= step * 0.95), default=0.0)
+    next_step = next((step for step in LADDER if step > longest_km), 42)
     qualifying_longs = sorted([r for r in recent if r["distance_km"] >= 18], key=lambda r: r["date"])
     failed_recent = False
     if len(qualifying_longs) >= 2:
@@ -471,7 +467,7 @@ def _long_run_progress_state(runs, today):
         if previous >= 21 and latest < previous * 0.9:
             failed_recent = True
     return {
-        "ladder": ladder,
+        "ladder": LADDER,
         "completed_step": completed_step,
         "next_step": next_step,
         "milestones_completed": completed_count,
