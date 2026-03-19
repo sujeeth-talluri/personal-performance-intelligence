@@ -1132,6 +1132,7 @@ def dashboard():
         else "In progress"
     )
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
+    progress_pct    = min(100, int(round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100)))
 
     # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
     today_item    = next((w for w in weekly_plan if w["is_today"]), None)
@@ -1255,6 +1256,8 @@ def dashboard():
         weekly_extra_km=weekly_extra_km,
         weekly_plan_remaining_km=weekly_plan_remaining_km,
         weekly_completion_pct=weekly_plan_completion_pct,
+        progress_pct=progress_pct,
+        week_actual_km=week_actual_km,
         weekly_status=weekly_status,
         weekly_plan_note=weekly_plan_note,
         week_closed=week_closed,

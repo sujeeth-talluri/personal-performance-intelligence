@@ -399,21 +399,34 @@
         <h2>Weekly Plan</h2>
         <div>
           {% for p in weekly_plan %}
-            <div class="plan-row {{ 'done-row' if p.status in ['completed','moved'] else '' }} {{ 'skip-row' if p.status in ['missed','skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}">
+            <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
               <div class="plan-main">
-                <div class="plan-distance">
-                  {% if p.status in ['completed','overperformed'] and p.actual %}{{ p.actual }}
-                  {% elif p.workout_type == 'STRENGTH' %}Gym
-                  {% else %}{{ p.planned }}{% endif %}
-                </div>
                 <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
+                <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
+                  {% if p.session_type == 'strength' %}
+                    💪 Gym
+                  {% elif p.status in ['completed', 'done'] %}
+                    ✓ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                  {% elif p.status == 'partial' %}
+                    ⚡ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                  {% elif p.status == 'missed' %}
+                    ✗ missed ({{ p.planned_km|int }}km planned)
+                  {% elif p.session_type == 'active_recovery' %}
+                    {{ p.planned_km|int }}km — easy run or walk
+                  {% elif p.status == 'bonus' %}
+                    🎁 {{ p.actual_km }}km bonus
+                  {% elif p.planned_km > 0 %}
+                    {{ p.planned_km|int }}km planned
+                  {% endif %}
+                </div>
               </div>
               <div class="plan-status">
-                {% if p.status == 'completed' %}<span class="status-green">✓ done</span>
-                {% elif p.status == 'moved' %}<span class="status-green">✓ moved</span>
-                {% elif p.status == 'partial' %}<span class="status-orange">partial</span>
-                {% elif p.status in ['missed','skipped'] %}<span class="status-orange">⚠ missed</span>
-                {% elif p.workout_type == 'STRENGTH' %}<span>💪 strength</span>
+                {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
+                {% elif p.status == 'partial' %}<span class="status-orange">⚡ partial</span>
+                {% elif p.status == 'missed' %}<span class="status-orange">✗ missed</span>
+                {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">▶ today</span>
+                {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">💪 gym</span>
+                {% elif p.status == 'bonus' %}<span class="status-green">🎁 bonus</span>
                 {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
               </div>
             </div>
@@ -422,10 +435,10 @@
         {% if week_closed %}
           <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
         {% endif %}
-        <div class="metric-row"><span>Goal</span><strong>{{ weekly_plan_goal_km }} km</strong></div>
-        <div class="metric-row"><span>Completed</span><strong>{{ weekly_plan_completed_km }} km</strong></div>
-        <div class="metric-row"><span>Remaining</span><strong>{{ weekly_plan_remaining_km }} km</strong></div>
-        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ weekly_completion_pct }}%"></span></div>
+        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km }} km</strong></div>
+        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
+        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
+        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
       </div>
 
       <div class="card">
