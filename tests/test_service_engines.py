@@ -1486,3 +1486,66 @@ def test_validate_weekly_caps_volume_in_danger_zone():
     # Validation record must reflect TSB zone
     assert validated["validation"]["tsb_zone"] == "danger"
     assert validated["validation"]["quality_replaced"] is True
+
+
+# ── Consistency score fix tests ───────────────────────────────────────────────
+
+def _fe_instance():
+    """Return a bare FeasibilityEngine bypassing __init__ (no DB needed)."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+    fe = object.__new__(FeasibilityEngine)
+    fe.user_id = 1
+    fe.today = __import__('datetime').date.today()
+    return fe
+
+
+def _make_run_activities(specs):
+    """specs: list of (days_ago, km) — returns mock Activity objects."""
+    from datetime import datetime, timedelta
+    from unittest.mock import MagicMock
+    acts = []
+    for days_ago, km in specs:
+        a = MagicMock()
+        a.date = datetime.utcnow() - timedelta(days=days_ago)
+        a.distance_km = km
+        a.activity_type = "Run"
+        acts.append(a)
+    return acts
+
+
+def test_weekly_volumes_aggregates_same_week_runs():
+    """
+    Runs on Mon + Wed of same week should be bucketed together, not as separate weeks.
+    Bug: using datetime key meant each run got its own bucket.
+    """
+    import datetime as _dt
+    today_weekday = _dt.date.today().weekday()
+    mon_days_ago = today_weekday          # days since this Monday
+    wed_days_ago = max(0, today_weekday - 2)
+
+    acts = _make_run_activities([(mon_days_ago, 15.0), (wed_days_ago, 18.0)])
+    fe = _fe_instance()
+    vols = fe._weekly_volumes(acts, 8)
+
+    # With the fix both runs share one week bucket → single entry of 33km
+    assert len(vols) == 1, f"Expected 1 week bucket, got {len(vols)}: {vols}"
+    assert vols[0] == 33.0, f"Expected 33.0km, got {vols[0]}"
+
+
+def test_consistency_score_not_broken_by_datetime_keys():
+    """
+    A runner doing 3×10km/week for 4 weeks (30km/week) should score ≥30.
+    Before fix: each run got its own bucket (10km), none hit 20km threshold →
+    active_weeks=0 → score=0. With fix: 30km/week buckets → active_weeks=4 → score≈50.
+    """
+    specs = []
+    for week in range(4):
+        for day_offset in [0, 2, 4]:   # Mon, Wed, Fri
+            specs.append((week * 7 + day_offset, 10.0))
+
+    acts = _make_run_activities(specs)
+    fe = _fe_instance()
+    score = fe._consistency_score(acts)
+
+    assert score >= 30, f"Expected ≥30 for 30km/week runner, got {score}"
+    assert score <= 100, f"Score must be ≤100, got {score}"

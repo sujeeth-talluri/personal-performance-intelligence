@@ -524,8 +524,10 @@ class FeasibilityEngine:
                 continue
             if not (a.activity_type and "run" in a.activity_type.lower()):
                 continue
-            # Monday of this activity's week
-            wk = a.date - timedelta(days=a.date.weekday())
+            # Monday of this activity's week — use date (not datetime) as key
+            # so all runs in the same week share a single bucket.
+            act_date = a.date.date() if hasattr(a.date, "date") else a.date
+            wk = act_date - timedelta(days=act_date.weekday())
             weekly[wk] += a.distance_km or 0
         return [round(v, 1) for v in weekly.values()]
 

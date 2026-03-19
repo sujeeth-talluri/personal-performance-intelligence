@@ -235,6 +235,11 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
             # this lets template changes take effect without wiping user edits
             # or completed/partial entries.
             if row.source == "engine" and row.status == "planned":
+                # FREEZE past days — never overwrite planned distance after the day
+                # has passed. The athlete may have missed it; changing the target
+                # retroactively corrupts historical compliance data.
+                if day_date < today_local:
+                    continue
                 # FIX 7: Sunday long run — if target_km doesn't match the canonical
                 # ladder distance, delete the stale row and regenerate it below.
                 if (offset == 6 and canonical_long_km > 0 and plan["workout_type"] == "RUN"
