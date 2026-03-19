@@ -299,6 +299,70 @@ class AICoachEngine:
             result.append(entry)
         return result
 
+    # ── PATTERN DETECTION ────────────────────────────────────────────────────
+
+    _RUN_TYPES      = {"run", "virtualrun", "trail run", "trail_run", "treadmill", "track"}
+    _STRENGTH_TYPES = {"strength", "weight_training", "strength_training", "crossfit",
+                       "yoga", "pilates", "workout", "core", "flexibility"}
+    _DAY_NAMES      = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+    def _analyze_training_pattern(self, activities: list, profile: dict) -> dict:
+        """
+        Detect actual training pattern from 8 weeks of activity history.
+        Returns day-of-week tendencies for runs, strength, long run, and rest.
+        Used to make the AI prompt more accurate about the runner's real schedule.
+        """
+        from collections import defaultdict
+
+        run_counts      = defaultdict(int)
+        strength_counts = defaultdict(int)
+        run_distances   = defaultdict(list)  # day → list of km
+
+        for a in activities:
+            act_date = a.date if isinstance(a.date, date) else a.date.date()
+            typ      = (a.activity_type or "").lower()
+            dow      = self._DAY_NAMES[act_date.weekday()]
+
+            if typ in self._RUN_TYPES:
+                run_counts[dow] += 1
+                run_distances[dow].append(a.distance_km or 0)
+            elif typ in self._STRENGTH_TYPES:
+                strength_counts[dow] += 1
+
+        # A day is a "typical run day" if it has a run in ≥40% of the 8 weeks
+        threshold    = max(2, len(activities) // 10)
+        typical_runs = [d for d in self._DAY_NAMES if run_counts[d] >= threshold]
+
+        # Strength day: ≥2 appearances
+        typical_strength = [d for d in self._DAY_NAMES if strength_counts[d] >= 2]
+
+        # Long run day: highest average distance across run days
+        avg_dist = {
+            d: sum(dists) / len(dists)
+            for d, dists in run_distances.items()
+            if dists
+        }
+        detected_long_day = (
+            max(avg_dist, key=avg_dist.get)
+            if avg_dist else profile.get("long_run_day", "sunday")
+        )
+
+        all_active = set(typical_runs) | set(typical_strength)
+        rest_days  = [d for d in self._DAY_NAMES if d not in all_active]
+
+        has_enough = len(activities) >= 10
+
+        return {
+            "typical_run_days":      typical_runs,
+            "typical_strength_days": typical_strength,
+            "detected_long_run_day": detected_long_day,
+            "rest_days":             rest_days,
+            "has_enough_pattern_data": has_enough,
+            "run_day_counts":        dict(run_counts),
+            "strength_day_counts":   dict(strength_counts),
+            "avg_run_distance_by_day": {d: round(v, 1) for d, v in avg_dist.items()},
+        }
+
     # ── STEP 5A: AI CALL — WEEKLY PLAN ───────────────────────────────────────
 
     def _call_claude_weekly(self, context: dict) -> dict:
