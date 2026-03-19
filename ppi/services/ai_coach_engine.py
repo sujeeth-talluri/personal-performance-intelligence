@@ -264,8 +264,15 @@ class AICoachEngine:
             reverse=True,
         )[:8]
 
+        feas_dict = feasibility.to_dict()
+        _tsb = feas_dict.get("readiness", {}).get("tsb", 0) or \
+               feas_dict.get("readiness", {}).get("current_tsb", 0) or 0
+        _atl = feas_dict.get("readiness", {}).get("atl", 0) or 0
+        tsb_enforcement = self._tsb_enforcement(float(_tsb), float(_atl))
+
         return {
             "runner_profile":  profile_data,
+            "tsb_enforcement": tsb_enforcement,
             "goal": {
                 "race_name":        goal.race_name,
                 "race_date":        goal.race_date.strftime("%Y-%m-%d"),
@@ -280,7 +287,7 @@ class AICoachEngine:
             },
             "data_quality":    dq.to_dict(),
             "compliance":      compliance.to_dict(),
-            "feasibility":     feasibility.to_dict(),
+            "feasibility":     feas_dict,
             "weekly_history":  weekly_summaries,
             "long_run_history": long_runs,
             "training_pattern": training_pattern,
@@ -312,6 +319,72 @@ class AICoachEngine:
             entry["long_run_km"]  = round(entry["long_run_km"], 1)
             result.append(entry)
         return result
+
+    # ── TSB ENFORCEMENT ──────────────────────────────────────────────────────
+
+    def _tsb_enforcement(self, tsb: float, atl: float) -> dict:
+        """
+        Convert current TSB (Form) into hard training constraints.
+
+        Zones:
+          danger    TSB <= -20   : Cut volume 30%, no quality, mandatory rest alert
+          fatigued  TSB in (-20, -10]: Cut volume 15%, no quality
+          normal    TSB in (-10, +10]: Standard training
+          fresh     TSB in (+10, +20]: Can step up volume 10%
+          peak_form TSB > +20    : Alert — possible over-taper or illness
+        """
+        if tsb <= -20:
+            return {
+                "zone": "danger",
+                "volume_cap": 0.70,
+                "long_run_cap": 0.75,
+                "quality_allowed": False,
+                "mandatory_alert": {
+                    "type": "danger",
+                    "message": (
+                        f"High fatigue detected (Form {tsb:+.0f}). "
+                        "Volume capped at 70% of normal. No quality sessions this week."
+                    ),
+                },
+            }
+        elif tsb <= -10:
+            return {
+                "zone": "fatigued",
+                "volume_cap": 0.85,
+                "long_run_cap": 0.90,
+                "quality_allowed": False,
+                "mandatory_alert": None,
+            }
+        elif tsb <= 10:
+            return {
+                "zone": "normal",
+                "volume_cap": 1.00,
+                "long_run_cap": 1.00,
+                "quality_allowed": True,
+                "mandatory_alert": None,
+            }
+        elif tsb <= 20:
+            return {
+                "zone": "fresh",
+                "volume_cap": 1.10,
+                "long_run_cap": 1.05,
+                "quality_allowed": True,
+                "mandatory_alert": None,
+            }
+        else:
+            return {
+                "zone": "peak_form",
+                "volume_cap": 1.00,
+                "long_run_cap": 1.00,
+                "quality_allowed": True,
+                "mandatory_alert": {
+                    "type": "info",
+                    "message": (
+                        f"Very high freshness detected (Form {tsb:+.0f}). "
+                        "You may be under-training — consider a moderate step-up if feeling good."
+                    ),
+                },
+            }
 
     # ── PATTERN DETECTION ────────────────────────────────────────────────────
 
@@ -385,6 +458,7 @@ class AICoachEngine:
         goal       = context["goal"]
         compliance = context["compliance"]
         feasibility = context["feasibility"]
+        tsb_enforcement = context.get("tsb_enforcement", {})
 
         recent_weeks      = context["weekly_history"][-4:]
         long_run_history  = context["long_run_history"][:5]
@@ -467,6 +541,15 @@ RECENT 4 WEEKS:
 
 RECENT LONG RUNS:
 {json.dumps(long_run_history, indent=2)}
+
+LOAD-BASED HARD CONSTRAINTS (TSB-driven — override coaching rules if they conflict):
+- Current Form (TSB): {feasibility.get('readiness', {}).get('tsb', 0) or 0:+.1f}
+- Fatigue zone: {tsb_enforcement.get('zone', 'normal')}
+- Volume cap this week: {tsb_enforcement.get('volume_cap', 1.00) * 100:.0f}% of normal
+- Long run cap: {tsb_enforcement.get('long_run_cap', 1.00) * 100:.0f}% of planned long run
+- Quality sessions allowed: {tsb_enforcement.get('quality_allowed', True)}
+
+{"⚠️ HIGH FATIGUE: Replace any tempo/intervals/marathon_pace sessions with easy or active_recovery." if not tsb_enforcement.get('quality_allowed', True) else ""}
 
 COACHING RULES (non-negotiable):
 1. Never increase weekly volume more than 10% from last week actual
@@ -678,10 +761,11 @@ Generate for ALL weeks until race day inclusive."""
         if not plan or "this_week" not in plan:
             return self._fallback_weekly(context)
 
-        this_week  = plan.get("this_week", {})
-        compliance = context["compliance"]
-        feasibility = context["feasibility"]
-        profile    = context["runner_profile"]
+        this_week       = plan.get("this_week", {})
+        compliance      = context["compliance"]
+        feasibility     = context["feasibility"]
+        profile         = context["runner_profile"]
+        tsb_enforcement = context.get("tsb_enforcement", {})
 
         recent_actual = compliance.get("actual_run_km", 0)
         trend         = compliance.get("trend", {})
@@ -696,6 +780,11 @@ Generate for ALL weeks until race day inclusive."""
         )
         adjusted_max = max_allowed * vol_adjustment
 
+        # Apply TSB volume cap on top of 10% rule
+        tsb_volume_cap = tsb_enforcement.get("volume_cap", 1.00)
+        tsb_adjusted_max = base_km * tsb_volume_cap
+        adjusted_max = min(adjusted_max, tsb_adjusted_max)
+
         weekly_enforced = ai_weekly > adjusted_max
         if weekly_enforced:
             this_week["weekly_target_km"] = round(adjusted_max, 1)
@@ -708,6 +797,10 @@ Generate for ALL weeks until race day inclusive."""
         ai_long   = float(this_week.get("long_run", {}).get("km", current_long))
         max_long  = current_long + 3.0
 
+        # Apply TSB long run cap on top of 3km rule
+        tsb_long_cap = tsb_enforcement.get("long_run_cap", 1.00)
+        max_long = min(max_long, current_long * tsb_long_cap + 3.0 * tsb_long_cap)
+
         long_enforced = ai_long > max_long
         if long_enforced:
             if "long_run" in this_week:
@@ -716,6 +809,26 @@ Generate for ALL weeks until race day inclusive."""
                 long_run_day = profile.get("long_run_day", "sunday")
                 if long_run_day in daily:
                     daily[long_run_day]["km"] = round(max_long, 1)
+
+        # Replace quality sessions if TSB says no quality allowed
+        quality_allowed = tsb_enforcement.get("quality_allowed", True)
+        if not quality_allowed:
+            quality_types = {"tempo", "intervals", "marathon_pace"}
+            daily = this_week.get("daily_plan", {})
+            quality_replaced = False
+            for day, session in daily.items():
+                if session.get("type") in quality_types:
+                    session["type"] = "easy"
+                    session["notes"] = (
+                        "Downgraded from quality session — high fatigue detected. Run easy."
+                    )
+                    quality_replaced = True
+            # Also replace this_week.quality_session
+            qs = this_week.get("quality_session", {})
+            if qs.get("type") in quality_types:
+                qs["type"] = "none"
+                qs["description"] = "Quality session removed — recovery required this week."
+                this_week["quality_session"] = qs
 
         # Ensure long run is on preferred day
         long_run_day = profile.get("long_run_day", "sunday")
@@ -728,10 +841,19 @@ Generate for ALL weeks until race day inclusive."""
             if session.get("type") == "strength":
                 session["km"] = 0
 
+        # Prepend mandatory TSB alert if present
+        mandatory_alert = tsb_enforcement.get("mandatory_alert")
+        if mandatory_alert:
+            existing_alerts = plan.get("alerts", [])
+            plan["alerts"] = [mandatory_alert] + existing_alerts
+
         plan["validation"] = {
-            "weekly_target_enforced":   weekly_enforced,
-            "long_run_enforced":        long_enforced,
-            "base_km_used":             round(base_km, 1),
+            "weekly_target_enforced":    weekly_enforced,
+            "long_run_enforced":         long_enforced,
+            "quality_replaced":          not quality_allowed,
+            "tsb_zone":                  tsb_enforcement.get("zone", "normal"),
+            "tsb_volume_cap":            tsb_volume_cap,
+            "base_km_used":              round(base_km, 1),
             "volume_adjustment_applied": vol_adjustment,
         }
 

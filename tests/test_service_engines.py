@@ -1362,3 +1362,127 @@ def test_ai_engine_scenario6_validate_taper_enforcement():
         f"Expected ≤28.5km for taper week -3, got {validated[0]['target_km']}"
     )
     assert validated[0]["phase"] == "taper"
+
+
+# ── TSB Enforcement tests ─────────────────────────────────────────────────────
+
+def _make_ai_engine():
+    """Return an AICoachEngine instance without Flask app context."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+    return AICoachEngine()
+
+
+def test_tsb_enforcement_danger_zone():
+    """TSB = -25 → danger, volume_cap=0.70, quality_allowed=False, mandatory alert."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(-25.0, 60.0)
+    assert result["zone"] == "danger"
+    assert result["volume_cap"] == 0.70
+    assert result["long_run_cap"] == 0.75
+    assert result["quality_allowed"] is False
+    assert result["mandatory_alert"] is not None
+    assert result["mandatory_alert"]["type"] == "danger"
+
+
+def test_tsb_enforcement_fatigued_zone():
+    """TSB = -15 → fatigued, volume_cap=0.85, quality_allowed=False, no mandatory alert."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(-15.0, 50.0)
+    assert result["zone"] == "fatigued"
+    assert result["volume_cap"] == 0.85
+    assert result["long_run_cap"] == 0.90
+    assert result["quality_allowed"] is False
+    assert result["mandatory_alert"] is None
+
+
+def test_tsb_enforcement_normal_zone():
+    """TSB = -5 → normal, volume_cap=1.00, quality_allowed=True."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(-5.0, 40.0)
+    assert result["zone"] == "normal"
+    assert result["volume_cap"] == 1.00
+    assert result["quality_allowed"] is True
+    assert result["mandatory_alert"] is None
+
+
+def test_tsb_enforcement_fresh_zone():
+    """TSB = +15 → fresh, volume_cap=1.10, quality_allowed=True."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(15.0, 30.0)
+    assert result["zone"] == "fresh"
+    assert result["volume_cap"] == 1.10
+    assert result["quality_allowed"] is True
+
+
+def test_tsb_enforcement_peak_form_zone():
+    """TSB = +25 → peak_form, mandatory info alert."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(25.0, 20.0)
+    assert result["zone"] == "peak_form"
+    assert result["mandatory_alert"] is not None
+    assert result["mandatory_alert"]["type"] == "info"
+
+
+def test_tsb_enforcement_boundary_at_minus20():
+    """TSB = -20 exactly → danger zone (boundary is <=)."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(-20.0, 55.0)
+    assert result["zone"] == "danger"
+
+
+def test_tsb_enforcement_boundary_at_minus10():
+    """TSB = -10 exactly → fatigued zone (boundary is <= -10)."""
+    engine = _make_ai_engine()
+    result = engine._tsb_enforcement(-10.0, 45.0)
+    assert result["zone"] == "fatigued"
+
+
+def test_validate_weekly_caps_volume_in_danger_zone():
+    """_validate_weekly caps volume to 70% base_km when TSB zone is danger."""
+    engine = _make_ai_engine()
+
+    context = {
+        "runner_profile": {"long_run_day": "sunday", "training_days_per_week": 5},
+        "compliance": {
+            "actual_run_km": 50.0,
+            "trend": {"avg_last_2_weeks": 50.0},
+            "response": {"volume_adjustment": 1.0},
+        },
+        "feasibility": {
+            "readiness": {"current_long_run_km": 22.0},
+        },
+        "tsb_enforcement": {
+            "zone": "danger",
+            "volume_cap": 0.70,
+            "long_run_cap": 0.75,
+            "quality_allowed": False,
+            "mandatory_alert": {"type": "danger", "message": "High fatigue."},
+        },
+    }
+
+    plan = {
+        "this_week": {
+            "weekly_target_km": 60.0,  # too high — should be capped to 50 * 0.70 = 35
+            "daily_plan": {
+                "tuesday": {"type": "tempo", "km": 10.0, "pace_guidance": "", "notes": ""},
+                "sunday": {"type": "long", "km": 24.0, "pace_guidance": "", "notes": ""},
+            },
+            "long_run": {"km": 24.0},
+            "quality_session": {"type": "tempo", "km": 10.0, "description": "Tempo"},
+        },
+        "alerts": [],
+    }
+
+    validated = engine._validate_weekly(plan, context)
+
+    # Volume must be ≤ 35km (50 * 0.70)
+    assert validated["this_week"]["weekly_target_km"] <= 35.5
+    # Quality session must be replaced
+    assert validated["this_week"]["quality_session"]["type"] == "none"
+    # Tempo in daily plan must be replaced
+    assert validated["this_week"]["daily_plan"]["tuesday"]["type"] == "easy"
+    # Mandatory alert must be prepended
+    assert validated["alerts"][0]["type"] == "danger"
+    # Validation record must reflect TSB zone
+    assert validated["validation"]["tsb_zone"] == "danger"
+    assert validated["validation"]["quality_replaced"] is True

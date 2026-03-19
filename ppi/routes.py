@@ -1030,7 +1030,7 @@ def dashboard():
         _raw_coaching_message = _re.sub(_pat, _rep, _raw_coaching_message, flags=_re.IGNORECASE)
     canonical_coaching_message = _raw_coaching_message
 
-    # ── Aerobic potential pace (for FM tile) ─────────────────────────────────
+    # ── Aerobic potential pace + wall math transparency ──────────────────────
     _wall_data = intel.get('wall_analysis') or {}
     _ap_seconds = _wall_data.get('optimal_fm_potential') or 0
     if _ap_seconds:
@@ -1038,6 +1038,30 @@ def dashboard():
         aerobic_pace_display = f"{int(_ap_pace_sec // 60)}:{int(_ap_pace_sec % 60):02d}/km avg"
     else:
         aerobic_pace_display = ''
+
+    # Wall factor math — compute canonical wall-adjusted prediction for the JS card
+    _WALL_FACTORS = {'low': 1.00, 'medium': 1.03, 'high': 1.08, 'unknown': 1.05}
+    _wall_risk = (_wall_data.get('wall_risk') or 'unknown').lower()
+    _wall_factor = _WALL_FACTORS.get(_wall_risk, 1.05)
+    _base_pred_seconds = float(intel.get('predictions', {}).get('marathon', {}).get('seconds', 0) or 0)
+
+    if _wall_risk == 'unknown' or not _base_pred_seconds:
+        show_wall_estimate = False
+        canonical_wall_adjusted_seconds = 0
+        canonical_wall_cost_minutes = 0
+    else:
+        show_wall_estimate = True
+        canonical_wall_adjusted_seconds = round(_base_pred_seconds * _wall_factor)
+        canonical_wall_cost_minutes = round((_base_pred_seconds * _wall_factor - _base_pred_seconds) / 60, 1)
+
+    def _fmt_hms(total_sec):
+        total_sec = int(total_sec)
+        h, rem = divmod(total_sec, 3600)
+        m, s   = divmod(rem, 60)
+        return f"{h}:{m:02d}:{s:02d}"
+
+    canonical_wall_base_display     = _fmt_hms(_base_pred_seconds) if _base_pred_seconds else ''
+    canonical_wall_adjusted_display = _fmt_hms(canonical_wall_adjusted_seconds) if canonical_wall_adjusted_seconds else ''
 
     # ── Fetch this week's activities ──────────────────────────────────────────
     today_local = _today_local_date(user_tz)
@@ -1430,6 +1454,13 @@ def dashboard():
         aerobic_pace_display=aerobic_pace_display,
         weekly_ctl_json=json.dumps(weekly_ctl_series),
         longest_date_display=longest_date_display,
+        show_wall_estimate=show_wall_estimate,
+        canonical_wall_adjusted_seconds=canonical_wall_adjusted_seconds,
+        canonical_wall_cost_minutes=canonical_wall_cost_minutes,
+        canonical_wall_base_display=canonical_wall_base_display,
+        canonical_wall_adjusted_display=canonical_wall_adjusted_display,
+        canonical_wall_factor=_wall_factor,
+        canonical_wall_risk=_wall_risk,
     )
 
 
