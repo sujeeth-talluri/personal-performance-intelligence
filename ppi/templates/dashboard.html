@@ -123,13 +123,15 @@
     .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
     .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
     .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
-    .confidence-badge {
-      display: inline-block; padding: 2px 8px; border-radius: 10px;
-      font-size: .65rem; font-weight: 700; text-transform: uppercase; margin-top: 8px;
+    /* Unified confidence badges — same style in tiles and legend */
+    .confidence-high, .confidence-moderate, .confidence-low {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      color: #fff; margin-top: 6px;
     }
-    .conf-high   { background: #dcfce7; color: #16a34a; }
-    .conf-medium { background: #fef9c3; color: #a16207; }
-    .conf-low    { background: #fee2e2; color: #dc2626; }
+    .confidence-high     { background: #00C853; }
+    .confidence-moderate { background: #f59e0b; }
+    .confidence-low      { background: #ef4444; }
     .prediction-legend {
       display: flex; align-items: center; gap: 16px;
       padding: 8px 12px; background: rgba(0,0,0,.03);
@@ -138,9 +140,6 @@
     }
     .legend-title { color: #aaa; font-weight: 500; }
     .legend-item { display: flex; align-items: center; gap: 6px; }
-    .badge-high     { background: #00C853; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
-    .badge-moderate { background: #f59e0b; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
-    .badge-low      { background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
 
     /* ─── Wall analysis ──────────────────────────────────────────── */
     .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -291,13 +290,22 @@
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
     .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
 
-    /* ─── Run items ──────────────────────────────────────────────── */
-    .run-item { display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: .82rem; }
-    .run-item:last-child { border-bottom: none; }
-    .run-date   { color: var(--muted); min-width: 56px; }
-    .run-dist   { font-weight: 700; min-width: 52px; }
-    .run-pace   { color: var(--muted); }
-    .run-time   { color: var(--muted); margin-left: auto; }
+    /* ─── Activity rows (unified grid) ──────────────────────────── */
+    .activity-row {
+      display: grid;
+      grid-template-columns: 26px 58px 1fr 72px 50px;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .82rem;
+    }
+    .activity-row:last-child { border-bottom: none; }
+    .activity-icon   { text-align: center; font-size: 1rem; }
+    .activity-date   { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+    .activity-main   { font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-hr     { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
+    .activity-dur    { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
 
     /* ─── Pills ──────────────────────────────────────────────────── */
     .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
@@ -560,27 +568,20 @@
       <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Last 7 activities</div>
       {% if recent_activities %}
         {% for act in recent_activities %}
-          <div class="run-item">
-            <div class="run-date">{{ act.icon }} {{ act.date }}</div>
-            {% if act.is_run %}
-              <div class="run-dist">{{ act.distance_km }} km</div>
-              {% if act.pace %}<div class="run-pace">{{ act.pace }}/km</div>{% endif %}
-              {% if act.hr %}<div class="run-pace">HR {{ act.hr }}</div>{% endif %}
-              {% if act.elevation %}<div class="run-pace">+{{ act.elevation }}m</div>{% endif %}
-              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
-            {% elif act.is_strength %}
-              <div class="run-dist" style="color:var(--muted)">{{ act.type|title }}</div>
-              {% if act.hr %}<div class="run-pace">HR {{ act.hr }}</div>{% endif %}
-              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
-            {% elif act.is_cross %}
-              <div class="run-dist">{{ act.distance_km }} km</div>
-              <div class="run-pace" style="color:var(--muted)">{{ act.type|title }}</div>
-              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
-            {% else %}
-              <div class="run-dist" style="color:var(--muted)">{{ act.type|title }}</div>
-              {% if act.distance_km > 0 %}<div class="run-pace">{{ act.distance_km }} km</div>{% endif %}
-              {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
-            {% endif %}
+          <div class="activity-row">
+            <div class="activity-icon">{{ act.icon }}</div>
+            <div class="activity-date">{{ act.date }}</div>
+            <div class="activity-main">
+              {% if act.is_run %}
+                {{ act.distance_km }}km{% if act.pace %} · {{ act.pace }}/km{% endif %}{% if act.elevation %} · +{{ act.elevation }}m{% endif %}
+              {% elif act.is_cross %}
+                {{ act.distance_km }}km · {{ act.type|title }}
+              {% else %}
+                {{ act.type|title }}
+              {% endif %}
+            </div>
+            <div class="activity-hr">{% if act.hr %}HR {{ act.hr }}{% endif %}</div>
+            <div class="activity-dur">{{ act.duration or '' }}</div>
           </div>
         {% endfor %}
       {% else %}
@@ -600,9 +601,9 @@
     <div class="dist-grid" id="dist-tiles"></div>
     <div class="prediction-legend">
       <span class="legend-title">Confidence:</span>
-      <span class="legend-item"><span class="badge-high">HIGH</span> Recent race result (last 60 days)</span>
-      <span class="legend-item"><span class="badge-moderate">MODERATE</span> Older race or training estimate</span>
-      <span class="legend-item"><span class="badge-low">LOW</span> Limited data — prediction is estimated</span>
+      <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
+      <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
+      <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
     </div>
   </div>
 
@@ -707,9 +708,9 @@
   function el(id) { return document.getElementById(id); }
 
   function confClass(c) {
-    if (!c) return 'conf-low';
+    if (!c) return 'confidence-low';
     const l = c.toLowerCase();
-    return l === 'high' ? 'conf-high' : l === 'medium' ? 'conf-medium' : 'conf-low';
+    return l === 'high' ? 'confidence-high' : (l === 'medium' || l === 'moderate') ? 'confidence-moderate' : 'confidence-low';
   }
 
   function riskClass(r) {
@@ -772,7 +773,7 @@
           <div class="label">${label}</div>
           <div class="time">${ptime}</div>
           <div class="sub-time">${subPace}</div>
-          <div><span class="confidence-badge ${confClass(conf)}">${conf}</span></div>
+          <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
         `;
         if (fm && wall && wall.optimal_fm_potential_display) {
           const apPace = window._aerobicPaceDisplay || '';

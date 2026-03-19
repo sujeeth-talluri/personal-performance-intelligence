@@ -49,6 +49,7 @@ from .services.strava_oauth_service import (
     link_oauth_identity,
 )
 from .services.ai_recommendation_service import build_pace_strategy, generate_coaching_output
+from .services.load_engine import running_stress_score as _rss_fn
 from .services.prediction_engine import vdot_from_race, vdot_to_race_time_seconds
 from .services.strava_service import sync_strava_data
 from .services.data_quality import DataQualityReport
@@ -1042,25 +1043,57 @@ def dashboard():
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
 
-    # ── 8-week CTL series for chart (last Metric value per week = end-of-week CTL) ──
-    _eight_weeks_ago = today_local - timedelta(weeks=8)
-    _ctl_metrics_raw = (
-        Metric.query
-        .filter(Metric.user_id == user.id, Metric.date >= _eight_weeks_ago)
-        .order_by(Metric.date.asc())
+    # ── 8-week CTL series — replay load_engine formula so chart matches fitness card ──
+    import math as _math
+    _CTL_DECAY = _math.exp(-1.0 / 42.0)
+    _CTL_GAIN  = 1.0 - _CTL_DECAY
+
+    _goal_obj  = intel.get("goal") or {}
+    _goal_secs = float(_goal_obj.get("goal_seconds") or 0)
+    _goal_dist = float(_goal_obj.get("distance_km") or 42.195)
+    _mp        = _goal_secs / _goal_dist if _goal_secs > 0 else 339.0
+
+    _all_acts_raw = (
+        Activity.query
+        .filter(Activity.user_id == user.id)
+        .order_by(Activity.date.asc())
         .all()
     )
+    _daily_tss_map: dict = {}
+    for _a in _all_acts_raw:
+        _d = float(_a.distance_km or 0)
+        _t = float(_a.moving_time or 0)
+        _a_date = _a.date.date() if hasattr(_a.date, 'date') else _a.date
+        _act_dict = {
+            "type": (_a.activity_type or "").lower(),
+            "moving_time_sec": _t,
+            "distance_km": _d,
+            "pace_sec_per_km": (_t / _d) if _d > 0 and _t > 0 else None,
+            "elevation_gain": float(_a.elevation_gain) if _a.elevation_gain else 0.0,
+        }
+        _daily_tss_map[_a_date] = _daily_tss_map.get(_a_date, 0.0) + _rss_fn(_act_dict, _mp)
+
+    _ctl_start = min(_daily_tss_map.keys()) if _daily_tss_map else today_local - timedelta(days=120)
+    _ctl_start = min(_ctl_start, today_local - timedelta(days=120))
+    _ctl_timeline: dict = {}
+    _ctl_running = 0.0
+    _cur = _ctl_start
+    while _cur <= today_local:
+        _tss = _daily_tss_map.get(_cur, 0.0)
+        _ctl_running = _ctl_running * _CTL_DECAY + _tss * _CTL_GAIN
+        _ctl_timeline[_cur] = round(_ctl_running, 1)
+        _cur += timedelta(days=1)
+
+    _eight_weeks_ago = today_local - timedelta(weeks=8)
     weekly_ctl_series = []
-    for _wn in range(9):  # 9 points: 8 past weeks + current
+    for _wn in range(9):
         _ws = _eight_weeks_ago + timedelta(weeks=_wn)
-        _we = _ws + timedelta(days=6)
-        _wm = [m for m in _ctl_metrics_raw if _ws <= m.date <= _we]
-        if _wm:
-            _last = max(_wm, key=lambda m: m.date)
-            weekly_ctl_series.append({'week': f"{_ws.strftime('%b')} {_ws.day}", 'ctl': round(_last.ctl or 0, 1)})
-        elif weekly_ctl_series:
-            weekly_ctl_series.append({'week': f"{_ws.strftime('%b')} {_ws.day}", 'ctl': weekly_ctl_series[-1]['ctl']})
-    weekly_ctl_series = weekly_ctl_series[-8:]  # keep most recent 8 points
+        _we = min(_ws + timedelta(days=6), today_local)
+        weekly_ctl_series.append({
+            'week': f"{_ws.strftime('%b')} {_ws.day}",
+            'ctl':  _ctl_timeline.get(_we, _ctl_timeline.get(_ws, 0.0)),
+        })
+    weekly_ctl_series = weekly_ctl_series[-8:]
 
     week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
