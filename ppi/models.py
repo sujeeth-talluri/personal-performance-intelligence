@@ -139,3 +139,27 @@ class RunnerProfile(db.Model):
     updated_at              = db.Column(db.DateTime, default=_utcnow_naive, onupdate=_utcnow_naive)
 
     user = db.relationship("User", backref=db.backref("runner_profile", uselist=False))
+
+
+class CoachingPlan(db.Model):
+    __tablename__ = "coaching_plans"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    user_id           = db.Column(
+                            db.Integer,
+                            db.ForeignKey("users.id"),
+                            nullable=False,
+                            unique=True,
+                        )
+    generated_at      = db.Column(db.DateTime, nullable=False)
+    plan_json         = db.Column(db.Text, nullable=False)
+    context_json      = db.Column(db.Text)
+    feasibility_score = db.Column(db.Float, default=0)
+    phase             = db.Column(db.String(20), default="base")
+    weekly_target_km  = db.Column(db.Float, default=0)
+    long_run_km       = db.Column(db.Float, default=0)
+    cache_key         = db.Column(db.String(64))
+    # cache_key = hash of (last_activity_date + goal_id)
+    # If this changes, cache is stale
+
+    user = db.relationship("User", backref="coaching_plan")

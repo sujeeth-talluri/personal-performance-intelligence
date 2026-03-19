@@ -1035,3 +1035,330 @@ def test_feasibility_scenario7_consistency_score_edge_cases():
     # No runs at all → 0
     score_none = fe._consistency_score([])
     assert score_none == 0.0
+
+
+# ── AICoachEngine helpers ─────────────────────────────────────────────────────
+#
+# AICoachEngine() takes no __init__ args — instantiate freely.
+# _fallback_weekly, _fallback_progression, _validate_weekly,
+# _validate_progression all operate on plain dicts — no DB or Flask context.
+# _build_cache_key touches Goal.query and Activity.query — needs patching.
+#
+# Context dict shape (minimal):
+#   compliance:  {"actual_run_km", "trend", "response", "miss_reason"}
+#   feasibility: {"readiness": {"current_long_run_km", ...}}
+#   runner_profile: {"training_days_per_week", "long_run_day", ...}
+#   goal: {"race_date", "goal_time", "goal_distance_km", "weeks_to_race", ...}
+
+
+def _make_ai_context(
+    actual_run_km=38.0,
+    current_long_km=22.0,
+    training_days=5,
+    long_run_day="sunday",
+    vol_adjustment=1.0,
+    avg_last_2=38.0,
+    weeks_to_race=20,
+    race_date=None,
+    goal_distance_km=42.195,
+):
+    """Build a minimal context dict for AICoachEngine method tests."""
+    from datetime import date, timedelta
+    if race_date is None:
+        race_date = (date.today() + timedelta(weeks=weeks_to_race)).strftime("%Y-%m-%d")
+    return {
+        "runner_profile": {
+            "training_days_per_week": training_days,
+            "long_run_day":           long_run_day,
+            "strength_days_per_week": 2,
+            "preferred_run_time":     "morning",
+            "consistency_level":      "consistent",
+            "race_experience":        "multiple",
+            "injury_status":          "healthy",
+            "injury_area":            "none",
+            "goal_priority":          "hit_time",
+        },
+        "goal": {
+            "race_name":       "Test Marathon",
+            "race_date":       race_date,
+            "goal_time":       "03:45:00",
+            "goal_distance_km": goal_distance_km,
+            "weeks_to_race":   weeks_to_race,
+            "today":           date.today().strftime("%Y-%m-%d"),
+            "personal_best":   None,
+            "pb_5k": None, "pb_10k": None, "pb_hm": "1:45:00",
+        },
+        "data_quality": {"confidence": "high", "is_sufficient": True},
+        "compliance": {
+            "actual_run_km": actual_run_km,
+            "planned_run_km": actual_run_km + 5,
+            "volume_compliance_pct": 90.0,
+            "miss_reason": {"code": "on_track"},
+            "trend": {
+                "direction": "steady",
+                "consecutive_good_weeks": 2,
+                "avg_last_2_weeks": avg_last_2,
+            },
+            "response": {"volume_adjustment": vol_adjustment},
+        },
+        "feasibility": {
+            "feasibility_score": 72.0,
+            "assessment_label":  "Achievable",
+            "vdot":              {"current": 42.0, "required": 44.0, "already_capable": False},
+            "readiness": {
+                "current_long_run_km":   current_long_km,
+                "required_long_run_km":  35.9,
+                "current_weekly_avg_km": actual_run_km,
+                "required_peak_weekly_km": 65.0,
+            },
+            "consistency_score": 75.0,
+        },
+        "weekly_history":   [],
+        "long_run_history": [],
+    }
+
+
+def _patch_ai_cache(goal_mock, activity_mock):
+    """Patch Goal and Activity in ai_coach_engine for cache key tests."""
+    mock_goal_cls = MagicMock()
+    mock_goal_cls.id = _Col()
+    mock_goal_cls.query.filter_by.return_value.order_by.return_value.first.return_value = goal_mock
+
+    mock_act_cls = MagicMock()
+    mock_act_cls.date = _Col()
+    mock_act_cls.query.filter_by.return_value.order_by.return_value.first.return_value = activity_mock
+
+    return patch.multiple(
+        "ppi.services.ai_coach_engine",
+        Goal=mock_goal_cls,
+        Activity=mock_act_cls,
+    )
+
+
+# ── AI Engine scenario tests ───────────────────────────────────────────────────
+
+
+def test_ai_engine_scenario1_cache_key_generation():
+    """S1 — Cache keys differ by user; same inputs → same key; new activity → different key."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+
+    engine = AICoachEngine()
+
+    def _goal(gid=1, goal_time="03:45:00", race_date="2026-12-01"):
+        g = MagicMock()
+        g.id = gid; g.goal_time = goal_time; g.race_date = race_date
+        return g
+
+    def _act(dt_str="2026-03-01"):
+        a = MagicMock()
+        a.date = dt_str
+        return a
+
+    goal = _goal()
+    act1 = _act("2026-03-01")
+    act2 = _act("2026-03-15")  # different last activity date
+
+    # Same inputs → same key
+    with _patch_ai_cache(goal, act1):
+        key_a = engine._build_cache_key(user_id=1)
+        key_b = engine._build_cache_key(user_id=1)
+    assert key_a == key_b, "Same inputs must produce same cache key"
+
+    # Different user → different key
+    with _patch_ai_cache(goal, act1):
+        key_user1 = engine._build_cache_key(user_id=1)
+        key_user2 = engine._build_cache_key(user_id=2)
+    assert key_user1 != key_user2, "Different users must produce different cache keys"
+
+    # New activity date → different key
+    with _patch_ai_cache(goal, act1):
+        key_old = engine._build_cache_key(user_id=1)
+    with _patch_ai_cache(goal, act2):
+        key_new = engine._build_cache_key(user_id=1)
+    assert key_old != key_new, "New activity date must invalidate cache key"
+
+
+def test_ai_engine_scenario2_fallback_weekly_required_fields():
+    """S2 — _fallback_weekly() returns a valid plan with all required fields."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+
+    engine = AICoachEngine()
+    ctx = _make_ai_context(actual_run_km=35.0, current_long_km=20.0)
+    plan = engine._fallback_weekly(ctx)
+
+    assert "phase" in plan
+    assert "coaching_message" in plan
+    assert "this_week" in plan
+
+    this_week = plan["this_week"]
+    assert "weekly_target_km" in this_week
+    assert "daily_plan" in this_week
+    assert "long_run" in this_week
+    assert "focus_point" in this_week
+
+    # Weekly target should be reasonable (not zero, not absurd)
+    assert 15 <= this_week["weekly_target_km"] <= 85
+
+    # All 7 days present
+    days = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+    assert set(this_week["daily_plan"].keys()) == days
+
+    # Long run on preferred day (sunday)
+    assert this_week["daily_plan"]["sunday"]["type"] == "long"
+
+    # Strength sessions have km=0
+    for day, session in this_week["daily_plan"].items():
+        if session["type"] == "strength":
+            assert session["km"] == 0
+
+
+def test_ai_engine_scenario3_fallback_progression_structure():
+    """S3 — _fallback_progression() returns correct structure, taper last 3, no km > max_long."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+
+    engine = AICoachEngine()
+    ctx = _make_ai_context(current_long_km=20.0, weeks_to_race=16)
+    progression = engine._fallback_progression(ctx)
+
+    assert isinstance(progression, list)
+    assert len(progression) > 0
+
+    required_keys = {"week_number", "week_date", "target_km", "phase", "is_recovery_week"}
+    for entry in progression:
+        assert required_keys.issubset(entry.keys()), f"Missing keys in {entry}"
+
+    # max_long = min(32, 42.195 * 0.80) = 32.0
+    max_long = min(32.0, 42.195 * 0.80)
+    for entry in progression:
+        assert entry["target_km"] <= max_long + 0.1, (
+            f"Week {entry['week_number']} exceeds max_long: {entry['target_km']}"
+        )
+
+    # Last 3 items (taper) must be taper phase
+    taper_entries = progression[-3:]
+    for entry in taper_entries:
+        assert entry["phase"] == "taper", (
+            f"Expected taper phase, got '{entry['phase']}' on {entry['week_date']}"
+        )
+
+
+def test_ai_engine_scenario4_validate_weekly_10pct_rule():
+    """S4 — 10% rule: AI target=100km, actual=38km → validated to ≤41.8km."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+
+    engine = AICoachEngine()
+    ctx = _make_ai_context(actual_run_km=38.0, avg_last_2=38.0, vol_adjustment=1.0)
+
+    # AI plan with outrageously high weekly target
+    ai_plan = {
+        "phase": "build",
+        "phase_label": "Build",
+        "phase_reasoning": "test",
+        "week_theme": "test",
+        "is_recovery_week": False,
+        "this_week": {
+            "weekly_target_km": 100.0,  # AI went rogue
+            "daily_plan": {
+                day: {"type": "easy", "km": 14.0, "pace_guidance": "", "notes": ""}
+                for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+            },
+            "long_run": {"km": 35.0, "pace_guidance": "", "purpose": ""},
+            "quality_session": {"day": "tuesday", "type": "tempo", "km": 12.0, "pace_guidance": "", "description": ""},
+            "focus_point": "",
+            "compliance_response": "",
+        },
+        "coaching_message": "",
+        "alerts": [],
+    }
+
+    validated = engine._validate_weekly(ai_plan, ctx)
+
+    # 38 * 1.10 * 1.0 = 41.8
+    assert validated["this_week"]["weekly_target_km"] <= 41.9, (
+        f"Expected ≤41.8km, got {validated['this_week']['weekly_target_km']}"
+    )
+    assert validated["validation"]["weekly_target_enforced"] is True
+
+
+def test_ai_engine_scenario5_validate_long_run_cap():
+    """S5 — Long run cap: AI says 35km, current_long=18km → validated to ≤21km."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+
+    engine = AICoachEngine()
+    ctx = _make_ai_context(actual_run_km=45.0, current_long_km=18.0, avg_last_2=45.0)
+
+    ai_plan = {
+        "phase": "peak",
+        "phase_label": "Peak",
+        "phase_reasoning": "test",
+        "week_theme": "test",
+        "is_recovery_week": False,
+        "this_week": {
+            "weekly_target_km": 48.0,
+            "daily_plan": {
+                "monday":    {"type": "easy",     "km": 8.0,  "pace_guidance": "", "notes": ""},
+                "tuesday":   {"type": "tempo",    "km": 10.0, "pace_guidance": "", "notes": ""},
+                "wednesday": {"type": "strength", "km": 0,    "pace_guidance": "", "notes": ""},
+                "thursday":  {"type": "easy",     "km": 8.0,  "pace_guidance": "", "notes": ""},
+                "friday":    {"type": "strength", "km": 0,    "pace_guidance": "", "notes": ""},
+                "saturday":  {"type": "easy",     "km": 8.0,  "pace_guidance": "", "notes": ""},
+                "sunday":    {"type": "long",     "km": 35.0, "pace_guidance": "", "notes": ""},
+            },
+            "long_run": {"km": 35.0, "pace_guidance": "", "purpose": ""},
+            "quality_session": {"day": "tuesday", "type": "tempo", "km": 10.0, "pace_guidance": "", "description": ""},
+            "focus_point": "",
+            "compliance_response": "",
+        },
+        "coaching_message": "",
+        "alerts": [],
+    }
+
+    validated = engine._validate_weekly(ai_plan, ctx)
+
+    # 18 + 3 = 21km max
+    assert validated["this_week"]["long_run"]["km"] <= 21.1, (
+        f"Expected ≤21km, got {validated['this_week']['long_run']['km']}"
+    )
+    assert validated["this_week"]["daily_plan"]["sunday"]["km"] <= 21.1
+    assert validated["validation"]["long_run_enforced"] is True
+
+
+def test_ai_engine_scenario6_validate_taper_enforcement():
+    """S6 — Taper: week 3 before race has 32km → validated to ≤24km (75% of 32km max)."""
+    from ppi.services.ai_coach_engine import AICoachEngine
+    from datetime import date, timedelta
+
+    engine = AICoachEngine()
+
+    race_date = date.today() + timedelta(weeks=20)
+    ctx = _make_ai_context(
+        current_long_km=30.0,
+        weeks_to_race=20,
+        race_date=race_date.strftime("%Y-%m-%d"),
+        goal_distance_km=42.195,
+    )
+
+    # Week that is exactly 3 weeks before race day
+    week_3_before = race_date - timedelta(weeks=3)
+
+    progression = [
+        {
+            "week_number": 17,
+            "week_date":   week_3_before.strftime("%Y-%m-%d"),
+            "target_km":   32.0,  # should be capped to 75% of max_long
+            "phase":       "peak",
+            "is_recovery_week": False,
+            "is_peak_run": True,
+            "label":       "Peak Run",
+        }
+    ]
+
+    validated = engine._validate_progression(progression, ctx)
+
+    # max_long = min(38, 42.195 * 0.90) = 37.97; 75% = 28.5
+    # Since target was 32.0 and max_long is ~37.97, taper cap is 37.97 * 0.75 = 28.5
+    assert len(validated) == 1
+    assert validated[0]["target_km"] <= 29.0, (
+        f"Expected ≤28.5km for taper week -3, got {validated[0]['target_km']}"
+    )
+    assert validated[0]["phase"] == "taper"
