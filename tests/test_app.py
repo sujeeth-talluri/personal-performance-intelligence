@@ -60,6 +60,9 @@ def test_register_and_login_flow(client):
 
 
 def test_onboarding_then_dashboard(client):
+    from ppi.extensions import db as _db
+    from ppi.models import RunnerProfile, User
+
     client.post(
         "/register",
         data={"name": "Runner", "email": "r@example.com", "password": "secret12"},
@@ -79,7 +82,26 @@ def test_onboarding_then_dashboard(client):
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/")
+    # After onboarding, user is redirected to coach-intro (not dashboard)
+    assert response.headers["Location"].endswith("/coach-intro")
+
+    # Simulate completing coach onboarding by inserting a completed RunnerProfile
+    with client.application.app_context():
+        user = User.query.filter_by(email="r@example.com").first()
+        profile = RunnerProfile(
+            user_id=user.id,
+            consistency_level="consistent",
+            race_experience="once",
+            injury_status="healthy",
+            training_days_per_week=5,
+            long_run_day="sunday",
+            strength_days_per_week=2,
+            preferred_run_time="morning",
+            goal_priority="hit_time",
+            onboarding_completed=True,
+        )
+        _db.session.add(profile)
+        _db.session.commit()
 
     dash = client.get("/", follow_redirects=False)
     assert dash.status_code == 200

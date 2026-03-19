@@ -109,3 +109,33 @@ class WorkoutLog(db.Model):
     source = db.Column(db.String(24), nullable=False, default="engine")
 
     __table_args__ = (db.UniqueConstraint("user_id", "workout_date", name="uq_user_workout_date"),)
+
+
+class RunnerProfile(db.Model):
+    __tablename__ = "runner_profiles"
+
+    id      = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
+
+    # Running background
+    consistency_level      = db.Column(db.String(32))   # just_starting|getting_back|consistent|well_trained
+    race_experience        = db.Column(db.String(32))   # first_time|once|multiple
+    injury_status          = db.Column(db.String(32))   # healthy|minor|ongoing
+    injury_area            = db.Column(db.String(64))   # knee|hip|ankle|foot|other|none
+
+    # Schedule preferences
+    training_days_per_week  = db.Column(db.Integer)     # 3, 4, 5, or 6
+    long_run_day            = db.Column(db.String(16))  # saturday|sunday|flexible
+    strength_days_per_week  = db.Column(db.Integer)     # 0, 1, or 2
+    preferred_run_time      = db.Column(db.String(32))  # early_morning|morning|evening|flexible
+
+    # Goal motivation
+    goal_priority           = db.Column(db.String(32))  # finish_healthy|beat_previous|hit_time|qualify
+
+    # Metadata
+    onboarding_completed    = db.Column(db.Boolean, default=False)
+    completed_at            = db.Column(db.DateTime)
+    created_at              = db.Column(db.DateTime, default=_utcnow_naive)
+    updated_at              = db.Column(db.DateTime, default=_utcnow_naive, onupdate=_utcnow_naive)
+
+    user = db.relationship("User", backref=db.backref("runner_profile", uselist=False))

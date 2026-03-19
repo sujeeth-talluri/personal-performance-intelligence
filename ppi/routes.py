@@ -1,3 +1,4 @@
+import json
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -5,6 +6,7 @@ from email.mime.text import MIMEText
 from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import requests as http_requests
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -49,6 +51,8 @@ from .services.strava_oauth_service import (
 from .services.ai_recommendation_service import build_pace_strategy, generate_coaching_output
 from .services.prediction_engine import vdot_from_race, vdot_to_race_time_seconds
 from .services.strava_service import sync_strava_data
+from .models import Activity, Goal, RunnerProfile
+from .extensions import db
 
 web = Blueprint("web", __name__)
 
@@ -916,6 +920,14 @@ def dashboard():
     user = _current_user()
     user_tz = _user_timezone_name()
 
+    # Gate: must complete coach onboarding before seeing dashboard
+    _profile = RunnerProfile.query.filter_by(user_id=user.id).first()
+    if not _profile or not _profile.onboarding_completed:
+        _goal = Goal.query.filter_by(user_id=user.id).order_by(Goal.id.desc()).first()
+        if not _goal:
+            return redirect(url_for("web.onboarding"))
+        return redirect(url_for("web.coach_intro"))
+
     force_sync = request.args.get("sync") == "1"
     cooldown_min = int(current_app.config.get("STRAVA_SYNC_COOLDOWN_MIN", 15))
     last_sync_at = _parse_iso_datetime(session.get("last_sync_at"))
@@ -1004,6 +1016,291 @@ def dashboard():
     )
 
 
+# ---------------------------------------------------------------------------
+# Coach intro — conversational AI onboarding (between /onboarding and /)
+# ---------------------------------------------------------------------------
+
+# Hardcoded fallback messages per step when Claude API is unavailable.
+_COACH_FALLBACKS = {
+    0: {
+        "text": "Welcome! I'm Coach Ike, your AI marathon coach. I have a few quick questions to personalise your training plan. First — how consistently have you been running recently?",
+        "options": ["Just getting started (< 1 month)", "Getting back into it (had a break)", "Training consistently (3+ months)", "Well trained (6+ months solid)"],
+        "input_type": "options",
+    },
+    1: {
+        "text": "Great — good to know where you're starting from. Have you completed this race distance before?",
+        "options": ["First time at this distance", "Done it once before", "Done it multiple times"],
+        "input_type": "options",
+    },
+    2: {
+        "text": "Understood. Any injuries or niggles I should know about in the last 6 months?",
+        "options": ["Fully healthy — no issues", "Minor issue, mostly recovered", "Managing an ongoing issue"],
+        "input_type": "options",
+    },
+    3: {
+        "text": "Got it. How many days per week can you realistically commit to training?",
+        "options": ["3 days", "4 days", "5 days", "6 days"],
+        "input_type": "options",
+    },
+    4: {
+        "text": "Perfect. Which day works best for your weekly long run?",
+        "options": ["Saturday", "Sunday", "Flexible — no preference"],
+        "input_type": "options",
+    },
+    5: {
+        "text": "Good to know. How many strength or gym sessions per week do you usually do?",
+        "options": ["No strength training", "1 session per week", "2 sessions per week"],
+        "input_type": "options",
+    },
+    6: {
+        "text": "Almost done! When do you usually run?",
+        "options": ["Early morning (before 7am)", "Morning (7-10am)", "Evening (after 5pm)", "Flexible — it varies"],
+        "input_type": "options",
+    },
+    7: {
+        "text": "Last question — what matters most to you about this race?",
+        "options": ["Just finish healthy and strong", "Beat my previous time", "Hit my specific time goal", "Qualify for a major race"],
+        "input_type": "options",
+    },
+}
+
+
+_STEP_KEYS = [
+    "consistency_level",
+    "race_experience",
+    "injury_status",
+    "training_days_per_week",
+    "long_run_day",
+    "strength_days_per_week",
+    "preferred_run_time",
+    "goal_priority",
+]
+
+
+def _get_next_coach_message(current_step, user_answer, collected, goal, user) -> dict:
+    """Call Claude to generate the next conversational coaching message.
+    Falls back to hardcoded questions if the API is unavailable."""
+    dist_km = float(getattr(goal, "race_distance", None) or 42.2)
+    if dist_km > 40:
+        dist_label = "marathon"
+    elif dist_km > 20:
+        dist_label = "half marathon"
+    elif dist_km > 9:
+        dist_label = "10K"
+    else:
+        dist_label = "5K"
+
+    prompt = (
+        f"You are a warm, encouraging elite marathon coach named Coach Ike "
+        f"having your first conversation with a new runner.\n\n"
+        f"Runner's goal: {goal.goal_time} {dist_label} on {goal.race_date} ({goal.race_name})\n"
+        f"Runner's name: {user.name or 'there'}\n\n"
+        f"Conversation so far:\n{json.dumps(collected, indent=2)}\n\n"
+        f"Current step: {current_step} of 7\n"
+        f"Previous answer: \"{user_answer}\"\n\n"
+        f"Generate the next conversational message for step {current_step}.\n\n"
+        f"STEP DEFINITIONS:\n"
+        f"Step 0: Warm welcome using runner's name and their specific goal. Ask how consistently they have been running recently.\n"
+        f"  Options: [\"Just getting started (< 1 month)\", \"Getting back into it (had a break)\", \"Training consistently (3+ months)\", \"Well trained (6+ months solid)\"]\n"
+        f"Step 1: Brief acknowledgment. Ask if they have completed this distance before.\n"
+        f"  Options: [\"First time at this distance\", \"Done it once before\", \"Done it multiple times\"]\n"
+        f"Step 2: Brief acknowledgment. Ask about injuries in last 6 months.\n"
+        f"  Options: [\"Fully healthy — no issues\", \"Minor issue, mostly recovered\", \"Managing an ongoing issue\"]\n"
+        f"Step 3: Brief acknowledgment (if injury mentioned, show empathy). Ask training days per week.\n"
+        f"  Options: [\"3 days\", \"4 days\", \"5 days\", \"6 days\"]\n"
+        f"Step 4: Brief acknowledgment. Ask long run day preference.\n"
+        f"  Options: [\"Saturday\", \"Sunday\", \"Flexible — no preference\"]\n"
+        f"Step 5: Brief acknowledgment. Ask strength training sessions per week.\n"
+        f"  Options: [\"No strength training\", \"1 session per week\", \"2 sessions per week\"]\n"
+        f"Step 6: Brief acknowledgment. Ask when they usually run.\n"
+        f"  Options: [\"Early morning (before 7am)\", \"Morning (7-10am)\", \"Evening (after 5pm)\", \"Flexible — it varies\"]\n"
+        f"Step 7: Brief acknowledgment. Ask what matters most to them. After options, add a warm closing:\n"
+        f"  Options: [\"Just finish healthy and strong\", \"Beat my previous time\", \"Hit my specific time goal\", \"Qualify for a major race\"]\n\n"
+        f"RULES:\n"
+        f"- Keep each message SHORT — 2-3 sentences max before the question\n"
+        f"- Be warm, personal, specific to their goal and race name\n"
+        f"- If injury mentioned, acknowledge with care\n"
+        f"- Never be generic\n\n"
+        f"Respond ONLY with valid JSON (no markdown, no code fences):\n"
+        f"{{\"text\": \"your message\", \"options\": [\"opt1\", \"opt2\", ...], \"input_type\": \"options\", \"collected\": {{...updated dict...}}}}"
+    )
+
+    api_key = None
+    model = "claude-sonnet-4-5"
+    try:
+        api_key = current_app.config.get("ANTHROPIC_API_KEY")
+        model = current_app.config.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+    except RuntimeError:
+        pass
+
+    if api_key:
+        for _attempt in range(2):
+            try:
+                resp = http_requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "max_tokens": 500,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    raw = resp.json()["content"][0]["text"].strip()
+                    raw = raw.replace("```json", "").replace("```", "").strip()
+                    parsed = json.loads(raw)
+                    # Ensure required keys present
+                    if "text" in parsed and "options" in parsed:
+                        return parsed
+            except Exception:
+                pass
+
+    # Fallback: return hardcoded question for this step
+    fallback = _COACH_FALLBACKS.get(current_step, _COACH_FALLBACKS[7])
+    return {**fallback, "collected": collected}
+
+
+def _save_runner_profile(user_id: int, collected: dict):
+    """Persist collected onboarding answers into RunnerProfile."""
+    consistency_map = {
+        "Just getting started (< 1 month)": "just_starting",
+        "Getting back into it (had a break)": "getting_back",
+        "Training consistently (3+ months)": "consistent",
+        "Well trained (6+ months solid)": "well_trained",
+    }
+    experience_map = {
+        "First time at this distance": "first_time",
+        "Done it once before": "once",
+        "Done it multiple times": "multiple",
+    }
+    injury_map = {
+        "Fully healthy — no issues": "healthy",
+        "Minor issue, mostly recovered": "minor",
+        "Managing an ongoing issue": "ongoing",
+    }
+    days_map = {"3 days": 3, "4 days": 4, "5 days": 5, "6 days": 6}
+    long_run_map = {
+        "Saturday": "saturday",
+        "Sunday": "sunday",
+        "Flexible — no preference": "flexible",
+    }
+    strength_map = {
+        "No strength training": 0,
+        "1 session per week": 1,
+        "2 sessions per week": 2,
+    }
+    run_time_map = {
+        "Early morning (before 7am)": "early_morning",
+        "Morning (7-10am)": "morning",
+        "Evening (after 5pm)": "evening",
+        "Flexible — it varies": "flexible",
+    }
+    priority_map = {
+        "Just finish healthy and strong": "finish_healthy",
+        "Beat my previous time": "beat_previous",
+        "Hit my specific time goal": "hit_time",
+        "Qualify for a major race": "qualify",
+    }
+
+    profile = RunnerProfile.query.filter_by(user_id=user_id).first()
+    if not profile:
+        profile = RunnerProfile(user_id=user_id)
+
+    profile.consistency_level      = consistency_map.get(collected.get("consistency_level"), "consistent")
+    profile.race_experience        = experience_map.get(collected.get("race_experience"), "once")
+    profile.injury_status          = injury_map.get(collected.get("injury_status"), "healthy")
+    profile.training_days_per_week = days_map.get(collected.get("training_days_per_week"), 5)
+    profile.long_run_day           = long_run_map.get(collected.get("long_run_day"), "sunday")
+    profile.strength_days_per_week = strength_map.get(collected.get("strength_days_per_week"), 2)
+    profile.preferred_run_time     = run_time_map.get(collected.get("preferred_run_time"), "flexible")
+    profile.goal_priority          = priority_map.get(collected.get("goal_priority"), "hit_time")
+    profile.onboarding_completed   = True
+    profile.completed_at           = _utcnow_naive()
+
+    db.session.add(profile)
+    db.session.commit()
+
+
+@web.route("/coach-intro", methods=["GET"])
+@login_required
+def coach_intro():
+    """Conversational AI onboarding — runs once, between goal setup and dashboard."""
+    user = _current_user()
+
+    # Already completed → skip to dashboard
+    profile = RunnerProfile.query.filter_by(user_id=user.id).first()
+    if profile and profile.onboarding_completed:
+        return redirect(url_for("web.dashboard"))
+
+    goal = Goal.query.filter_by(user_id=user.id).order_by(Goal.id.desc()).first()
+    if not goal:
+        return redirect(url_for("web.onboarding"))
+
+    four_weeks_ago = _utcnow_naive() - timedelta(weeks=4)
+    activity_count = Activity.query.filter(
+        Activity.user_id == user.id,
+        Activity.date >= four_weeks_ago,
+    ).count()
+
+    from datetime import date as _date
+    try:
+        race_date = goal.race_date if isinstance(goal.race_date, _date) else _date.fromisoformat(str(goal.race_date))
+        days_to_race = (race_date - _date.today()).days
+    except Exception:
+        days_to_race = None
+
+    return render_template(
+        "coach_intro.html",
+        user=user,
+        goal=goal,
+        days_to_race=days_to_race,
+        has_strava_data=activity_count > 0,
+        strava_activity_count=activity_count,
+    )
+
+
+@web.route("/api/coach-intro/message", methods=["POST"])
+@login_required
+def coach_intro_message():
+    """Handle one turn of the conversational onboarding chat."""
+    user = _current_user()
+    data = request.get_json(silent=True) or {}
+
+    conversation   = data.get("conversation", [])
+    user_answer    = data.get("user_answer", "")
+    current_step   = int(data.get("current_step", 0))
+    collected      = dict(data.get("collected", {}))
+
+    goal = Goal.query.filter_by(user_id=user.id).order_by(Goal.id.desc()).first()
+    if not goal:
+        return jsonify({"error": "no_goal"}), 400
+
+    # Collect the previous step's answer
+    if current_step > 0 and user_answer and current_step - 1 < len(_STEP_KEYS):
+        collected[_STEP_KEYS[current_step - 1]] = user_answer
+
+    # All 8 steps answered → save and redirect
+    if current_step >= 8:
+        _save_runner_profile(user.id, collected)
+        return jsonify({"done": True, "redirect": url_for("web.dashboard")})
+
+    msg = _get_next_coach_message(current_step, user_answer, collected, goal, user)
+
+    return jsonify({
+        "done": False,
+        "message": msg.get("text", ""),
+        "options": msg.get("options", []),
+        "input_type": msg.get("input_type", "options"),
+        "next_step": current_step + 1,
+        "collected": msg.get("collected", collected),
+    })
+
+
 @web.route("/onboarding", methods=["GET", "POST"])
 @login_required
 def onboarding():
@@ -1041,7 +1338,7 @@ def onboarding():
                     pb_10k=pb_10k,
                     pb_hm=pb_hm,
                 )
-                return redirect(url_for("web.dashboard"))
+                return redirect(url_for("web.coach_intro"))
             except Exception:
                 error = "Unable to save goal right now. Please try again."
 
