@@ -466,7 +466,7 @@ Respond ONLY with valid JSON array, no markdown:
 ]
 Generate for ALL weeks until race day inclusive."""
 
-        result = self._call_api(prompt, max_tokens=2000)
+        result = self._call_api(prompt, max_tokens=4096)
         if isinstance(result, list):
             return result
         if isinstance(result, dict):
