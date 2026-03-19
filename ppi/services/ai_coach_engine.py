@@ -107,7 +107,7 @@ class AICoachEngine:
             .first()
         )
         key_str = (
-            f"v3"  # bump to invalidate all existing caches
+            f"v5"  # bump to invalidate all existing caches
             f":{user_id}"
             f":{goal.id if goal else 'none'}"
             f":{goal.goal_time if goal else ''}"
@@ -395,11 +395,17 @@ class AICoachEngine:
             else ""
         )
 
-        pattern = context.get("training_pattern", {})
+        pattern      = context.get("training_pattern", {})
+        long_run_day = profile.get("long_run_day", "sunday")
+        strength_days = profile.get("strength_days_per_week", 2)
+        training_days = profile.get("training_days_per_week", 5)
+        run_only_days = training_days - strength_days
+        active_recovery_days = 7 - training_days
+
         pattern_confidence = (
-            "HIGH — use this pattern, override profile preferences if they conflict"
+            "HIGH — supplements profile, does not override it"
             if pattern.get("has_enough_pattern_data")
-            else "LOW — insufficient data, use profile preferences instead"
+            else "LOW — insufficient data, rely on profile only"
         )
 
         prompt = f"""You are an elite marathon coach. Analyze this runner's data and generate their weekly training plan.
@@ -407,22 +413,34 @@ class AICoachEngine:
 GOAL: {goal['goal_time']} {goal['race_name']} on {goal['race_date']} ({goal['weeks_to_race']} weeks away)
 
 RUNNER PREFERENCES:
-- Training days/week: {profile.get('training_days_per_week', 5)}
-- Long run day: {profile.get('long_run_day', 'sunday')}
-- Strength sessions/week: {profile.get('strength_days_per_week', 2)}
+- Training days/week: {training_days}
+- Long run day: {long_run_day}
+- Strength sessions/week: {strength_days}
 - Experience: {profile.get('race_experience', 'multiple')}
 - Injury status: {profile.get('injury_status', 'healthy')}
 {injury_line}
 - Goal priority: {profile.get('goal_priority', 'hit_time')}
 
-ACTUAL TRAINING PATTERN (detected from Strava history):
+SCHEDULE CONSTRAINTS FROM RUNNER PROFILE (ground truth — overrides everything else):
+- Total training days per week: {training_days}
+- Strength sessions per week: {strength_days}
+- Long run day: {long_run_day} (FIXED — never change this)
+- Run-only days: {run_only_days} days
+- Active recovery days: {active_recovery_days} (easy 5km jog/walk — NOT complete rest)
+
+SCHEDULE BUILDING RULE — follow these steps in order:
+Step 1: Assign long run to {long_run_day}
+Step 2: Assign {strength_days} strength days (prefer Wed and Fri based on pattern)
+Step 3: Fill remaining {run_only_days - 1} training days with runs (easy/tempo)
+Step 4: Remaining {active_recovery_days} days = active_recovery (5km easy jog — not rest)
+Step 5: NEVER leave any day as complete rest — every day has a purpose
+
+ACTUAL TRAINING PATTERN (detected from Strava — supplements profile, does not override):
 - Typical run days: {pattern.get('typical_run_days', [])}
 - Typical strength days: {pattern.get('typical_strength_days', [])}
-- Detected long run day: {pattern.get('resolved_long_run_day', profile.get('long_run_day', 'sunday'))}
+- Detected long run day: {pattern.get('resolved_long_run_day', long_run_day)}
 - Pattern confidence: {pattern_confidence}
 - Run frequency per day: {pattern.get('run_day_counts', {})}
-CRITICAL RULE: The daily_plan MUST assign runs on typical_run_days and rest/strength on other days.
-Never assign a run on a day the runner never runs. Never assign rest on a day the runner always runs.
 
 CURRENT FITNESS:
 - Feasibility score: {feasibility.get('feasibility_score', 0)}/100
@@ -492,7 +510,7 @@ Respond ONLY with valid JSON, no markdown:
   "this_week": {{
     "weekly_target_km": 0.0,
     "daily_plan": {{
-      "monday":    {{"type": "easy|tempo|long|rest|strength|recovery", "km": 0.0, "pace_guidance": "", "notes": ""}},
+      "monday":    {{"type": "easy|tempo|long|active_recovery|strength|recovery|intervals|marathon_pace", "km": 0.0, "pace_guidance": "", "notes": ""}},
       "tuesday":   {{"type": "", "km": 0.0, "pace_guidance": "", "notes": ""}},
       "wednesday": {{"type": "strength", "km": 0, "pace_guidance": "", "notes": "Gym — strength and conditioning"}},
       "thursday":  {{"type": "", "km": 0.0, "pace_guidance": "", "notes": ""}},

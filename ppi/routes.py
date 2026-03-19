@@ -1034,12 +1034,13 @@ def dashboard():
 
     # ── Build weekly plan from AI daily_plan ──────────────────────────────────
     _SESSION_NAMES = {
-        "easy":          "Easy Run",
-        "long":          "Long Run",
-        "tempo":         "Tempo Run",
-        "recovery":      "Recovery Run",
-        "intervals":     "Interval Session",
-        "marathon_pace": "Marathon Pace Run",
+        "easy":            "Easy Run",
+        "long":            "Long Run",
+        "tempo":           "Tempo Run",
+        "recovery":        "Recovery Run",
+        "active_recovery": "Active Recovery",
+        "intervals":       "Interval Session",
+        "marathon_pace":   "Marathon Pace Run",
     }
     _DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
@@ -1135,6 +1136,15 @@ def dashboard():
     # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
     today_item    = next((w for w in weekly_plan if w["is_today"]), None)
     tomorrow_item = weekly_plan[today_local.weekday() + 1] if today_local.weekday() < 6 else None
+
+    # Upgrade rest → active_recovery: no day should be complete rest
+    if today_item and today_item.get("session_type") in ("rest", None, ""):
+        today_item = dict(today_item)  # don't mutate the weekly_plan list
+        today_item["session_type"] = "active_recovery"
+        today_item["session"]      = "Active Recovery"
+        today_item["workout_type"] = "RUN"
+        today_item["planned_km"]   = today_item["planned_km"] or 5.0
+        today_item["notes"]        = today_item.get("notes") or "Active recovery — easy 5km jog or 40min walk"
 
     def _fmt_km(km):
         return f"{km} km" if km else "—"
