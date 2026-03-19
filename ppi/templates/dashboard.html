@@ -347,7 +347,7 @@
           &nbsp;·&nbsp; {{ today_date }}
         </div>
         <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
-          Phase: {{ weekly_goal.display_phase|title }}
+          Phase: {{ canonical_phase_label }}
           &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}{% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}
           &nbsp;·&nbsp; Target pace {{ intel.goal.target_pace }}
         </div>
