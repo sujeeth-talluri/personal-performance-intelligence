@@ -32,7 +32,7 @@ def _next_long_run_target(phase, longest_km, next_milestone, weekly_target, week
     progression_target = max(base_target, hinted_target if hinted_target in allowed_steps else base_target)
     capacity_cap = round(weekly_target * 0.35, 1)
 
-    if phase == "rebuild":
+    if phase == "rebuild" and apply_capacity_cap:
         return max(14.0, min(18.0, capacity_cap))
     if phase == "recovery":
         return max(14.0, min(max(16.0, round(longest_km * 0.78, 1)), round(weekly_target * 0.30, 1), practical_peak))
