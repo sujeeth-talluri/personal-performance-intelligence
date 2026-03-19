@@ -228,6 +228,7 @@
       border-left: 3px solid var(--green);
     }
     .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
+    .coaching-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--muted); }
 
     /* ─── Weekly plan ────────────────────────────────────────────── */
     .plan-row {
@@ -391,6 +392,23 @@
       <div id="intel-content" style="display:none"></div>
       <div id="intel-error"   style="display:none"></div>
     </div>
+
+    <!-- ── AI Coaching Insight (server-rendered) ───────────────────────── -->
+    {% if canonical_coaching_message %}
+    <div class="card" id="card-coaching">
+      <div class="card-title">AI Coaching Insight</div>
+      <div class="coaching-text">{{ canonical_coaching_message }}</div>
+      <div class="coaching-stats">
+        <span>📅 This week: <strong>{{ canonical_weekly_target_km|int }}km target</strong></span>
+        <span>🏃 Long run: <strong>{{ canonical_long_run_km|int }}km on {{ canonical_long_run_day }}</strong></span>
+        <span>📍 Phase: <strong>{{ canonical_phase_label }}</strong></span>
+      </div>
+      <div class="coaching-badge" style="margin-top:10px">
+        <span>🤖</span>
+        <span>Powered by Claude · StrideIQ coaching engine</span>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- ── Weekly Plan (server-rendered) ──────────────────────────────── -->
     <div class="section-label">This Week</div>
@@ -615,15 +633,7 @@
     <div id="km32-fuel-note" style="display:none;margin-top:12px"></div>
   </div>
 
-  <!-- 6. AI COACHING SUMMARY -->
-  <div class="card" id="card-coaching">
-    <div class="card-title">AI Coaching Insight</div>
-    <div class="coaching-text" id="coaching-text"></div>
-    <div class="coaching-badge">
-      <span>🤖</span>
-      <span id="coaching-source">Powered by StrideIQ coaching engine</span>
-    </div>
-  </div>
+  <!-- 6. AI COACHING SUMMARY — placeholder (server-rendered below intel-container) -->
 </template>
 
 <script>

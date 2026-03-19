@@ -981,6 +981,8 @@ def dashboard():
     canonical_long_run_progression = _coaching_plan.get("long_run_progression", [])
     canonical_feasibility          = _coaching_plan.get("feasibility", {})
     _daily_plan                    = _coaching_plan.get("this_week", {}).get("daily_plan", {})
+    _profile_data                  = _coaching_plan.get("runner_profile", {})
+    canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
 
     # ISSUE 1: Compute weekly target directly from daily_plan (most accurate)
     # Sum km for all non-strength, non-rest sessions — this matches what Claude planned
@@ -1326,6 +1328,7 @@ def dashboard():
         upcoming_long_runs=upcoming_long_runs,
         week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
         canonical_feasibility=canonical_feasibility,
+        canonical_long_run_day=canonical_long_run_day,
     )
 
 
