@@ -990,24 +990,38 @@ def dashboard():
 
     week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
+
+    # BUG 1 FIX: case-insensitive query — DB stores lowercase ("run"), Strava API sends "Run"
+    _RUN_TYPES      = ["run", "virtualrun", "trail run", "trail_run", "treadmill", "workout"]
+    _STRENGTH_TYPES = {"workout", "weight_training", "strength_training", "crossfit", "yoga", "pilates"}
+
     week_activities = (
         Activity.query
         .filter(
             Activity.user_id == user.id,
             Activity.date >= week_cutoff_dt,
             Activity.date <= week_end_dt,
-            Activity.activity_type.in_(["Run", "VirtualRun"]),
+            db.func.lower(Activity.activity_type).in_(_RUN_TYPES + list(_STRENGTH_TYPES)),
         )
         .order_by(Activity.date.asc())
         .all()
     )
 
-    _act_by_date = {}
+    # Separate run vs strength activities, keyed by date
+    _run_by_date      = {}
+    _strength_by_date = {}
     for _a in week_activities:
-        _d = _a.date.date() if isinstance(_a.date, datetime) else _a.date
-        _act_by_date[_d] = _a
+        _d   = _a.date.date() if isinstance(_a.date, datetime) else _a.date
+        _typ = (_a.activity_type or "").lower()
+        if _typ in _STRENGTH_TYPES:
+            _strength_by_date.setdefault(_d, []).append(_a)
+        else:
+            _run_by_date[_d] = _a  # keep longest if multiple (last writer wins — ordered asc)
 
-    week_actual_km = round(sum(a.distance_km or 0 for a in week_activities), 1)
+    week_actual_km = round(
+        sum(a.distance_km or 0 for a in week_activities if (a.activity_type or "").lower() not in _STRENGTH_TYPES),
+        1,
+    )
 
     # ── Build weekly plan from AI daily_plan ──────────────────────────────────
     _SESSION_NAMES = {
@@ -1022,11 +1036,11 @@ def dashboard():
 
     weekly_plan = []
     for i, day_name in enumerate(_DAY_NAMES):
-        day_date  = week_start + timedelta(days=i)
-        day_info  = _daily_plan.get(day_name, {"type": "rest", "km": 0, "notes": ""})
+        day_date     = week_start + timedelta(days=i)
+        day_info     = _daily_plan.get(day_name, {"type": "rest", "km": 0, "notes": ""})
         session_type = day_info.get("type", "rest")
         planned_km   = float(day_info.get("km", 0) or 0)
-        actual_act   = _act_by_date.get(day_date)
+        actual_act   = _run_by_date.get(day_date)
         actual_km    = round(float(actual_act.distance_km or 0), 1) if actual_act else 0.0
 
         if session_type == "strength":
@@ -1046,8 +1060,10 @@ def dashboard():
             done   = actual_km > 0
             status = "completed" if done else ("missed" if is_past else ("today" if is_today else "planned"))
         elif workout_type == "STRENGTH":
-            done   = False
-            status = "completed" if is_past else ("today" if is_today else "planned")
+            # BUG 2 FIX: verify strength against Strava, don't auto-mark as done
+            strength_acts = _strength_by_date.get(day_date, [])
+            done   = bool(strength_acts)
+            status = "completed" if done else ("missed" if is_past else ("today" if is_today else "planned"))
         else:
             done   = True
             status = "rest"
@@ -1087,16 +1103,36 @@ def dashboard():
     )
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
 
-    # ── Today's workout card ──────────────────────────────────────────────────
-    today_item = next((w for w in weekly_plan if w["is_today"]), None)
+    # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
+    today_item    = next((w for w in weekly_plan if w["is_today"]), None)
+    tomorrow_item = weekly_plan[today_local.weekday() + 1] if today_local.weekday() < 6 else None
+
+    def _fmt_km(km):
+        return f"{km} km" if km else "—"
+
+    _status_label = {
+        "completed": "Completed",
+        "missed":    "Missed",
+        "today":     "Planned",
+        "planned":   "Planned",
+        "rest":      "Rest",
+    }
     today_workout = {
-        "session":       today_item["session"]       if today_item else "Rest Day",
-        "planned_km":    today_item["planned_km"]    if today_item else 0,
-        "actual_km":     today_item["actual_km"]     if today_item else 0,
-        "status":        today_item["status"]        if today_item else "rest",
-        "completed":     today_item["done"]          if today_item else True,
-        "pace_guidance": today_item["pace_guidance"] if today_item else "",
-        "notes":         today_item["notes"]         if today_item else "",
+        # Fields the template actually uses
+        "date":            today_local.strftime("%A, %d %b"),
+        "workout":         today_item["session"]      if today_item else "Rest Day",
+        "workout_type":    today_item["workout_type"] if today_item else "REST",
+        "status":          _status_label.get(today_item["status"], "Planned") if today_item else "Rest",
+        "completed":       today_item["done"]         if today_item else False,
+        "distance_actual": _fmt_km(today_item["actual_km"])  if today_item else "—",
+        "distance_target": _fmt_km(today_item["planned_km"]) if today_item else "—",
+        "tomorrow":        tomorrow_item["session"]   if tomorrow_item else "Rest Day",
+        # Extra fields used elsewhere (show_today_plan, pace card)
+        "session":         today_item["session"]      if today_item else "Rest Day",
+        "planned_km":      today_item["planned_km"]   if today_item else 0,
+        "actual_km":       today_item["actual_km"]    if today_item else 0,
+        "pace_guidance":   today_item["pace_guidance"] if today_item else "",
+        "notes":           today_item["notes"]        if today_item else "",
     }
 
     runs             = recent_runs(user.id, limit=20, user_timezone=user_tz)
