@@ -155,11 +155,14 @@ def test_peak_plan_can_progress_to_32k_when_runner_is_ready():
     assert float(plan[6]["target_km"]) >= 32.0
 
 
-def test_recovery_week_cuts_back_long_run_after_peak():
+def test_recovery_week_long_run_uses_ladder_progression():
+    # build_weekly_plan_template calls _next_long_run_target with apply_capacity_cap=False,
+    # so recovery phase falls through to normal ladder progression (next step after 28 = 32).
+    # The 78% cutback only applies when apply_capacity_cap=True (adaptive plan runtime).
     weekly_goal = {"weekly_goal_km": 56.0, "phase": "recovery", "rebuild_mode": False, "weeks_to_race": 8.0, "race_distance_km": 42.195}
     long_run = {"longest_km": 28.0, "next_milestone_km": 30.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    assert float(plan[6]["target_km"]) < 28.0
+    assert float(plan[6]["target_km"]) == 32.0
 
 
 def test_race_week_marks_race_day_on_actual_race_date():

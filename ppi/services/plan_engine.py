@@ -34,10 +34,12 @@ def _next_long_run_target(phase, longest_km, next_milestone, weekly_target, week
 
     if phase == "rebuild" and apply_capacity_cap:
         return max(14.0, min(18.0, capacity_cap))
-    if phase == "recovery":
+    if phase == "recovery" and apply_capacity_cap:
         # Cutback based on 78% of longest_km — not capped by weekly volume so the
         # long run is always a meaningful effort (e.g. 21 km) rather than a tiny
         # number driven by a low weekly_target * 0.30 cap.
+        # When apply_capacity_cap=False (template call), fall through to normal
+        # progression so Sunday always advances to the next ladder milestone.
         return max(14.0, min(max(16.0, round(longest_km * 0.78, 1)), practical_peak))
     if phase == "taper":
         if weeks_to_race <= 1:
@@ -289,10 +291,6 @@ def apply_adaptive_plan(plan_items, today_local, weekly_goal):
                 item["planned"] = f"{int(round(item['planned_km']))} km"
                 item["adaptive_note"] = "Recovery week reduces workout intensity while preserving consistency."
                 item.update(plan_meta_for_session(item["session"]))
-            elif item["session"] == "Long Run":
-                item["planned_km"] = round(min(max_safe_run, max(14.0, (item["planned_km"] or 0.0) * 0.85)), 1)
-                item["planned"] = f"{int(round(item['planned_km']))} km"
-                item["adaptive_note"] = "Recovery week trims long-run stress."
 
     if len(missed_runs) + len(partial_runs) >= 2:
         for item in future_runs:

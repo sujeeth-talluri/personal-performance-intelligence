@@ -326,7 +326,7 @@
         </div>
         <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
           Phase: {{ weekly_goal.display_phase|title }}
-          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}{% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 0 %}Balanced ⚡{% elif _tsb >= -10 %}Some Fatigue 🟡{% else %}Tired — Needs Rest 🔴{% endif %}
+          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}{% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}
           &nbsp;·&nbsp; Target pace {{ intel.goal.target_pace }}
         </div>
       </div>
@@ -430,7 +430,7 @@
             {% if lk >= 32 %}✓{% elif nxt == 32 %}NEXT{% endif %}<span class="km">32 km</span>
           </div>
         </div>
-        <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km &nbsp;·&nbsp; Latest: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
+        <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %} &nbsp;·&nbsp; Latest: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
       </div>
     </div>
 
@@ -583,6 +583,13 @@
 
   function pct_of(val, max) { return Math.min(100, Math.max(2, (val / max) * 100)).toFixed(1); }
 
+  function fmtPace(secPerKm) {
+    // Truncate (not round) so 339.85 → 5:39, not 5:40
+    const m = Math.floor(secPerKm / 60);
+    const s = Math.floor(secPerKm % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s + '/km';
+  }
+
   // ── Build the intelligence DOM ───────────────────────────────────────────
   function render(data) {
     const tmpl = document.getElementById('intel-template');
@@ -611,12 +618,18 @@
         const wallAdjTime = fm && wall && wall.current_predicted_fm_display && wall.current_predicted_fm_display !== '--'
           ? wall.current_predicted_fm_display : null;
         const ptime = fm ? (wallAdjTime || pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
+        // FM sub-pace: show wall-adjusted projected pace (matches the wall-adjusted display time).
+        // Other distances: show avg_pace from pace strategy (based on VDOT).
+        const fmProjSec = fm && wall && wall.current_predicted_fm ? wall.current_predicted_fm : null;
+        const subPace = fm
+          ? (fmProjSec ? fmtPace(fmProjSec / 42.195) + ' projected avg' : (d.avg_pace ? d.avg_pace + ' avg' : ''))
+          : (d.avg_pace ? d.avg_pace + ' avg' : '');
         const div = document.createElement('div');
         div.className = 'dist-tile' + (fm ? ' fm' : '');
         let inner = `
           <div class="label">${label}</div>
           <div class="time">${ptime}</div>
-          <div class="sub-time">${d.avg_pace ? d.avg_pace + ' avg' : ''}</div>
+          <div class="sub-time">${subPace}</div>
           <div><span class="confidence-badge ${confClass(conf)}">${conf}</span></div>
         `;
         if (fm && wall && wall.optimal_fm_potential_display) {

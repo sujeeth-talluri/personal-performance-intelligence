@@ -387,6 +387,29 @@ def generate_coaching_output(intel: dict, weekly_plan: list) -> dict:
             "coaching_summary":       "...",   # plain text, 2-3 sentences
         }
     """
+    # Compute plan total km from the actual weekly plan rows.
+    # This overrides the analytics-computed weekly_goal_km so the coaching
+    # summary always quotes the same figure as the weekly plan card.
+    plan_run_km = round(sum(
+        float(item.get("planned_km") or 0.0)
+        for item in weekly_plan
+        if item.get("workout_type") == "RUN" and item.get("session") != "Race Day"
+    ), 1)
+    if plan_run_km > 0:
+        intel = dict(intel)
+        intel["weekly"] = dict(intel.get("weekly") or {})
+        intel["weekly"]["weekly_goal_km"] = plan_run_km
+
+    # Also override next_milestone_km in long_run with the actual Sunday planned km
+    # so the key workout description matches the plan card.
+    sunday_item = next(
+        (item for item in weekly_plan if item.get("session") == "Long Run" and item.get("workout_type") == "RUN"),
+        None,
+    )
+    if sunday_item and sunday_item.get("planned_km"):
+        intel["long_run"] = dict(intel.get("long_run") or {})
+        intel["long_run"]["next_milestone_km"] = float(sunday_item["planned_km"])
+
     race_prediction = _build_race_prediction(intel)
     goal_ctx = intel.get("goal") or {}
     goal_secs = float(goal_ctx.get("goal_seconds") or 0) or None

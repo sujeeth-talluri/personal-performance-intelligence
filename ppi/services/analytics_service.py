@@ -199,13 +199,14 @@ def _phase_minimum_goal(desired_peak, phase):
     )
 
 
-def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, weekly_readiness_target, rolling_week_distance_km, phase):
+def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, weekly_readiness_target, rolling_week_distance_km, phase, weekly_goal_km=None):
     actions = []
     if need_long > 0:
         actions.append(f"Complete {need_long} more long run{'s' if need_long > 1 else ''} of 18 km or longer")
     if need_weekly > 0 and phase != "taper":
-        remaining = round(max(0.0, weekly_readiness_target - rolling_week_distance_km), 1)
-        actions.append(f"Weekly target: {int(round(weekly_readiness_target))} km — {rolling_week_distance_km} km done, {remaining} km to go")
+        display_target = weekly_goal_km if weekly_goal_km and weekly_goal_km > 0 else weekly_readiness_target
+        remaining = round(max(0.0, display_target - rolling_week_distance_km), 1)
+        actions.append(f"Weekly target: {int(round(display_target))} km — {rolling_week_distance_km} km done, {remaining} km to go")
     if need_medium > 0:
         actions.append(f"Add {need_medium} more medium run{'s' if need_medium > 1 else ''} between 8 and 12 km")
     if need_weeks > 0:
@@ -887,6 +888,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         weekly_readiness_target,
         rolling_week_distance_km,
         phase,
+        weekly_goal_km=weekly_goal_km,
     )
     if week_closed and rolling_week_distance_km < weekly_readiness_target:
         next_requirement = f"Start next week by rebuilding to about {int(round(weekly_readiness_target))} km and protecting the long run."

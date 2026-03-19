@@ -226,10 +226,7 @@ def _best_vdot_from_metrics(metrics, today) -> tuple[float | None, int | None]:
 def _fmt_pace(sec_per_km: float) -> str:
     sec_per_km = max(0.0, sec_per_km)
     m = int(sec_per_km // 60)
-    s = int(round(sec_per_km % 60))
-    if s == 60:
-        m += 1
-        s = 0
+    s = int(sec_per_km % 60)  # truncate, not round, so 339.85 → 5:39 not 5:40
     return f"{m}:{s:02d}/km"
 
 
