@@ -724,7 +724,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     remaining_km = round(max(0.0, weekly_goal_km - completed_km), 1)
 
     runs_30d = [r for r in runs if r["date"] >= today - timedelta(days=30)]
-    longest_run = max(runs_8w, key=lambda x: x["distance_km"], default=None)
+    runs_12w = [r for r in runs if r["date"] >= today - timedelta(days=84)]
+    longest_run = max(runs_12w, key=lambda x: x["distance_km"], default=None)
     latest_long_run = max(runs_30d, key=lambda x: x["distance_km"], default=None)
     long_run_state = _long_run_progress_state(runs, today)
     race_sim_runs = _race_simulation_runs(runs_8w, goal_ctx["goal_seconds"] / 42.195)

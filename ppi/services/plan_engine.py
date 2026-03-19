@@ -1,7 +1,7 @@
 from datetime import date
 
 
-LONG_RUN_LADDER = [16.0, 18.0, 21.0, 24.0, 26.0, 28.0, 30.0, 32.0]
+LONG_RUN_LADDER = [21.0, 24.0, 28.0, 32.0]
 
 
 def goal_marathon_pace(weekly_goal):
