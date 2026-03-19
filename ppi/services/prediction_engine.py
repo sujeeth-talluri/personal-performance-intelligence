@@ -241,7 +241,7 @@ def _fmt_hms(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}"
 
 
-def fm_wall_prevention_pace_strategy(goal_pace_sec_per_km: float, wall_risk: str = "high") -> dict:
+def fm_wall_prevention_pace_strategy(goal_pace_sec_per_km: float, wall_risk: str = "high", goal_seconds: float = 0.0) -> dict:
     """Build a 4-segment marathon pacing plan designed to prevent the km-32 wall.
 
     Segment logic (relative to goal pace):
@@ -264,22 +264,39 @@ def fm_wall_prevention_pace_strategy(goal_pace_sec_per_km: float, wall_risk: str
     # (e.g. 3:59 goal → 339 s/km = exactly 5:39/km, not 339.85).
     p = int(goal_pace_sec_per_km)
 
-    segments = [
-        {"label": "km 0–10",  "start_km": 0,    "end_km": 10.0,   "pace": p + 20, "note": "Deliberately conservative. Hold back even if you feel fresh."},
-        {"label": "km 10–21", "start_km": 10.0, "end_km": 21.0,   "pace": p + 10, "note": "Settling in. Breathing should be controlled and comfortable."},
-        {"label": "km 21–32", "start_km": 21.0, "end_km": 32.0,   "pace": p,      "note": "Race pace. This is where discipline pays off."},
-        {"label": "km 32–42", "start_km": 32.0, "end_km": 42.195, "pace": p - 5,  "note": "Negative split. Only attempt if you feel strong at km 32."},
+    # First 3 segments have fixed pace offsets relative to goal
+    seg_defs = [
+        {"label": "km 0–10",  "start_km": 0,    "end_km": 10.0, "pace": p + 20, "note": "Deliberately conservative. Hold back even if you feel fresh."},
+        {"label": "km 10–21", "start_km": 10.0, "end_km": 21.0, "pace": p + 10, "note": "Settling in. Breathing should be controlled and comfortable."},
+        {"label": "km 21–32", "start_km": 21.0, "end_km": 32.0, "pace": p,      "note": "Race pace. This is where discipline pays off."},
     ]
 
-    # Compute predicted split times
     elapsed = 0.0
-    for seg in segments:
+    segments = []
+    for seg in seg_defs:
         dist = seg["end_km"] - seg["start_km"]
         seg_time = dist * seg["pace"]
         elapsed += seg_time
         seg["segment_time"] = _fmt_hms(seg_time)
         seg["elapsed_at_end"] = _fmt_hms(elapsed)
         seg["pace_display"] = _fmt_pace(seg["pace"])
+        segments.append(seg)
+
+    # Last segment: use remaining time so total = goal_seconds exactly
+    _last_start, _last_end = 32.0, 42.195
+    _last_dist = _last_end - _last_start
+    _exact_goal = goal_seconds if goal_seconds > 0 else goal_pace_sec_per_km * 42.195
+    _remaining = _exact_goal - elapsed
+    _last_pace = _remaining / _last_dist if _last_dist > 0 else p - 5
+    elapsed += _remaining
+    segments.append({
+        "label": "km 32–42", "start_km": _last_start, "end_km": _last_end,
+        "pace": round(_last_pace),
+        "pace_display": _fmt_pace(_last_pace),
+        "segment_time": _fmt_hms(_remaining),
+        "elapsed_at_end": _fmt_hms(elapsed),
+        "note": "Negative split. Only attempt if you feel strong at km 32.",
+    })
 
     predicted_total = elapsed
 
@@ -498,7 +515,7 @@ def marathon_wall_analysis(
     else:
         goal_pace = current_secs / 42.195
 
-    pacing = fm_wall_prevention_pace_strategy(goal_pace, wall["risk"])
+    pacing = fm_wall_prevention_pace_strategy(goal_pace, wall["risk"], goal_seconds=goal_secs or 0.0)
     fueling = marathon_fueling_plan(current_secs, goal_pace)
 
     return {

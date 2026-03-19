@@ -130,6 +130,17 @@
     .conf-high   { background: #dcfce7; color: #16a34a; }
     .conf-medium { background: #fef9c3; color: #a16207; }
     .conf-low    { background: #fee2e2; color: #dc2626; }
+    .prediction-legend {
+      display: flex; align-items: center; gap: 16px;
+      padding: 8px 12px; background: rgba(0,0,0,.03);
+      border-radius: 6px; font-size: 12px; color: #888;
+      flex-wrap: wrap; margin-top: 10px;
+    }
+    .legend-title { color: #aaa; font-weight: 500; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .badge-high     { background: #00C853; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+    .badge-moderate { background: #f59e0b; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+    .badge-low      { background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
 
     /* ─── Wall analysis ──────────────────────────────────────────── */
     .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -382,10 +393,11 @@
         <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
           {{ canonical_phase_label }}
           &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
+          {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
           <span class="tooltip-wrap">
             {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}
             <span class="tooltip-icon">?</span>
-            <span class="tooltip-text">Your current form score (TSB = {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }}).<br>Positive = fresh, Negative = fatigued.<br>Ideal race form: +5 to +15.<br>{% if _tsb > 5 %}Current state: fresh and ready to perform.{% elif _tsb >= -5 %}Current state: well balanced for training.{% else %}Current state: building fitness, expect fatigue.{% endif %}</span>
+            <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
           </span>
           &nbsp;·&nbsp; {{ intel.goal.target_pace }}/km goal pace
         </div>
@@ -518,13 +530,13 @@
               <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
                 {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
                 <span class="km">{{ lr.target_km|int }} km</span>
-                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date[5:] }}</span>
+                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
               </div>
             {% endfor %}
           </div>
           <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Longest recent: {{ long_run.longest_km }} km
-            {% if upcoming_long_runs %}&nbsp;·&nbsp; <span class="tooltip-wrap">Peak target: {{ canonical_long_run_progression | selectattr('is_peak_run') | list | map(attribute='target_km') | max | default(canonical_long_run_km) | int }}km<span class="tooltip-icon">?</span><span class="tooltip-text">The maximum long run distance in your plan. For sub-4 marathon: 30–32km peak long run. This trains your body to handle race distance and builds mental confidence.</span></span>{% endif %}
+            Longest recent: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
+            {% if upcoming_long_runs %}&nbsp;·&nbsp; Next: {{ upcoming_long_runs[0].target_km|int }}km on {{ upcoming_long_runs[0].week_date_display or upcoming_long_runs[0].week_date[5:] }}{% endif %}
           </div>
         {% else %}
           <div class="ladder">
@@ -558,6 +570,7 @@
               {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
             {% elif act.is_strength %}
               <div class="run-dist" style="color:var(--muted)">{{ act.type|title }}</div>
+              {% if act.hr %}<div class="run-pace">HR {{ act.hr }}</div>{% endif %}
               {% if act.duration %}<div class="run-time">{{ act.duration }}</div>{% endif %}
             {% elif act.is_cross %}
               <div class="run-dist">{{ act.distance_km }} km</div>
@@ -585,7 +598,12 @@
   <div class="card" id="card-predictions">
     <div class="card-title">Race Predictions — All Distances</div>
     <div class="dist-grid" id="dist-tiles"></div>
-    <div style="font-size:.72rem;color:var(--muted);margin-top:12px" id="pred-note"></div>
+    <div class="prediction-legend">
+      <span class="legend-title">Confidence:</span>
+      <span class="legend-item"><span class="badge-high">HIGH</span> Recent race result (last 60 days)</span>
+      <span class="legend-item"><span class="badge-moderate">MODERATE</span> Older race or training estimate</span>
+      <span class="legend-item"><span class="badge-low">LOW</span> Limited data — prediction is estimated</span>
+    </div>
   </div>
 
   <div class="grid-2">
@@ -754,7 +772,7 @@
           <div class="label">${label}</div>
           <div class="time">${ptime}</div>
           <div class="sub-time">${subPace}</div>
-          <div><span class="tooltip-wrap confidence-badge ${confClass(conf)}">${conf}<span class="tooltip-icon">?</span><span class="tooltip-text">Prediction confidence based on recency and quality of your race data.<br>High = recent race result (last 60 days).<br>Moderate = older race or training estimate.<br>Low = limited data available.</span></span></div>
+          <div><span class="confidence-badge ${confClass(conf)}">${conf}</span></div>
         `;
         if (fm && wall && wall.optimal_fm_potential_display) {
           const apPace = window._aerobicPaceDisplay || '';
@@ -764,8 +782,6 @@
         distTiles.appendChild(div);
       });
     }
-    const noteEl = el('pred-note');
-    if (noteEl && pred.note) noteEl.textContent = pred.note;
 
     // ── 2. Wall Analysis — 2-column layout ───────────────────────────────
     // Left:  risk badge + callout + VDOT bars
@@ -1043,15 +1059,17 @@
       const areaEl = el('ctl-area');
       if (pathEl) pathEl.setAttribute('d', pathD);
       if (areaEl) areaEl.setAttribute('d', areaD);
-      // Dots
+      // Dots with hover tooltips
       const dotsEl = el('ctl-dots');
       if (dotsEl) {
         dotsEl.innerHTML = pts.map((p, i) => {
           const isLast = i === pts.length - 1;
           const fill = isLast ? 'var(--green)' : '#fff';
           const r = isLast ? 4 : 3;
-          let dot = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="var(--green)" stroke-width="1.5"/>`;
-          if (isLast) dot += `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--green)">${vals[i].toFixed(1)}</text>`;
+          const wk  = (weeks[i] || '').replace(/'/g, '&apos;');
+          const ctlV = vals[i].toFixed(1);
+          let dot = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="var(--green)" stroke-width="1.5" style="cursor:pointer" data-week="${wk}" data-ctl="${ctlV}" onmouseover="showCTLTooltip(this)" onmouseout="hideCTLTooltip()"/>`;
+          if (isLast) dot += `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--green)" style="pointer-events:none">${ctlV}</text>`;
           return dot;
         }).join('');
       }
@@ -1098,6 +1116,26 @@
     });
 
 })();
+</script>
+
+<!-- CTL graph hover tooltip -->
+<div id="ctl-tooltip" style="display:none;position:fixed;background:#1e2736;color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;border:1px solid rgba(255,255,255,0.1);z-index:1000;line-height:1.5;"></div>
+<script>
+function showCTLTooltip(el) {
+  const tt = document.getElementById('ctl-tooltip');
+  tt.innerHTML = '<strong>' + el.dataset.week + '</strong><br>CTL: ' + el.dataset.ctl;
+  tt.style.display = 'block';
+  document.addEventListener('mousemove', moveCTLTooltip);
+}
+function moveCTLTooltip(e) {
+  const tt = document.getElementById('ctl-tooltip');
+  tt.style.left = (e.clientX + 12) + 'px';
+  tt.style.top  = (e.clientY - 36) + 'px';
+}
+function hideCTLTooltip() {
+  document.getElementById('ctl-tooltip').style.display = 'none';
+  document.removeEventListener('mousemove', moveCTLTooltip);
+}
 </script>
 </body>
 </html>

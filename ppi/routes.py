@@ -995,11 +995,11 @@ def dashboard():
     _ai_weekly_target = float(_coaching_plan.get("this_week", {}).get("weekly_target_km", 0))
     canonical_weekly_target_km = weekly_plan_run_km if weekly_plan_run_km > 0 else _ai_weekly_target
 
-    # Post-process coaching message — replace any stale km targets with canonical values
+    # Post-process coaching message — replace stale km targets + fix AI grammar
     import re as _re
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
     _raw_coaching_message = _re.sub(
-        r'\b\d+\.?\d*\s*(?:km|kilometers?)\s*(?:per week|weekly|a week|this week)',
+        r'\b(\d+\.?\d*)\s*km\s*(per week|weekly|a week|this week)',
         f'{canonical_weekly_target_km:.0f}km this week',
         _raw_coaching_message, flags=_re.IGNORECASE,
     )
@@ -1018,6 +1018,15 @@ def dashboard():
         f"target of {canonical_weekly_target_km:.0f}km",
         _raw_coaching_message,
     )
+    for _pat, _rep in [
+        (r"\bjumping from\b", "building from"),
+        (r"\bwe'll\b",        "you'll"),
+        (r"\bwe need\b",      "you need"),
+        (r"\bwe build\b",     "you build"),
+        (r"\blet's\b",        "focus on"),
+        (r"\bwe're\b",        "you're"),
+    ]:
+        _raw_coaching_message = _re.sub(_pat, _rep, _raw_coaching_message, flags=_re.IGNORECASE)
     canonical_coaching_message = _raw_coaching_message
 
     # ── Aerobic potential pace (for FM tile) ─────────────────────────────────
@@ -1033,23 +1042,25 @@ def dashboard():
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
 
-    # ── 8-week CTL series for chart ───────────────────────────────────────────
-    from collections import defaultdict as _defaultdict
-    _ctl_cutoff = today_local - timedelta(days=56)
-    _ctl_metrics = (
+    # ── 8-week CTL series for chart (last Metric value per week = end-of-week CTL) ──
+    _eight_weeks_ago = today_local - timedelta(weeks=8)
+    _ctl_metrics_raw = (
         Metric.query
-        .filter(Metric.user_id == user.id, Metric.date >= _ctl_cutoff)
+        .filter(Metric.user_id == user.id, Metric.date >= _eight_weeks_ago)
         .order_by(Metric.date.asc())
         .all()
     )
-    _ctl_by_week: dict = _defaultdict(list)
-    for _m in _ctl_metrics:
-        _wk = _m.date - timedelta(days=_m.date.weekday())  # Monday of that week
-        _ctl_by_week[_wk].append(_m.ctl)
-    weekly_ctl_series = [
-        {'week': f"{ws.strftime('%b')} {ws.day}", 'ctl': round(sum(vs) / len(vs), 1)}
-        for ws, vs in sorted(_ctl_by_week.items())
-    ][-8:]
+    weekly_ctl_series = []
+    for _wn in range(9):  # 9 points: 8 past weeks + current
+        _ws = _eight_weeks_ago + timedelta(weeks=_wn)
+        _we = _ws + timedelta(days=6)
+        _wm = [m for m in _ctl_metrics_raw if _ws <= m.date <= _we]
+        if _wm:
+            _last = max(_wm, key=lambda m: m.date)
+            weekly_ctl_series.append({'week': f"{_ws.strftime('%b')} {_ws.day}", 'ctl': round(_last.ctl or 0, 1)})
+        elif weekly_ctl_series:
+            weekly_ctl_series.append({'week': f"{_ws.strftime('%b')} {_ws.day}", 'ctl': weekly_ctl_series[-1]['ctl']})
+    weekly_ctl_series = weekly_ctl_series[-8:]  # keep most recent 8 points
 
     week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
@@ -1197,12 +1208,29 @@ def dashboard():
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
     progress_pct    = min(100, int(round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100)))
 
-    # ── Upcoming long runs (ISSUE 6) ─────────────────────────────────────────
+    # ── Upcoming long runs — with formatted display dates ────────────────────
     _today_str = today_local.strftime("%Y-%m-%d")
     upcoming_long_runs = [
         w for w in canonical_long_run_progression
         if w.get("week_date", "") > _today_str
     ][:4]
+    for _w in upcoming_long_runs:
+        try:
+            _wd = datetime.strptime(_w["week_date"], "%Y-%m-%d")
+            _w["week_date_display"] = f"{_wd.strftime('%a')} {_wd.day} {_wd.strftime('%b')}"
+        except Exception:
+            _w["week_date_display"] = _w.get("week_date", "")
+
+    # Format longest recent run date for display
+    _lr_date_raw = intel.get("long_run", {}).get("longest_date")
+    if _lr_date_raw:
+        try:
+            _lrd = datetime.strptime(_lr_date_raw[:10], "%Y-%m-%d")
+            longest_date_display = f"{_lrd.strftime('%a')} {_lrd.day} {_lrd.strftime('%b')}"
+        except Exception:
+            longest_date_display = _lr_date_raw
+    else:
+        longest_date_display = None
 
     # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
     today_item    = next((w for w in weekly_plan if w["is_today"]), None)
@@ -1368,6 +1396,7 @@ def dashboard():
         canonical_long_run_day=canonical_long_run_day,
         aerobic_pace_display=aerobic_pace_display,
         weekly_ctl_json=json.dumps(weekly_ctl_series),
+        longest_date_display=longest_date_display,
     )
 
 
