@@ -811,3 +811,227 @@ def test_compliance_scenario8_declining_trend():
 
     r = ce.to_dict()
     assert r["trend"]["direction"] == "declining"
+
+
+# ── FeasibilityEngine helpers ─────────────────────────────────────────────────
+#
+# _patch_feasibility mocks Goal.query and Activity.query.
+# Goal.id must be _Col so order_by(Goal.id.desc()) doesn't raise TypeError.
+# Activity.date must be a real datetime so Python-level filtering works
+# (a.date < cutoff, a.date.weekday(), etc.).
+#
+# VDOT reference values (verified against Jack Daniels formula):
+#   _vdot_from_race(42.195, 14400)  → ~38.1  (sub-4 marathon; spec says ~42 — wrong)
+#   _vdot_from_race(21.097, 6040)   → ~44.78 (HM 1:40:40)
+#   _vdot_from_race(42.195, 10800)  → ~53.54 (sub-3 marathon)
+#   _vdot_from_race(42.195, 12600)  → ~44.53 (sub-3:30 marathon)
+#   _vdot_from_race(5.0,    1620)   → ~34.97 (5k 27:00)
+#   _vdot_from_race(21.097, 5460)   → ~50.33 (HM 1:31:00)
+#   _vdot_from_race(42.195, 18000)  → ~28.72 (sub-5 marathon)
+
+
+def _make_goal_fe(goal_time, race_distance, weeks_to_race,
+                  pb_hm=None, pb_5k=None, pb_10k=None, personal_best=None):
+    """Mock Goal object for FeasibilityEngine tests."""
+    goal = MagicMock()
+    goal.race_date = date.today() + timedelta(weeks=weeks_to_race)
+    goal.goal_time = goal_time
+    goal.race_distance = race_distance
+    goal.pb_hm = pb_hm
+    goal.pb_5k = pb_5k
+    goal.pb_10k = pb_10k
+    goal.personal_best = personal_best
+    return goal
+
+
+def _make_feas_run(days_ago, distance_km, pace_sec_per_km=450, activity_type="run"):
+    """Mock Activity for FeasibilityEngine. date is a real datetime."""
+    act = MagicMock()
+    act.date = datetime.utcnow() - timedelta(days=days_ago)
+    act.distance_km = distance_km
+    act.moving_time = pace_sec_per_km * distance_km
+    act.activity_type = activity_type
+    return act
+
+
+def _patch_feasibility(goal, activities):
+    """Patch Goal.query and Activity.query for FeasibilityEngine tests."""
+    mock_goal_cls = MagicMock()
+    mock_goal_cls.id = _Col()
+    mock_goal_cls.query.filter_by.return_value.order_by.return_value.first.return_value = goal
+
+    mock_act_cls = MagicMock()
+    mock_act_cls.user_id = _Col()
+    mock_act_cls.date = _Col()
+    mock_act_cls.query.filter.return_value.order_by.return_value.all.return_value = activities
+
+    return patch.multiple(
+        "ppi.services.feasibility_engine",
+        Goal=mock_goal_cls,
+        Activity=mock_act_cls,
+    )
+
+
+# ── Feasibility scenario tests ────────────────────────────────────────────────
+
+
+def test_feasibility_scenario1_already_capable_sub4():
+    """S1 — VDOT 44.78 (HM 1:40:40) vs sub-4 (requires ~38.1): already_capable=True."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    goal = _make_goal_fe("04:00:00", 42.195, weeks_to_race=23, pb_hm="1:40:40")
+    # 8 weeks: 1 long run (25km) + 4 easy runs (8km) per week = 57km/wk
+    activities = []
+    for w in range(8):
+        activities.append(_make_feas_run(w * 7 + 6, 25.0, pace_sec_per_km=420))
+        for d in range(1, 5):
+            activities.append(_make_feas_run(w * 7 + d, 8.0, pace_sec_per_km=450))
+
+    with _patch_feasibility(goal, activities):
+        fe = FeasibilityEngine(user_id=1)
+
+    r = fe.to_dict()
+    assert r["vdot"]["already_capable"] is True
+    assert r["vdot"]["gap"] == 0
+    assert r["show_revised_goal"] is False
+    assert r["vdot"]["current"] >= 44.0  # from pb_hm "1:40:40"
+
+
+def test_feasibility_scenario2_vdot_gap_sub3():
+    """S2 — VDOT ~50 (HM 1:31:00) vs sub-3 (requires ~53.5): already_capable=False, gap > 0."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    goal = _make_goal_fe("03:00:00", 42.195, weeks_to_race=12, pb_hm="1:31:00")
+    # 8 weeks of moderate training (40km/wk)
+    activities = [
+        _make_feas_run(w * 7 + d, 10.0, pace_sec_per_km=400)
+        for w in range(8) for d in range(1, 5)
+    ]
+
+    with _patch_feasibility(goal, activities):
+        fe = FeasibilityEngine(user_id=1)
+
+    r = fe.to_dict()
+    assert r["vdot"]["already_capable"] is False
+    assert r["vdot"]["gap"] > 0
+    assert r["vdot"]["current"] >= 49.0   # from pb_hm "1:31:00" → ~50.33
+    assert r["vdot"]["required"] >= 52.0  # sub-3 requires ~53.54
+
+
+def test_feasibility_scenario3_already_capable_sub5():
+    """S3 — VDOT ~35 (5k 27:00) vs sub-5 marathon (requires ~28.7): already_capable=True."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    goal = _make_goal_fe("05:00:00", 42.195, weeks_to_race=20, pb_5k="0:27:00")
+    # 8 weeks of light training (20km/wk)
+    activities = [
+        _make_feas_run(w * 7 + d, 5.0, pace_sec_per_km=480)
+        for w in range(8) for d in range(1, 5)
+    ]
+
+    with _patch_feasibility(goal, activities):
+        fe = FeasibilityEngine(user_id=1)
+
+    r = fe.to_dict()
+    assert r["vdot"]["already_capable"] is True
+    assert r["show_revised_goal"] is False
+    assert r["vdot"]["current"] >= 33.0   # from pb_5k "0:27:00" → ~34.97
+    assert r["vdot"]["required"] <= 30.0  # sub-5 requires ~28.72
+
+
+def test_feasibility_scenario4_needs_revision_vdot35_sub3_6w():
+    """S4 — VDOT ~35, sub-3 goal, 6w out, minimal training: needs_revision, revised_goal shown."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    goal = _make_goal_fe("03:00:00", 42.195, weeks_to_race=6, pb_5k="0:27:00")
+    # Minimal training: 4 weeks × 2 runs × 10km = 20km/wk; no long runs
+    activities = [
+        _make_feas_run(w * 7 + d, 10.0, pace_sec_per_km=480)
+        for w in range(4) for d in [2, 5]
+    ]
+
+    with _patch_feasibility(goal, activities):
+        fe = FeasibilityEngine(user_id=1)
+
+    r = fe.to_dict()
+    assert r["assessment"] == "needs_revision"
+    assert r["show_revised_goal"] is True
+    assert r["revised_goal"] is not None
+    assert r["feasibility_score"] < 50
+    assert "revised_goal_time" in r["revised_goal"]
+
+
+def test_feasibility_scenario5_on_track_vdot50_sub330():
+    """S5 — VDOT ~50 (HM 1:31:00), sub-3:30, 18w, 65km/wk with long runs: on_track."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    goal = _make_goal_fe("03:30:00", 42.195, weeks_to_race=18, pb_hm="1:31:00")
+    # 8 weeks: 1 long run (30km) + 4 runs (8.75km each) = 65km/wk
+    activities = []
+    for w in range(8):
+        activities.append(_make_feas_run(w * 7 + 6, 30.0, pace_sec_per_km=420))
+        for d in range(1, 5):
+            activities.append(_make_feas_run(w * 7 + d, 8.75, pace_sec_per_km=450))
+
+    with _patch_feasibility(goal, activities):
+        fe = FeasibilityEngine(user_id=1)
+
+    r = fe.to_dict()
+    assert r["assessment"] == "on_track"
+    assert r["feasibility_score"] >= 75
+    assert r["vdot"]["already_capable"] is True  # 50.33 > 44.53 (sub-3:30 requirement)
+
+
+def test_feasibility_scenario6_vdot_math_validation():
+    """S6 — VDOT formula produces correct values; sub-4 marathon is ~38 (NOT ~42 as widely assumed)."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    # Construct FeasibilityEngine with no goal — returns _empty_result immediately
+    with _patch_feasibility(goal=None, activities=[]):
+        fe = FeasibilityEngine(user_id=1)
+
+    # sub-4 marathon (4:00:00 = 14400s): VDOT ≈ 38.1 — not 42 as spec incorrectly states
+    vdot_sub4 = fe._vdot_from_race(42.195, 14400)
+    assert 37.0 < vdot_sub4 < 40.0, f"sub-4 VDOT should be ~38, got {vdot_sub4}"
+
+    # HM 1:40:40 (6040s): VDOT ≈ 44.78
+    vdot_hm = fe._vdot_from_race(21.097, 6040)
+    assert 44.0 < vdot_hm < 46.0, f"HM 1:40:40 VDOT should be ~44.78, got {vdot_hm}"
+
+    # Inverse: VDOT 44.78 → marathon prediction ≈ 3:29 (12480–12720s)
+    predicted_marathon = fe._vdot_to_race_time(44.78, 42.195)
+    assert 12300 < predicted_marathon < 12900, (
+        f"VDOT 44.78 marathon should be ~12546s (3:29), got {predicted_marathon}"
+    )
+
+    # sub-3 marathon (10800s): VDOT ≈ 53.54
+    vdot_sub3 = fe._vdot_from_race(42.195, 10800)
+    assert 52.0 < vdot_sub3 < 55.0, f"sub-3 VDOT should be ~53.5, got {vdot_sub3}"
+
+
+def test_feasibility_scenario7_consistency_score_edge_cases():
+    """S7 — consistency_score: 8/8 active weeks → ≥90; alternating → ~50; no runs → 0."""
+    from ppi.services.feasibility_engine import FeasibilityEngine
+
+    with _patch_feasibility(goal=None, activities=[]):
+        fe = FeasibilityEngine(user_id=1)
+
+    # All 8 weeks active, 25km each, zero variance → score ≈ 100
+    all_active = [
+        _make_feas_run(days_ago=w * 7 + 1, distance_km=25.0)
+        for w in range(8)
+    ]
+    score_all = fe._consistency_score(all_active)
+    assert score_all >= 90.0, f"All-active score should be ≥90, got {score_all}"
+
+    # 4 of 8 weeks active (weeks 0, 2, 4, 6) — base 50%, zero variance within active weeks
+    alt_runs = [
+        _make_feas_run(days_ago=w * 7 + 1, distance_km=25.0)
+        for w in range(0, 8, 2)
+    ]
+    score_alt = fe._consistency_score(alt_runs)
+    assert 40.0 <= score_alt <= 60.0, f"Alternating score should be ~50, got {score_alt}"
+
+    # No runs at all → 0
+    score_none = fe._consistency_score([])
+    assert score_none == 0.0
