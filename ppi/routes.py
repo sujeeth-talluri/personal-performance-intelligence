@@ -218,9 +218,17 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
     existing = {w.workout_date: w for w in fetch_workout_logs(user_id, week_start, week_end)}
     for offset in range(7):
         day_date = week_start + timedelta(days=offset)
-        if day_date in existing:
-            continue
         plan = template[offset]
+        if day_date in existing:
+            row = existing[day_date]
+            # Overwrite engine-generated rows that are still planned —
+            # this lets template changes take effect without wiping user edits
+            # or completed/partial entries.
+            if row.source == "engine" and row.status == "planned":
+                row.workout_type = plan["workout_type"]
+                row.session_name = plan["session"]
+                row.target_distance_km = plan["target_km"]
+            continue
         upsert_workout_log(
             user_id=user_id,
             workout_date=day_date,
