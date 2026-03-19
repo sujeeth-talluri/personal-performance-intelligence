@@ -204,8 +204,8 @@ def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, week
     if need_long > 0:
         actions.append(f"Complete {need_long} more long run{'s' if need_long > 1 else ''} of 18 km or longer")
     if need_weekly > 0 and phase != "taper":
-        deficit = max(0.0, weekly_readiness_target - rolling_week_distance_km)
-        actions.append(f"Build this week to about {int(round(weekly_readiness_target))} km total ({round(deficit, 1)} km still to add)")
+        remaining = round(max(0.0, weekly_readiness_target - rolling_week_distance_km), 1)
+        actions.append(f"Weekly target: {int(round(weekly_readiness_target))} km — {rolling_week_distance_km} km done, {remaining} km to go")
     if need_medium > 0:
         actions.append(f"Add {need_medium} more medium run{'s' if need_medium > 1 else ''} between 8 and 12 km")
     if need_weeks > 0:

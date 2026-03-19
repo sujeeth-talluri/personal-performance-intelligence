@@ -13,6 +13,7 @@ from .repositories import (
     consume_password_reset,
     create_password_reset,
     create_user,
+    delete_workout_log,
     fetch_activities_between,
     fetch_workout_logs,
     get_goal,
@@ -214,6 +215,8 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
     week_start = week_start or _week_bounds(today_local)[0]
     week_end = week_start + timedelta(days=6)
     template = _weekly_plan_template(weekly_goal, long_run)
+    # Canonical long run distance from the ladder — used to detect stale Sunday rows.
+    canonical_long_km = round(float(long_run.get("next_milestone_km") or 0), 1)
 
     existing = {w.workout_date: w for w in fetch_workout_logs(user_id, week_start, week_end)}
     for offset in range(7):
@@ -225,10 +228,19 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
             # this lets template changes take effect without wiping user edits
             # or completed/partial entries.
             if row.source == "engine" and row.status == "planned":
-                row.workout_type = plan["workout_type"]
-                row.session_name = plan["session"]
-                row.target_distance_km = plan["target_km"]
-            continue
+                # FIX 7: Sunday long run — if target_km doesn't match the canonical
+                # ladder distance, delete the stale row and regenerate it below.
+                if (offset == 6 and canonical_long_km > 0 and plan["workout_type"] == "RUN"
+                        and abs(float(row.target_distance_km or 0) - plan["target_km"]) > 0.5):
+                    delete_workout_log(user_id, day_date)
+                    # Fall through to upsert with the correct target_km
+                else:
+                    row.workout_type = plan["workout_type"]
+                    row.session_name = plan["session"]
+                    row.target_distance_km = plan["target_km"]
+                    continue
+            else:
+                continue
         upsert_workout_log(
             user_id=user_id,
             workout_date=day_date,
@@ -460,6 +472,19 @@ def _build_today_workout(today_local, runs, weekly_plan, upcoming_run):
     target = today_assignment["planned"] if today_assignment else "Rest"
     planned_km = float(today_assignment["planned_km"] or 0.0) if today_assignment else 0.0
 
+    # Compute tomorrow's planned session for the "Tomorrow" field.
+    tomorrow_local = today_local + timedelta(days=1)
+    tomorrow_plan = next((w for w in weekly_plan if w["date"] == tomorrow_local), None)
+    if tomorrow_plan:
+        if tomorrow_plan["workout_type"] == "STRENGTH":
+            tomorrow_label = f"Gym — {tomorrow_plan['session']}"
+        elif tomorrow_plan["workout_type"] == "RUN":
+            tomorrow_label = f"{tomorrow_plan['planned']} {tomorrow_plan['session']}"
+        else:
+            tomorrow_label = "Rest"
+    else:
+        tomorrow_label = "Rest"
+
     if today_run:
         actual_km = float(today_run["distance"])
         status_key, completion_pct, extra_km = _classify_run_completion(actual_km, planned_km)
@@ -476,7 +501,7 @@ def _build_today_workout(today_local, runs, weekly_plan, upcoming_run):
             "pace": today_run["pace"],
             "hr": str(today_run["hr"]) if today_run["hr"] else "--",
             "coach_insight": "Workout completed for today. Keep recovery and hydration on track.",
-            "upcoming_run": upcoming_run,
+            "tomorrow": tomorrow_label,
             "completed": True,
         }
 
@@ -493,7 +518,7 @@ def _build_today_workout(today_local, runs, weekly_plan, upcoming_run):
         "pace": "--",
         "hr": "--",
         "coach_insight": "Today's session is assigned from your weekly plan.",
-        "upcoming_run": upcoming_run,
+        "tomorrow": tomorrow_label,
         "completed": False,
     }
 

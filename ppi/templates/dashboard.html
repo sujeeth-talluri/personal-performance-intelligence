@@ -326,7 +326,7 @@
         </div>
         <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
           Phase: {{ weekly_goal.display_phase|title }}
-          &nbsp;·&nbsp; Freshness: {{ intel.fatigue_balance }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})
+          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}{% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 0 %}Balanced ⚡{% elif _tsb >= -10 %}Some Fatigue 🟡{% else %}Tired — Needs Rest 🔴{% endif %}
           &nbsp;·&nbsp; Target pace {{ intel.goal.target_pace }}
         </div>
       </div>
@@ -409,28 +409,25 @@
         {% else %}
           <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
         {% endif %}
-        <div class="metric-row"><span>Coming Up</span><strong>{{ today_workout.upcoming_run }}</strong></div>
+        <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 
         <div class="divider"></div>
         <h2 style="margin-bottom:12px">Long Run Ladder</h2>
-        {# ±5% rule: "done" only if a run of at least 95% of that distance exists #}
+        {# Strict thresholds — NEXT driven by Python's next_milestone_km (same source as plan) #}
         {% set lk = long_run.longest_km %}
-        {% set d21 = 21 * 0.95 %}
-        {% set d24 = 24 * 0.95 %}
-        {% set d28 = 28 * 0.95 %}
-        {% set d32 = 32 * 0.95 %}
+        {% set nxt = long_run.next_milestone_km %}
         <div class="ladder">
-          <div class="ladder-step {{ 'done' if lk >= d21 else 'next' }}">
-            {% if lk >= d21 %}✓{% else %}NEXT{% endif %}<span class="km">21 km</span>
+          <div class="ladder-step {{ 'done' if lk >= 21 else ('next' if nxt == 21 else '') }}">
+            {% if lk >= 21 %}✓{% elif nxt == 21 %}NEXT{% endif %}<span class="km">21 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= d24 else ('next' if lk >= d21 else '') }}">
-            {% if lk >= d24 %}✓{% elif lk >= d21 %}NEXT{% endif %}<span class="km">24 km</span>
+          <div class="ladder-step {{ 'done' if lk >= 24 else ('next' if nxt == 24 else '') }}">
+            {% if lk >= 24 %}✓{% elif nxt == 24 %}NEXT{% endif %}<span class="km">24 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= d28 else ('next' if lk >= d24 else '') }}">
-            {% if lk >= d28 %}✓{% elif lk >= d24 %}NEXT{% endif %}<span class="km">28 km</span>
+          <div class="ladder-step {{ 'done' if lk >= 28 else ('next' if nxt == 28 else '') }}">
+            {% if lk >= 28 %}✓{% elif nxt == 28 %}NEXT{% endif %}<span class="km">28 km</span>
           </div>
-          <div class="ladder-step {{ 'done' if lk >= d32 else ('next' if lk >= d28 else '') }}">
-            {% if lk >= d32 %}✓{% elif lk >= d28 %}NEXT{% endif %}<span class="km">32 km</span>
+          <div class="ladder-step {{ 'done' if lk >= 32 else ('next' if nxt == 32 else '') }}">
+            {% if lk >= 32 %}✓{% elif nxt == 32 %}NEXT{% endif %}<span class="km">32 km</span>
           </div>
         </div>
         <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km &nbsp;·&nbsp; Latest: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
@@ -438,9 +435,8 @@
     </div>
 
     <!-- ── Recent Runs ─────────────────────────────────────────────────── -->
-    <div class="section-label">Recent Activity</div>
+    <div class="section-label">Recent Runs</div>
     <div class="card">
-      <h2>Recent Runs</h2>
       {% if runs %}
         {% for run in runs %}
           <div class="run-item">

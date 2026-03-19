@@ -18,10 +18,7 @@ def _fmt_pace(sec_per_km: float) -> str:
     """Format seconds-per-km as 'M:SS/km'."""
     sec_per_km = max(0.0, sec_per_km)
     m = int(sec_per_km // 60)
-    s = int(round(sec_per_km % 60))
-    if s == 60:
-        m += 1
-        s = 0
+    s = int(sec_per_km % 60)  # truncate, not round, so 339.85 → 5:39 not 5:40
     return f"{m}:{s:02d}/km"
 
 
@@ -60,10 +57,21 @@ def _riegel(time_sec: float, from_km: float, to_km: float, exponent: float = 1.0
 # ---------------------------------------------------------------------------
 
 def _build_race_prediction(intel: dict) -> dict:
-    """Extract and structure the predicted race time from the intel layer."""
+    """Extract and structure the predicted race time from the intel layer.
+
+    For marathon goals the wall-adjusted time is used as the canonical display
+    value so the coaching summary always quotes the same figure as the FM tile.
+    """
     race_proj = intel.get("race_day_projection", "--")
     current_proj = intel.get("current_projection", "--")
     display = race_proj if race_proj not in ("--", None) else current_proj
+
+    # Use wall-adjusted FM prediction as the single source of truth for display.
+    # This matches the FM tile in the dashboard which also shows the wall-adjusted time.
+    wall = intel.get("wall_analysis") or {}
+    wall_adj = wall.get("current_predicted_fm_display")
+    if wall_adj and wall_adj not in ("--", None):
+        display = wall_adj
 
     predicted_seconds = _parse_hms(display) or _parse_hms(current_proj)
 
@@ -202,6 +210,12 @@ def _build_training_recommendations(intel: dict) -> dict:
         phase_label = "Race ready"
         phase_rule = "Begin taper 3 weeks before race date."
         weekly_target_km = round(prior_avg_km * 0.85, 1)
+
+    # Canonical override: use the same weekly_goal_km that drives the weekly plan
+    # so the coaching summary always quotes the same number as the plan card.
+    canonical_km = float(weekly.get("weekly_goal_km") or 0.0)
+    if canonical_km > 0:
+        weekly_target_km = canonical_km
 
     # Key workout recommendation
     if recovery_needed:

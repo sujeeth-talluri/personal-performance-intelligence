@@ -35,7 +35,10 @@ def _next_long_run_target(phase, longest_km, next_milestone, weekly_target, week
     if phase == "rebuild" and apply_capacity_cap:
         return max(14.0, min(18.0, capacity_cap))
     if phase == "recovery":
-        return max(14.0, min(max(16.0, round(longest_km * 0.78, 1)), round(weekly_target * 0.30, 1), practical_peak))
+        # Cutback based on 78% of longest_km — not capped by weekly volume so the
+        # long run is always a meaningful effort (e.g. 21 km) rather than a tiny
+        # number driven by a low weekly_target * 0.30 cap.
+        return max(14.0, min(max(16.0, round(longest_km * 0.78, 1)), practical_peak))
     if phase == "taper":
         if weeks_to_race <= 1:
             return 0.0

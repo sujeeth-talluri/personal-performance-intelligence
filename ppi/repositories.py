@@ -221,6 +221,13 @@ def fetch_workout_logs(user_id, start_date, end_date):
     )
 
 
+def delete_workout_log(user_id, workout_date):
+    row = WorkoutLog.query.filter_by(user_id=user_id, workout_date=workout_date).first()
+    if row:
+        db.session.delete(row)
+        _commit()
+
+
 def upsert_workout_log(
     user_id,
     workout_date,
