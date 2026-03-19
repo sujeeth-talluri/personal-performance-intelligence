@@ -263,12 +263,14 @@ def fm_wall_prevention_pace_strategy(goal_pace_sec_per_km: float, wall_risk: str
         A structured dict with per-segment paces, split times, and the
         km-32 checkpoint advisory.
     """
-    p = goal_pace_sec_per_km
+    # Use integer pace so segment totals use clean whole-second arithmetic
+    # (e.g. 3:59 goal → 339 s/km = exactly 5:39/km, not 339.85).
+    p = int(goal_pace_sec_per_km)
 
     segments = [
-        {"label": "km 0–10",  "start_km": 0,   "end_km": 10.0,   "pace": p + 20, "note": "Deliberately conservative. Hold back even if you feel fresh."},
-        {"label": "km 10–21", "start_km": 10.0, "end_km": 21.1,   "pace": p + 10, "note": "Settling in. Breathing should be controlled and comfortable."},
-        {"label": "km 21–32", "start_km": 21.1, "end_km": 32.0,   "pace": p,      "note": "Race pace. This is where discipline pays off."},
+        {"label": "km 0–10",  "start_km": 0,    "end_km": 10.0,   "pace": p + 20, "note": "Deliberately conservative. Hold back even if you feel fresh."},
+        {"label": "km 10–21", "start_km": 10.0, "end_km": 21.0,   "pace": p + 10, "note": "Settling in. Breathing should be controlled and comfortable."},
+        {"label": "km 21–32", "start_km": 21.0, "end_km": 32.0,   "pace": p,      "note": "Race pace. This is where discipline pays off."},
         {"label": "km 32–42", "start_km": 32.0, "end_km": 42.195, "pace": p - 5,  "note": "Negative split. Only attempt if you feel strong at km 32."},
     ]
 
@@ -349,7 +351,7 @@ def marathon_fueling_plan(predicted_seconds: float, goal_pace_sec_per_km: float)
     gel_num = 1
     while t < predicted_seconds - 300:
         km = round(km_at_elapsed(t), 1)
-        if km > 41.0:  # never schedule a gel beyond km 41 — the finish is at 42.195
+        if km >= 42.0:  # never schedule a gel past the finish line (42.195 km)
             break
         gel_schedule.append({
             "gel": gel_num,

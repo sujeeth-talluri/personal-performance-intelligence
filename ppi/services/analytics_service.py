@@ -452,12 +452,14 @@ def _long_run_progress_state(runs, today):
     # next_step is derived purely from the longest completed run so that a run of
     # e.g. 21.8 km correctly advances to 24 km rather than staying at 21 km.
     LADDER = [21, 24, 28, 32]
-    recent = [r for r in runs if r["date"] >= today - timedelta(days=84)]
+    # 63-day window: current training block only — avoids counting a stale long
+    # run from a different training cycle as a completed ladder milestone.
+    recent = [r for r in runs if r["date"] >= today - timedelta(days=63)]
     last_long = max(recent, key=lambda r: r["distance_km"], default=None)
     longest_km = last_long["distance_km"] if last_long else 0.0
-    # Count how many ladder milestones are fully covered (>= 95% threshold)
-    completed_count = sum(1 for step in LADDER if longest_km >= step * 0.95)
-    completed_step  = max((step for step in LADDER if longest_km >= step * 0.95), default=0.0)
+    # Strict threshold: a step is done only when an actual run >= that distance exists.
+    completed_count = sum(1 for step in LADDER if longest_km >= step)
+    completed_step  = max((step for step in LADDER if longest_km >= step), default=0.0)
     next_step = next((step for step in LADDER if step > longest_km), 42)
     qualifying_longs = sorted([r for r in recent if r["distance_km"] >= 18], key=lambda r: r["date"])
     failed_recent = False
