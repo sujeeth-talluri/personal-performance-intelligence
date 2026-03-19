@@ -278,3 +278,536 @@ def test_data_quality_high_confidence():
     assert dq.is_sufficient is True
     assert dq.show_banner is False
     assert dq.banner["message"] == ""
+
+
+# ── Scenario tests ────────────────────────────────────────────────────────────
+#
+# Each scenario uses _make_runs with runs in ascending date order (oldest first),
+# matching the ORDER BY date ASC the real query applies.
+#
+# Span arithmetic:  span_days = (newest_date - oldest_date).days
+#                   span_weeks = span_days / 7
+#
+# Recent window:    a.date >= today - 28 days  (four_weeks_ago)
+# Distinct weeks:   ISO-week Monday; runs spaced 7 days apart are always in
+#                   different ISO weeks.
+# Long-run gate:    distance_km >= 15 triggers long_run detection.
+#
+# Confidence tiers (both conditions required):
+#   high:         span >= 12w AND recent_active_weeks >= 3
+#   medium:       span >= 8w  AND recent_active_weeks >= 2
+#   low:          span >= 4w  AND recent_active_weeks >= 2
+#   insufficient: anything below low, OR recent_active_weeks < 2
+#   no_data:      zero activities
+
+
+def test_dq_scenario1_brand_new_user():
+    """S1 — Zero activities: no_data, not sufficient, warning with sync action."""
+    from ppi.services.data_quality import DataQualityReport
+
+    with _patch_dq(runs=[]):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "no_data"
+    assert r["is_sufficient"] is False
+    assert r["total_runs"] == 0
+    assert r["show_banner"] is True
+    assert r["banner"]["type"] == "warning"
+    assert r["banner"]["action"] == "Sync Strava Now"
+
+
+def test_dq_scenario2_one_week_of_data():
+    """S2 — 3 runs all within 7 days: span < 1 week → insufficient, warning banner."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day7, newest=day2 → span = 5/7 = 0.71 weeks < 4
+    runs = _make_runs([(7, 6.0), (4, 5.5), (2, 7.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "insufficient"
+    assert r["is_sufficient"] is False
+    assert r["show_banner"] is True
+    assert r["banner"]["type"] == "warning"
+    # Banner message must reference the weeks threshold
+    assert "week" in r["banner"]["message"].lower()
+
+
+def test_dq_scenario3_two_weeks_both_active():
+    """S3 — 5 runs over 2 weeks: span = 2w < 4w minimum → insufficient."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day14, newest=day0 → span = 14/7 = 2.0 weeks < 4
+    # recent_weeks covers both, but span still fails the gate
+    runs = _make_runs([(14, 9.0), (11, 8.0), (7, 10.0), (4, 7.0), (0, 8.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "insufficient"
+    assert r["is_sufficient"] is False
+    assert r["data_span_weeks"] < 4
+
+
+def test_dq_scenario4_four_weeks_two_active():
+    """S4 — 3 runs over 5w span, 2 of last 4 weeks active: low confidence, sufficient."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day35, newest=day7 → span = 28/7 = 4.0 weeks ≥ 4
+    # recent window (≤28 days): days 14 and 7 → 2 distinct ISO weeks ≥ 2
+    runs = _make_runs([(35, 12.0), (14, 10.0), (7, 9.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "low"
+    assert r["is_sufficient"] is True
+    assert r["show_banner"] is True
+    assert r["banner"]["type"] == "info"
+    assert r["data_span_weeks"] >= 4
+    assert r["recent_weeks_with_data"] >= 2
+
+
+def test_dq_scenario5_inactive_three_weeks_sick():
+    """S5 — 4+ weeks history but ran only 1 week in last 4: insufficient (recent gate fails)."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Runs at weeks 8, 7, 6 ago (outside 28-day window) then one run at day 7
+    # oldest=day56, newest=day7 → span = 49/7 = 7.0 weeks ≥ 4
+    # recent (≤28 days): only day7 → 1 active week < 2 required
+    runs = _make_runs([(56, 10.0), (49, 11.0), (42, 9.0), (7, 6.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "insufficient"
+    assert r["is_sufficient"] is False
+    assert r["recent_weeks_with_data"] < 2
+
+
+def test_dq_scenario6_eight_weeks_consistent():
+    """S6 — 8 runs across ~9 weeks (6 active weeks): medium confidence, sufficient."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day63, newest=day2 → span = 61/7 = 8.71 weeks ≥ 8
+    # skipped weeks at ~35 and ~42 = 6 of 8 active weeks
+    # recent (≤28 days): days 28, 21, 14, 7, 2 → 5 distinct ISO weeks ≥ 2
+    runs = _make_runs([
+        (63, 10.0), (56, 11.0), (49, 9.0),
+        (28, 10.0), (21, 12.0), (14, 9.0), (7, 10.0), (2, 8.0),
+    ])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "medium"
+    assert r["is_sufficient"] is True
+    assert r["show_banner"] is True
+    assert r["data_span_weeks"] >= 8
+    assert r["recent_weeks_with_data"] >= 2
+
+
+def test_dq_scenario7_twelve_weeks_very_consistent():
+    """S7 — 12 runs over 13 weeks (10 active): high confidence, no banner shown."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day91, newest=day2 → span = 89/7 = 12.7 weeks ≥ 12
+    # skipped weeks at day56 and day28 → 10 of 12 active weeks
+    # recent (≤28 days): days 21, 14, 7, 2 → 4 distinct ISO weeks ≥ 3
+    runs = _make_runs([
+        (91, 10.0), (84, 11.0), (77, 12.0), (70, 10.0),
+        (63, 11.0), (49, 10.0), (42, 9.0), (35, 11.0),
+        (21, 10.0), (14, 12.0), (7, 10.0), (2, 8.0),
+    ])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "high"
+    assert r["is_sufficient"] is True
+    assert r["show_banner"] is False
+    assert r["banner"]["message"] == ""
+    assert r["data_span_weeks"] >= 12
+    assert r["recent_weeks_with_data"] >= 3
+
+
+def test_dq_scenario8_stopped_running_six_weeks_ago():
+    """S8 — 20 weeks of history but no runs in last 6 weeks: insufficient (recent gate fails)."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Runs from 20 weeks ago to 6 weeks ago, then silence
+    # oldest=day140, newest=day42 → span = 98/7 = 14 weeks ≥ 4
+    # recent (≤28 days): day42 is 42 > 28 → 0 active weeks in window
+    runs = _make_runs([
+        (140, 12.0), (112, 11.0), (84, 10.0),
+        (63, 11.0), (56, 12.0), (49, 10.0), (42, 9.0),
+    ])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "insufficient"
+    assert r["is_sufficient"] is False
+    assert r["recent_weeks_with_data"] == 0
+    assert r["data_span_weeks"] >= 12  # lots of history, but stale
+
+
+def test_dq_scenario9_sub3_runner_high_volume():
+    """S9 — 17 weeks, 80km/week with long runs: high confidence."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Weekly runs for 17 weeks — oldest first
+    # oldest=day112, newest=day0 → span = 112/7 = 16.0 weeks ≥ 12
+    # recent (≤28 days): days 28, 21, 14, 7, 0 → 5 distinct ISO weeks ≥ 3
+    # Include 20km long runs (≥15km) every 3rd week
+    pattern = []
+    for weeks_ago in range(16, -1, -1):
+        days = weeks_ago * 7
+        km = 20.0 if weeks_ago % 3 == 0 else 12.0  # long run every 3 weeks
+        pattern.append((days, km))
+    runs = _make_runs(pattern)
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "high"
+    assert r["is_sufficient"] is True
+    assert r["long_runs_count"] > 0
+    assert r["data_span_weeks"] >= 12
+    assert r["recent_weeks_with_data"] >= 3
+
+
+def test_dq_scenario10_first_timer_no_long_runs():
+    """S10 — 5 weeks, 20km/week, all runs short (no run ≥15km): low confidence, missing long-run hint."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # oldest=day42, newest=day2 → span = 40/7 = 5.71 weeks ≥ 4 but < 8
+    # recent (≤28 days): days 21, 14, 7, 2 → 4 distinct ISO weeks ≥ 2
+    # All runs ≤ 10km → long_runs_count = 0 → missing includes long-run guidance
+    runs = _make_runs([
+        (42, 5.0), (35, 8.0), (28, 6.0),
+        (21, 10.0), (14, 7.0), (7, 8.0), (2, 6.0),
+    ])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    r = dq.to_dict()
+    assert r["confidence"] == "low"
+    assert r["is_sufficient"] is True
+    assert r["long_runs_count"] == 0
+    assert any("long run" in m.lower() for m in r["missing"])
+
+
+# ── ComplianceEngine helpers ──────────────────────────────────────────────────
+#
+# Mock layers patched at "ppi.services.compliance_engine":
+#   WorkoutLog  — planned sessions
+#   Activity    — Strava actuals
+#   Metric      — ATL/TSB load signals
+#   db          — session.query for trend aggregates (4 weekly scalars)
+#
+# Activity.date must be a real datetime so .date() returns a real date;
+# the gap-detection loop relies on this.
+#
+# Run activities:
+#   pace_sec_per_km < 390  → quality effort (tempo / interval)
+#   pace_sec_per_km >= 390 → easy effort
+#   moving_time = pace_sec_per_km * distance_km
+
+
+def _make_log(workout_date, session_name, target_km, workout_type="RUN"):
+    """Mock WorkoutLog row."""
+    log = MagicMock()
+    log.workout_date = workout_date
+    log.workout_type = workout_type
+    log.session_name = session_name
+    log.target_distance_km = target_km
+    return log
+
+
+def _make_run(dt, distance_km, pace_sec_per_km=420, activity_type="run"):
+    """Mock Activity row — dt must be a real datetime."""
+    act = MagicMock()
+    act.date = dt
+    act.activity_type = activity_type
+    act.distance_km = distance_km
+    act.moving_time = pace_sec_per_km * distance_km
+    return act
+
+
+class _Col:
+    """
+    Minimal SQLAlchemy column expression stand-in for tests.
+
+    `MagicMock >= date` raises TypeError in Python 3.9+ because
+    MagicMock.__ge__ returns NotImplemented for non-Mock types, and
+    datetime.date.__le__(MagicMock) also returns NotImplemented.
+    This class prevents that by explicitly handling all comparisons.
+    """
+    def __eq__(self, other): return MagicMock()
+    def __ne__(self, other): return MagicMock()
+    def __ge__(self, other): return MagicMock()
+    def __le__(self, other): return MagicMock()
+    def __gt__(self, other): return MagicMock()
+    def __lt__(self, other): return MagicMock()
+    def __hash__(self): return id(self)
+    def asc(self): return MagicMock()
+    def desc(self): return MagicMock()
+
+
+def _patch_compliance(planned_logs, actual_activities, trend_km=None, atl=0.0, tsb=0.0, ctl=0.0):
+    """
+    Patch all DB dependencies of ComplianceEngine.
+
+    trend_km: list of 4 floats [last_week, 2w_ago, 3w_ago, 4w_ago]
+    """
+    if trend_km is None:
+        trend_km = [0.0, 0.0, 0.0, 0.0]
+
+    # WorkoutLog — column attrs use _Col so >= / <= with date don't raise TypeError
+    mock_wl = MagicMock()
+    mock_wl.user_id = _Col()
+    mock_wl.workout_date = _Col()
+    mock_wl.workout_type = _Col()
+    mock_wl.session_name = _Col()
+    mock_wl.query.filter.return_value.all.return_value = planned_logs
+
+    # Activity — same treatment for date comparisons
+    mock_act = MagicMock()
+    mock_act.user_id = _Col()
+    mock_act.date = _Col()
+    mock_act.activity_type = _Col()
+    mock_act.distance_km = _Col()
+    mock_act.query.filter.return_value.order_by.return_value.all.return_value = actual_activities
+
+    # Metric (load signals)
+    mock_metric_row = MagicMock()
+    mock_metric_row.ctl = ctl
+    mock_metric_row.atl = atl
+    mock_metric_row.tsb = tsb
+    mock_metric = MagicMock()
+    mock_metric.query.filter_by.return_value.order_by.return_value.first.return_value = mock_metric_row
+
+    # db.session.query(...).filter(...).scalar() — called 4 times for trend loop
+    mock_scalar = MagicMock()
+    mock_scalar.filter.return_value.scalar.side_effect = list(trend_km)
+    mock_db = MagicMock()
+    mock_db.session.query.return_value = mock_scalar
+
+    return patch.multiple(
+        "ppi.services.compliance_engine",
+        WorkoutLog=mock_wl,
+        Activity=mock_act,
+        Metric=mock_metric,
+        db=mock_db,
+    )
+
+
+def _last_week_dates():
+    """Return (last_monday, last_sunday) as date objects."""
+    today = date.today()
+    last_monday = today - timedelta(days=today.weekday() + 7)
+    last_sunday = last_monday + timedelta(days=6)
+    return last_monday, last_sunday
+
+
+def _dt(d):
+    """Convert date to datetime at midnight."""
+    return datetime.combine(d, datetime.min.time())
+
+
+# ── Compliance scenario tests ─────────────────────────────────────────────────
+
+
+def test_compliance_scenario1_perfect_week():
+    """S1 — 43/45km completed (95.6%): on_track, volume_adjustment=1.05."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [
+        _make_log(monday,                   "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=1), "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=2), "Tempo Run", 9.0),
+        _make_log(monday + timedelta(days=4), "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=6), "Long Run",  9.0),
+    ]
+    # 5 easy runs, 43km total, spread across Mon/Tue/Wed/Fri/Sun — max gap = 1
+    actual = [
+        _make_run(_dt(monday),                   8.5, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=1)), 9.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=2)), 8.5, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=4)), 9.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=6)), 8.0, pace_sec_per_km=420),
+    ]
+    # consecutive_good_weeks = 1 (only last week ≥20) → volume_adjustment = 1.05
+    with _patch_compliance(planned, actual, trend_km=[43.0, 0.0, 0.0, 0.0]):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "on_track"
+    assert r["volume_compliance_pct"] >= 90
+    assert r["response"]["volume_adjustment"] == 1.05
+
+
+def test_compliance_scenario2_fatigue_miss():
+    """S2 — 64% volume, ATL=38, TSB=-15: fatigue detected, volume_adjustment=0.85."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 10.0) for i in range(5)]
+    actual = [
+        _make_run(_dt(monday),                   8.0,  pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=1)), 8.0,  pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=3)), 8.0,  pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=4)), 8.0,  pace_sec_per_km=420),
+    ]
+    # actual=32km, planned=50km → 64% < 80%; ATL=38>30, TSB=-15<-10 → fatigue
+
+    with _patch_compliance(planned, actual, atl=38.0, tsb=-15.0):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "fatigue"
+    assert r["response"]["volume_adjustment"] == 0.85
+    assert "volume" in r["response"]["message"].lower() or "15%" in r["response"]["message"]
+
+
+def test_compliance_scenario3_illness_five_day_gap():
+    """S3 — 8km in 2 days, 5-day consecutive gap: illness_or_life, volume_adjustment=0.70."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 9.0) for i in range(5)]
+    # Only Monday (4km) and Sunday (4km) — Tue through Sat = 5 consecutive rest days
+    actual = [
+        _make_run(_dt(monday), 4.0, pace_sec_per_km=420),
+        _make_run(_dt(sunday), 4.0, pace_sec_per_km=420),
+    ]
+
+    with _patch_compliance(planned, actual):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "illness_or_life"
+    assert r["max_gap_days"] >= 5
+    assert r["response"]["volume_adjustment"] == 0.70
+
+
+def test_compliance_scenario4_busy_week_time_management():
+    """S4 — 28/45km, 3 days active, no long gap, ATL normal: time_management, adjustment=1.0."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 9.0) for i in range(5)]
+    # Mon, Wed, Fri active → max gap = 2 days; 62% volume, ATL=25≤30
+    actual = [
+        _make_run(_dt(monday),                    9.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=2)), 10.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=4)),  9.0, pace_sec_per_km=420),
+    ]
+
+    with _patch_compliance(planned, actual, atl=25.0, tsb=-2.0):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "time_management"
+    assert r["response"]["volume_adjustment"] == 1.0
+    assert r["max_gap_days"] < 5
+
+
+def test_compliance_scenario5_key_sessions_skipped():
+    """S5 — 20/45km easy only, no tempo, no long run (44%): key_sessions_skipped."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [
+        _make_log(monday,                   "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=1), "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=2), "Tempo Run", 9.0),    # quality session
+        _make_log(monday + timedelta(days=4), "Easy Run",  9.0),
+        _make_log(monday + timedelta(days=6), "Long Run",  9.0),    # planned_long = 9km... wait
+    ]
+    # planned_long = max(9, 9, 9, 9, 9) = 9km; long_run_done requires actual_long ≥ 9*0.90=8.1km
+    # Use 3 short easy runs (6+7+7=20km) so actual_long=7 < 8.1 → long_run_done=False
+    # pace=420>390 → quality_done=False
+    # pct = 20/45 = 44.4% < 50 → time_management guard (50≤pct<90) FAILS → falls to key_sessions_skipped
+    # actual_run_days=3, planned_run_days=5; 3≥5*0.6=3 ✓
+    actual = [
+        _make_run(_dt(monday),                   6.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=2)), 7.0, pace_sec_per_km=420),
+        _make_run(_dt(monday + timedelta(days=4)), 7.0, pace_sec_per_km=420),
+    ]
+
+    with _patch_compliance(planned, actual, atl=20.0, tsb=-2.0):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "key_sessions_skipped"
+    assert r["response"]["priority"] == "quality_focus"
+
+
+def test_compliance_scenario6_complete_miss():
+    """S6 — Zero activities: complete_miss, volume_adjustment=0.65."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 9.0) for i in range(5)]
+
+    with _patch_compliance(planned, actual_activities=[]):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "complete_miss"
+    assert r["actual_run_km"] == 0.0
+    assert r["response"]["volume_adjustment"] == 0.65
+
+
+def test_compliance_scenario7_three_consecutive_good_weeks():
+    """S7 — On-track + 4 consecutive good weeks: volume_adjustment=1.10 (step up)."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 9.0) for i in range(5)]
+    actual = [
+        _make_run(_dt(monday + timedelta(days=i)), 9.0, pace_sec_per_km=420)
+        for i in range(5)
+    ]
+    # trend: [42, 44, 43, 38] — all ≥ 20 → consecutive_good_weeks = 4 ≥ 3
+    with _patch_compliance(planned, actual, trend_km=[42.0, 44.0, 43.0, 38.0]):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["miss_reason"]["code"] == "on_track"
+    assert r["trend"]["consecutive_good_weeks"] >= 3
+    assert r["response"]["volume_adjustment"] == 1.10
+
+
+def test_compliance_scenario8_declining_trend():
+    """S8 — Recent avg 20km vs prior avg 40km: direction='declining'."""
+    from ppi.services.compliance_engine import ComplianceEngine
+
+    monday, sunday = _last_week_dates()
+    planned = [_make_log(monday + timedelta(days=i), "Easy Run", 9.0) for i in range(5)]
+    actual = [
+        _make_run(_dt(monday + timedelta(days=i)), 9.0, pace_sec_per_km=420)
+        for i in range(5)
+    ]
+    # trend_km[0]=last week, [1]=2w ago, [2]=3w ago, [3]=4w ago
+    # recent_avg = (18+22)/2 = 20; older_avg = (38+42)/2 = 40
+    # 20 < 40 * 0.90 = 36 → declining
+    with _patch_compliance(planned, actual, trend_km=[18.0, 22.0, 38.0, 42.0]):
+        ce = ComplianceEngine(user_id=1)
+
+    r = ce.to_dict()
+    assert r["trend"]["direction"] == "declining"
