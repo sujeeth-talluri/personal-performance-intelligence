@@ -53,7 +53,7 @@ from .services.prediction_engine import vdot_from_race, vdot_to_race_time_second
 from .services.strava_service import sync_strava_data
 from .services.data_quality import DataQualityReport
 from .services.ai_coach_engine import AICoachEngine
-from .models import Activity, Goal, RunnerProfile
+from .models import Activity, Goal, Metric, RunnerProfile
 from .extensions import db
 
 web = Blueprint("web", __name__)
@@ -995,9 +995,19 @@ def dashboard():
     _ai_weekly_target = float(_coaching_plan.get("this_week", {}).get("weekly_target_km", 0))
     canonical_weekly_target_km = weekly_plan_run_km if weekly_plan_run_km > 0 else _ai_weekly_target
 
-    # ISSUE 4: Post-process coaching message — replace any stale km targets with canonical
+    # Post-process coaching message — replace any stale km targets with canonical values
     import re as _re
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
+    _raw_coaching_message = _re.sub(
+        r'\b\d+\.?\d*\s*(?:km|kilometers?)\s*(?:per week|weekly|a week|this week)',
+        f'{canonical_weekly_target_km:.0f}km this week',
+        _raw_coaching_message, flags=_re.IGNORECASE,
+    )
+    _raw_coaching_message = _re.sub(
+        r'(?:long run|long-run)\s+(?:of\s+)?\d+\.?\d*\s*km',
+        f'long run of {canonical_long_run_km:.0f}km',
+        _raw_coaching_message, flags=_re.IGNORECASE,
+    )
     _raw_coaching_message = _re.sub(
         r"[Tt]arget\s+\d+\.?\d*\s*km",
         f"target {canonical_weekly_target_km:.0f}km",
@@ -1010,9 +1020,36 @@ def dashboard():
     )
     canonical_coaching_message = _raw_coaching_message
 
+    # ── Aerobic potential pace (for FM tile) ─────────────────────────────────
+    _wall_data = intel.get('wall_analysis') or {}
+    _ap_seconds = _wall_data.get('optimal_fm_potential') or 0
+    if _ap_seconds:
+        _ap_pace_sec = _ap_seconds / 42.195
+        aerobic_pace_display = f"{int(_ap_pace_sec // 60)}:{int(_ap_pace_sec % 60):02d}/km avg"
+    else:
+        aerobic_pace_display = ''
+
     # ── Fetch this week's activities ──────────────────────────────────────────
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
+
+    # ── 8-week CTL series for chart ───────────────────────────────────────────
+    from collections import defaultdict as _defaultdict
+    _ctl_cutoff = today_local - timedelta(days=56)
+    _ctl_metrics = (
+        Metric.query
+        .filter(Metric.user_id == user.id, Metric.date >= _ctl_cutoff)
+        .order_by(Metric.date.asc())
+        .all()
+    )
+    _ctl_by_week: dict = _defaultdict(list)
+    for _m in _ctl_metrics:
+        _wk = _m.date - timedelta(days=_m.date.weekday())  # Monday of that week
+        _ctl_by_week[_wk].append(_m.ctl)
+    weekly_ctl_series = [
+        {'week': f"{ws.strftime('%b')} {ws.day}", 'ctl': round(sum(vs) / len(vs), 1)}
+        for ws, vs in sorted(_ctl_by_week.items())
+    ][-8:]
 
     week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt    = datetime.combine(week_end, datetime.max.time())
@@ -1255,7 +1292,7 @@ def dashboard():
         Activity.query
         .filter(Activity.user_id == user.id)
         .order_by(Activity.date.desc())
-        .limit(10)
+        .limit(7)
         .all()
     )
     recent_activities = []
@@ -1329,6 +1366,8 @@ def dashboard():
         week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
         canonical_feasibility=canonical_feasibility,
         canonical_long_run_day=canonical_long_run_day,
+        aerobic_pace_display=aerobic_pace_display,
+        weekly_ctl_json=json.dumps(weekly_ctl_series),
     )
 
 
