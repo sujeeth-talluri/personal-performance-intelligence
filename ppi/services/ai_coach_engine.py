@@ -107,7 +107,8 @@ class AICoachEngine:
             .first()
         )
         key_str = (
-            f"{user_id}"
+            f"v2"  # bump to invalidate all existing caches
+            f":{user_id}"
             f":{goal.id if goal else 'none'}"
             f":{goal.goal_time if goal else ''}"
             f":{goal.race_date if goal else ''}"
@@ -233,7 +234,19 @@ class AICoachEngine:
             .all()
         )
 
-        weekly_summaries = self._build_weekly_summaries(activities, today)
+        weekly_summaries  = self._build_weekly_summaries(activities, today)
+        training_pattern  = self._analyze_training_pattern(activities, profile_data)
+
+        # Resolve long run day: prefer detected pattern over profile preference
+        # when there is enough data and the detected day differs
+        detected_long = training_pattern.get("detected_long_run_day")
+        preferred_long = profile_data.get("long_run_day", "sunday")
+        resolved_long = (
+            detected_long
+            if training_pattern.get("has_enough_pattern_data") and detected_long
+            else preferred_long
+        )
+        training_pattern["resolved_long_run_day"] = resolved_long
 
         long_runs = sorted(
             [
@@ -252,24 +265,25 @@ class AICoachEngine:
         )[:8]
 
         return {
-            "runner_profile": profile_data,
+            "runner_profile":  profile_data,
             "goal": {
-                "race_name":       goal.race_name,
-                "race_date":       goal.race_date.strftime("%Y-%m-%d"),
-                "goal_time":       goal.goal_time,
+                "race_name":        goal.race_name,
+                "race_date":        goal.race_date.strftime("%Y-%m-%d"),
+                "goal_time":        goal.goal_time,
                 "goal_distance_km": float(goal.race_distance or 42.195),
-                "weeks_to_race":   weeks_to_race,
-                "today":           today.strftime("%Y-%m-%d"),
-                "personal_best":   goal.personal_best,
-                "pb_5k":           goal.pb_5k,
-                "pb_10k":          goal.pb_10k,
-                "pb_hm":           goal.pb_hm,
+                "weeks_to_race":    weeks_to_race,
+                "today":            today.strftime("%Y-%m-%d"),
+                "personal_best":    goal.personal_best,
+                "pb_5k":            goal.pb_5k,
+                "pb_10k":           goal.pb_10k,
+                "pb_hm":            goal.pb_hm,
             },
-            "data_quality":   dq.to_dict(),
-            "compliance":     compliance.to_dict(),
-            "feasibility":    feasibility.to_dict(),
-            "weekly_history": weekly_summaries,
+            "data_quality":    dq.to_dict(),
+            "compliance":      compliance.to_dict(),
+            "feasibility":     feasibility.to_dict(),
+            "weekly_history":  weekly_summaries,
             "long_run_history": long_runs,
+            "training_pattern": training_pattern,
         }
 
     def _build_weekly_summaries(self, activities: list, today: date) -> list:
@@ -381,6 +395,13 @@ class AICoachEngine:
             else ""
         )
 
+        pattern = context.get("training_pattern", {})
+        pattern_confidence = (
+            "HIGH — use this pattern, override profile preferences if they conflict"
+            if pattern.get("has_enough_pattern_data")
+            else "LOW — insufficient data, use profile preferences instead"
+        )
+
         prompt = f"""You are an elite marathon coach. Analyze this runner's data and generate their weekly training plan.
 
 GOAL: {goal['goal_time']} {goal['race_name']} on {goal['race_date']} ({goal['weeks_to_race']} weeks away)
@@ -393,6 +414,15 @@ RUNNER PREFERENCES:
 - Injury status: {profile.get('injury_status', 'healthy')}
 {injury_line}
 - Goal priority: {profile.get('goal_priority', 'hit_time')}
+
+ACTUAL TRAINING PATTERN (detected from Strava history):
+- Typical run days: {pattern.get('typical_run_days', [])}
+- Typical strength days: {pattern.get('typical_strength_days', [])}
+- Detected long run day: {pattern.get('resolved_long_run_day', profile.get('long_run_day', 'sunday'))}
+- Pattern confidence: {pattern_confidence}
+- Run frequency per day: {pattern.get('run_day_counts', {})}
+CRITICAL RULE: The daily_plan MUST assign runs on typical_run_days and rest/strength on other days.
+Never assign a run on a day the runner never runs. Never assign rest on a day the runner always runs.
 
 CURRENT FITNESS:
 - Feasibility score: {feasibility.get('feasibility_score', 0)}/100
