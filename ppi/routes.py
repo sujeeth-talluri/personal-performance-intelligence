@@ -974,15 +974,39 @@ def dashboard():
     _coaching_plan = _coach.get_plan(user.id)
 
     canonical_phase_label          = _coaching_plan.get("phase_label", "Training")
-    canonical_weekly_target_km     = float(_coaching_plan.get("this_week", {}).get("weekly_target_km", 0))
     canonical_long_run_km          = float(_coaching_plan.get("this_week", {}).get("long_run", {}).get("km", 0))
-    canonical_coaching_message     = _coaching_plan.get("coaching_message", "")
     canonical_alerts               = _coaching_plan.get("alerts", [])
     canonical_week_theme           = _coaching_plan.get("week_theme", "")
     canonical_focus_point          = _coaching_plan.get("this_week", {}).get("focus_point", "")
     canonical_long_run_progression = _coaching_plan.get("long_run_progression", [])
     canonical_feasibility          = _coaching_plan.get("feasibility", {})
     _daily_plan                    = _coaching_plan.get("this_week", {}).get("daily_plan", {})
+
+    # ISSUE 1: Compute weekly target directly from daily_plan (most accurate)
+    # Sum km for all non-strength, non-rest sessions — this matches what Claude planned
+    weekly_plan_run_km = round(sum(
+        float(s.get("km", 0) or 0)
+        for s in _daily_plan.values()
+        if s.get("type") not in ("strength", "rest") and float(s.get("km", 0) or 0) > 0
+    ), 1)
+    # Prefer daily_plan sum; fall back to AI's stated weekly_target_km if daily_plan is empty
+    _ai_weekly_target = float(_coaching_plan.get("this_week", {}).get("weekly_target_km", 0))
+    canonical_weekly_target_km = weekly_plan_run_km if weekly_plan_run_km > 0 else _ai_weekly_target
+
+    # ISSUE 4: Post-process coaching message — replace any stale km targets with canonical
+    import re as _re
+    _raw_coaching_message = _coaching_plan.get("coaching_message", "")
+    _raw_coaching_message = _re.sub(
+        r"[Tt]arget\s+\d+\.?\d*\s*km",
+        f"target {canonical_weekly_target_km:.0f}km",
+        _raw_coaching_message,
+    )
+    _raw_coaching_message = _re.sub(
+        r"target of \d+\.?\d*\s*km",
+        f"target of {canonical_weekly_target_km:.0f}km",
+        _raw_coaching_message,
+    )
+    canonical_coaching_message = _raw_coaching_message
 
     # ── Fetch this week's activities ──────────────────────────────────────────
     today_local = _today_local_date(user_tz)
@@ -1134,9 +1158,30 @@ def dashboard():
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
     progress_pct    = min(100, int(round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100)))
 
+    # ── Upcoming long runs (ISSUE 6) ─────────────────────────────────────────
+    _today_str = today_local.strftime("%Y-%m-%d")
+    upcoming_long_runs = [
+        w for w in canonical_long_run_progression
+        if w.get("week_date", "") > _today_str
+    ][:4]
+
     # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
     today_item    = next((w for w in weekly_plan if w["is_today"]), None)
     tomorrow_item = weekly_plan[today_local.weekday() + 1] if today_local.weekday() < 6 else None
+
+    # ISSUE 3: Build tomorrow display with date
+    if tomorrow_item:
+        _tmrw_date = today_local + timedelta(days=1)
+        _tmrw_session = tomorrow_item["session"]
+        _tmrw_km = tomorrow_item.get("planned_km", 0)
+        _tmrw_type = tomorrow_item.get("session_type", "")
+        _tmrw_km_str = (
+            f" · {int(_tmrw_km)}km" if _tmrw_km > 0 and _tmrw_type not in ("strength", "rest", "active_recovery")
+            else ""
+        )
+        tomorrow_display = f"{_tmrw_date.strftime('%a %d %b')} · {_tmrw_session}{_tmrw_km_str}"
+    else:
+        tomorrow_display = "Rest Day"
 
     # Upgrade rest → active_recovery: no day should be complete rest
     if today_item and today_item.get("session_type") in ("rest", None, ""):
@@ -1166,7 +1211,7 @@ def dashboard():
         "completed":       today_item["done"]         if today_item else False,
         "distance_actual": _fmt_km(today_item["actual_km"])  if today_item else "—",
         "distance_target": _fmt_km(today_item["planned_km"]) if today_item else "—",
-        "tomorrow":        tomorrow_item["session"]   if tomorrow_item else "Rest Day",
+        "tomorrow":        tomorrow_display,
         # Extra fields used elsewhere (show_today_plan, pace card)
         "session":         today_item["session"]      if today_item else "Rest Day",
         "planned_km":      today_item["planned_km"]   if today_item else 0,
@@ -1278,6 +1323,8 @@ def dashboard():
         canonical_week_theme=canonical_week_theme,
         canonical_focus_point=canonical_focus_point,
         canonical_long_run_progression=canonical_long_run_progression,
+        upcoming_long_runs=upcoming_long_runs,
+        week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
         canonical_feasibility=canonical_feasibility,
     )
 

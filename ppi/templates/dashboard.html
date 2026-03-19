@@ -450,7 +450,6 @@
             <span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}" style="margin-left:6px">{{ today_workout.status }}</span>
           </strong>
         </div>
-        <div class="metric-row"><span>Type</span><strong>{{ today_workout.workout_type }}</strong></div>
         {% if today_workout.completed %}
           <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
         {% else %}
@@ -459,25 +458,34 @@
         <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 
         <div class="divider"></div>
-        <h2 style="margin-bottom:12px">Long Run Ladder</h2>
-        {# Strict thresholds — NEXT driven by Python's next_milestone_km (same source as plan) #}
-        {% set lk = long_run.longest_km %}
-        {% set nxt = long_run.next_milestone_km %}
-        <div class="ladder">
-          <div class="ladder-step {{ 'done' if lk >= 21 else ('next' if nxt == 21 else '') }}">
-            {% if lk >= 21 %}✓{% elif nxt == 21 %}NEXT{% endif %}<span class="km">21 km</span>
+        <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
+        {% if upcoming_long_runs %}
+          <div class="ladder">
+            {% for lr in upcoming_long_runs %}
+              <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
+                {% if loop.first %}<span style="font-size:.6rem;display:block;margin-bottom:2px">NEXT</span>{% endif %}
+                <span class="km">{{ lr.target_km|int }} km</span>
+                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date[5:] }}</span>
+              </div>
+            {% endfor %}
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 24 else ('next' if nxt == 24 else '') }}">
-            {% if lk >= 24 %}✓{% elif nxt == 24 %}NEXT{% endif %}<span class="km">24 km</span>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
+            Longest recent: {{ long_run.longest_km }} km
+            {% if upcoming_long_runs %}&nbsp;·&nbsp; Peak target: {{ canonical_long_run_progression | selectattr('is_peak_run') | list | map(attribute='target_km') | max | default(canonical_long_run_km) | int }}km{% endif %}
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 28 else ('next' if nxt == 28 else '') }}">
-            {% if lk >= 28 %}✓{% elif nxt == 28 %}NEXT{% endif %}<span class="km">28 km</span>
+        {% else %}
+          <div class="ladder">
+            {# Fallback to static ladder when no progression data yet #}
+            {% set lk = long_run.longest_km %}
+            {% set nxt = long_run.next_milestone_km %}
+            {% for milestone in [21, 24, 28, 32] %}
+              <div class="ladder-step {{ 'done' if lk >= milestone else ('next' if nxt == milestone else '') }}">
+                {% if lk >= milestone %}✓{% elif nxt == milestone %}NEXT{% endif %}<span class="km">{{ milestone }} km</span>
+              </div>
+            {% endfor %}
           </div>
-          <div class="ladder-step {{ 'done' if lk >= 32 else ('next' if nxt == 32 else '') }}">
-            {% if lk >= 32 %}✓{% elif nxt == 32 %}NEXT{% endif %}<span class="km">32 km</span>
-          </div>
-        </div>
-        <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %} &nbsp;·&nbsp; Latest: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
+          <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+        {% endif %}
       </div>
     </div>
 
@@ -553,7 +561,8 @@
           <div class="lt-sub" id="lt-tsb-sub">Positive = Fresh / Negative = Tired</div>
         </div>
       </div>
-      <div class="metric-row"><span>Phase</span><strong id="lt-phase">—</strong></div>
+      <div class="metric-row"><span>Phase</span><strong id="lt-phase">{{ canonical_phase_label }}</strong></div>
+      <div class="metric-row"><span>Weekly target</span><strong id="lt-weekly" data-canonical="{{ canonical_weekly_target_km }}">{{ canonical_weekly_target_km }}km</strong></div>
       <div class="metric-row"><span>Key Session</span><strong id="lt-key-session">—</strong></div>
       <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
       <div class="mini-chart-wrap">
@@ -959,9 +968,13 @@
       const tsbSub = el('lt-tsb-sub');
       if (tsbSub) tsbSub.textContent = tsbVal >= 5 ? 'Fresh' : tsbVal >= -5 ? 'Neutral' : 'Tired';
     }
-    if (ltPhase)   ltPhase.textContent  = tr.phase_label || '—';
+    if (ltPhase) ltPhase.textContent = ltPhase.textContent !== '—' ? ltPhase.textContent : (tr.phase_label || '—');
     if (ltKey && tr.key_workout)   ltKey.textContent = tr.key_workout.name + ' — ' + tr.key_workout.description;
-    if (ltWeekly)  ltWeekly.textContent = tr.weekly_target_km ? tr.weekly_target_km + ' km target this week' : '—';
+    if (ltWeekly) {
+      const canonical = ltWeekly.dataset.canonical;
+      if (!canonical) ltWeekly.textContent = tr.weekly_target_km ? tr.weekly_target_km + 'km' : '—';
+      // else: server-rendered canonical value is already shown, don't overwrite
+    }
     if (ltTrend)   ltTrend.textContent  = load.fitness_trend || '—';
 
     // Mini CTL chart
