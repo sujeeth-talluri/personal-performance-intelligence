@@ -134,27 +134,32 @@ def _pace_strategy_for_distance(key: str, pred_secs: float, dist_km: float) -> d
     }
 
 
-def build_pace_strategy(predicted_marathon_seconds: float | None, all_distances: dict | None = None) -> dict:
+def build_pace_strategy(
+    predicted_marathon_seconds: float | None,
+    all_distances: dict | None = None,
+    goal_seconds: float | None = None,
+) -> dict:
     """Derive pace strategy for all four distances.
 
-    Uses VDOT-accurate per-distance predictions from *all_distances* when
-    available (anchored to the best known PB floor), falling back to Riegel
-    projection from the marathon time only when those are absent.
+    For the marathon tile the pace targets are built from *goal_seconds* so
+    the runner sees splits that reflect what they must run to hit their goal,
+    not the current fitness projection.  Shorter distances use VDOT-accurate
+    times from *all_distances*, falling back to Riegel from predicted FM.
     """
     if not predicted_marathon_seconds or predicted_marathon_seconds <= 0:
         return {}
 
-    fm = predicted_marathon_seconds
+    fm_pace_base = goal_seconds if goal_seconds and goal_seconds > 0 else predicted_marathon_seconds
     ad = all_distances or {}
-    hm  = float(ad.get("half_marathon") or 0) or _riegel(fm, 42.195, 21.0975)
-    ten = float(ad.get("10k")           or 0) or _riegel(fm, 42.195, 10.0)
-    five= float(ad.get("5k")            or 0) or _riegel(fm, 42.195, 5.0)
+    hm  = float(ad.get("half_marathon") or 0) or _riegel(predicted_marathon_seconds, 42.195, 21.0975)
+    ten = float(ad.get("10k")           or 0) or _riegel(predicted_marathon_seconds, 42.195, 10.0)
+    five= float(ad.get("5k")            or 0) or _riegel(predicted_marathon_seconds, 42.195, 5.0)
 
     return {
-        "marathon":      _pace_strategy_for_distance("marathon",      fm,   42.195),
-        "half_marathon": _pace_strategy_for_distance("half_marathon", hm,   21.0975),
-        "10k":           _pace_strategy_for_distance("10k",           ten,  10.0),
-        "5k":            _pace_strategy_for_distance("5k",            five, 5.0),
+        "marathon":      _pace_strategy_for_distance("marathon",      fm_pace_base, 42.195),
+        "half_marathon": _pace_strategy_for_distance("half_marathon", hm,           21.0975),
+        "10k":           _pace_strategy_for_distance("10k",           ten,          10.0),
+        "5k":            _pace_strategy_for_distance("5k",            five,         5.0),
     }
 
 
@@ -369,9 +374,12 @@ def generate_coaching_output(intel: dict, weekly_plan: list) -> dict:
         }
     """
     race_prediction = _build_race_prediction(intel)
+    goal_ctx = intel.get("goal") or {}
+    goal_secs = float(goal_ctx.get("goal_seconds") or 0) or None
     pace_strategy = build_pace_strategy(
         race_prediction.get("predicted_seconds"),
         all_distances=intel.get("all_distances"),
+        goal_seconds=goal_secs,
     )
     training_recs = _build_training_recommendations(intel)
 

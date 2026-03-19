@@ -451,9 +451,9 @@ def _long_run_progress_state(runs, today):
     # Milestone ladder: a step is "done" when the runner has covered ≥ 95% of it.
     # next_step is derived purely from the longest completed run so that a run of
     # e.g. 21.8 km correctly advances to 24 km rather than staying at 21 km.
-    LADDER = [21, 24, 28, 32, 35, 38, 42]
-    recent = [r for r in runs if r["date"] >= today - timedelta(days=70)]
-    last_long = max(recent, key=lambda r: (r["date"], r["distance_km"]), default=None)
+    LADDER = [21, 24, 28, 32]
+    recent = [r for r in runs if r["date"] >= today - timedelta(days=84)]
+    last_long = max(recent, key=lambda r: r["distance_km"], default=None)
     longest_km = last_long["distance_km"] if last_long else 0.0
     # Count how many ladder milestones are fully covered (>= 95% threshold)
     completed_count = sum(1 for step in LADDER if longest_km >= step * 0.95)
@@ -1468,6 +1468,7 @@ def recent_runs(user_id, limit=5, user_timezone=None):
                 "time": _fmt_hms(a.moving_time),
                 "pace": f"{int(pace//60)}:{int(pace%60):02d}/km" if pace else "--",
                 "hr": int(float(a.avg_hr)) if a.avg_hr else None,
+                "elevation": int(round(float(a.elevation_gain))) if a.elevation_gain and float(a.elevation_gain) > 0 else None,
             }
         )
         if len(out) >= limit:

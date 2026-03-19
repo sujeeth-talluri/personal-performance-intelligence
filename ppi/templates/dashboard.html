@@ -448,6 +448,7 @@
             <div class="run-dist">{{ run.distance }} km</div>
             <div class="run-pace">{{ run.pace }}/km</div>
             {% if run.hr %}<div class="run-pace">HR {{ run.hr }}</div>{% endif %}
+            {% if run.elevation %}<div class="run-pace">+{{ run.elevation }}m</div>{% endif %}
             <div class="run-time">{{ run.time }}</div>
           </div>
         {% endfor %}
@@ -491,9 +492,9 @@
           <div class="lt-sub">7-day load</div>
         </div>
         <div class="load-tile">
-          <div class="lt-label">Form (TSB)</div>
+          <div class="lt-label" title="TSB = Fitness - Fatigue. Positive = Fresh, Negative = Tired" style="cursor:help">Form</div>
           <div class="lt-val" id="lt-tsb">—</div>
-          <div class="lt-sub">CTL − ATL</div>
+          <div class="lt-sub" id="lt-tsb-sub">Positive = Fresh / Negative = Tired</div>
         </div>
       </div>
       <div class="metric-row"><span>Phase</span><strong id="lt-phase">—</strong></div>
@@ -611,7 +612,9 @@
     if (distTiles) {
       tiles.forEach(({ key, label, fm }) => {
         const d = ps[key] || {};
-        const ptime = fm ? (pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
+        const wallAdjTime = fm && wall && wall.current_predicted_fm_display && wall.current_predicted_fm_display !== '--'
+          ? wall.current_predicted_fm_display : null;
+        const ptime = fm ? (wallAdjTime || pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
         const div = document.createElement('div');
         div.className = 'dist-tile' + (fm ? ' fm' : '');
         let inner = `
@@ -884,6 +887,8 @@
     if (ltTsb) {
       ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
       ltTsb.className = 'lt-val ' + tsb_color(tsbVal);
+      const tsbSub = el('lt-tsb-sub');
+      if (tsbSub) tsbSub.textContent = tsbVal >= 5 ? 'Fresh' : tsbVal >= -5 ? 'Neutral' : 'Tired';
     }
     if (ltPhase)   ltPhase.textContent  = tr.phase_label || '—';
     if (ltKey && tr.key_workout)   ltKey.textContent = tr.key_workout.name + ' — ' + tr.key_workout.description;

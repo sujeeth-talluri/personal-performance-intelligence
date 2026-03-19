@@ -349,6 +349,8 @@ def marathon_fueling_plan(predicted_seconds: float, goal_pace_sec_per_km: float)
     gel_num = 1
     while t < predicted_seconds - 300:
         km = round(km_at_elapsed(t), 1)
+        if km > 41.0:  # never schedule a gel beyond km 41 — the finish is at 42.195
+            break
         gel_schedule.append({
             "gel": gel_num,
             "elapsed": _fmt_hms(t),
