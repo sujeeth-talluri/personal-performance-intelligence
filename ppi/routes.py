@@ -1107,33 +1107,3 @@ def strava_callback():
         return redirect(url_for("web.onboarding"))
     return redirect(url_for("web.dashboard"))
 
-
-# ---------------------------------------------------------------------------
-# TEMPORARY admin endpoint — remove after one-time DB cleanup
-# ---------------------------------------------------------------------------
-@web.route("/admin/reset-plan", methods=["POST"])
-def reset_weekly_plan():
-    from datetime import date, timedelta
-    from .extensions import db
-    from .models import WorkoutLog
-
-    secret = request.args.get("secret", "")
-    if secret != "strideiq-reset-2026":
-        return jsonify({"error": "unauthorized"}), 401
-
-    today = date.today()
-    week_start = today - timedelta(days=today.weekday())
-    week_end = week_start + timedelta(days=6)
-
-    result = db.session.execute(
-        db.delete(WorkoutLog).where(
-            WorkoutLog.workout_date >= week_start,
-            WorkoutLog.workout_date <= week_end,
-        )
-    )
-    db.session.commit()
-    return jsonify({
-        "deleted": result.rowcount,
-        "week": f"{week_start} to {week_end}",
-    })
-
