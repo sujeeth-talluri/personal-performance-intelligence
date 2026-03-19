@@ -51,6 +51,7 @@ from .services.strava_oauth_service import (
 from .services.ai_recommendation_service import build_pace_strategy, generate_coaching_output
 from .services.prediction_engine import vdot_from_race, vdot_to_race_time_seconds
 from .services.strava_service import sync_strava_data
+from .services.data_quality import DataQualityReport
 from .models import Activity, Goal, RunnerProfile
 from .extensions import db
 
@@ -939,6 +940,28 @@ def dashboard():
     else:
         sync_info = {"status": "skipped", "reason": "cooldown", "new_activities": 0}
 
+    # ── Data quality gate ────────────────────────────────────────────────────
+    dq = DataQualityReport(user.id)
+    if dq.confidence == "no_data":
+        return render_template(
+            "no_data.html",
+            user=user,
+            goal=Goal.query.filter_by(user_id=user.id).order_by(Goal.id.desc()).first(),
+            banner=dq.banner,
+        )
+    if not dq.is_sufficient:
+        _goal = Goal.query.filter_by(user_id=user.id).order_by(Goal.id.desc()).first()
+        _runs = recent_runs(user.id, limit=10, user_timezone=user_tz)
+        return render_template(
+            "dashboard_limited.html",
+            user=user,
+            goal=_goal,
+            dq=dq.to_dict(),
+            banner=dq.banner,
+            runs=_runs,
+        )
+    dq_report = dq.to_dict()
+
     intel = performance_intelligence(user.id, user_timezone=user_tz)
 
     if not intel or not intel.get("goal"):
@@ -1013,6 +1036,9 @@ def dashboard():
         sync_info=sync_info,
         today_date=_today_date_label(user_tz),
         long_run=intel["long_run"],
+        banner=dq_report["banner"],
+        show_banner=dq_report["show_banner"],
+        dq=dq_report,
     )
 
 

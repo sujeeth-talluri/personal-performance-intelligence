@@ -1,8 +1,44 @@
-from datetime import date
+from datetime import date, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 from ppi.services.load_engine import classify_run_intensity, load_model, running_stress_score
 from ppi.services.plan_engine import apply_adaptive_plan, build_weekly_plan_template, classify_run_completion, training_consistency_score
 from ppi.services.prediction_engine import marathon_prediction_seconds
+
+
+# ── DataQualityReport helpers ────────────────────────────────────────────────
+
+def _make_activity(days_ago, distance_km=8.0):
+    """Return a mock Activity with .date and .distance_km."""
+    a = MagicMock()
+    a.date = datetime.utcnow() - timedelta(days=days_ago)
+    a.distance_km = distance_km
+    return a
+
+
+def _make_runs(pattern):
+    """
+    Build a list of mock activities from a pattern list of (days_ago, km) tuples.
+    """
+    return [_make_activity(d, km) for d, km in pattern]
+
+
+def _patch_dq(runs, goal=None):
+    """
+    Context manager that patches Activity.query and Goal.query so
+    DataQualityReport can be instantiated without a real DB.
+    """
+    mock_activity_query = MagicMock()
+    mock_activity_query.filter.return_value.order_by.return_value.all.return_value = runs
+
+    mock_goal_query = MagicMock()
+    mock_goal_query.filter_by.return_value.order_by.return_value.first.return_value = goal
+
+    return patch.multiple(
+        "ppi.services.data_quality",
+        Activity=MagicMock(query=mock_activity_query),
+        Goal=MagicMock(query=mock_goal_query),
+    )
 
 
 class DummyLog:
@@ -179,3 +215,66 @@ def test_race_week_marks_race_day_on_actual_race_date():
     assert plan[6]["session"] == "Race Day"
     assert plan[6]["workout_type"] == "RUN"
     assert plan[6]["target_km"] == 42.195
+
+
+# ── DataQualityReport tests ───────────────────────────────────────────────────
+
+def test_data_quality_no_data():
+    """No activities → no_data confidence, is_sufficient=False, warning banner."""
+    from ppi.services.data_quality import DataQualityReport
+
+    with _patch_dq(runs=[]):
+        dq = DataQualityReport(user_id=1)
+
+    assert dq.confidence == "no_data"
+    assert dq.is_sufficient is False
+    assert dq.show_banner is True
+    assert dq.banner["type"] == "warning"
+    assert dq.to_dict()["total_runs"] == 0
+
+
+def test_data_quality_insufficient():
+    """2 weeks of data → insufficient confidence, is_sufficient=False."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Two runs spread ~14 days apart, both in last 4 weeks (span < 4 weeks)
+    runs = _make_runs([(21, 10.0), (7, 8.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    assert dq.confidence == "insufficient"
+    assert dq.is_sufficient is False
+    assert dq.show_banner is True
+    assert dq.to_dict()["data_span_weeks"] < 4
+
+
+def test_data_quality_low_confidence():
+    """4+ weeks span, 2+ active weeks → low confidence but is_sufficient=True."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Runs on days 35, 21, 14, 7 — spans 28 days = 4 weeks, 4 distinct weeks
+    runs = _make_runs([(35, 12.0), (21, 10.0), (14, 8.0), (7, 9.0)])
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    assert dq.confidence == "low"
+    assert dq.is_sufficient is True
+    assert dq.to_dict()["data_span_weeks"] >= 4
+
+
+def test_data_quality_high_confidence():
+    """12+ weeks of data, 3+ recent active weeks → high confidence, no banner."""
+    from ppi.services.data_quality import DataQualityReport
+
+    # Weekly runs for 13 weeks — oldest first so span computes correctly
+    runs = _make_runs([(d, 10.0) for d in range(90, -1, -7)])  # 13 runs over 12 weeks
+
+    with _patch_dq(runs=runs):
+        dq = DataQualityReport(user_id=1)
+
+    assert dq.confidence == "high"
+    assert dq.is_sufficient is True
+    assert dq.show_banner is False
+    assert dq.banner["message"] == ""

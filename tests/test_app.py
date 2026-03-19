@@ -85,7 +85,10 @@ def test_onboarding_then_dashboard(client):
     # After onboarding, user is redirected to coach-intro (not dashboard)
     assert response.headers["Location"].endswith("/coach-intro")
 
-    # Simulate completing coach onboarding by inserting a completed RunnerProfile
+    # Simulate completing coach onboarding and seed Activity rows to pass data quality gate
+    from datetime import datetime, timedelta
+    from ppi.models import Activity
+
     with client.application.app_context():
         user = User.query.filter_by(email="r@example.com").first()
         profile = RunnerProfile(
@@ -101,6 +104,20 @@ def test_onboarding_then_dashboard(client):
             onboarding_completed=True,
         )
         _db.session.add(profile)
+
+        # Seed 8 runs over 8 weeks so DataQualityReport sees sufficient data
+        today = datetime.utcnow()
+        for weeks_ago in range(8, 0, -1):
+            act = Activity(
+                user_id=user.id,
+                strava_activity_id=1000 + weeks_ago,
+                activity_type="run",
+                date=today - timedelta(weeks=weeks_ago),
+                distance_km=10.0,
+                moving_time=3600.0,
+                elevation_gain=0,
+            )
+            _db.session.add(act)
         _db.session.commit()
 
     dash = client.get("/", follow_redirects=False)
