@@ -1,55 +1,163 @@
-﻿<!doctype html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset='utf-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StrideIQ Settings</title>
-  <link rel='stylesheet' href='/static/app.css'>
+  <link rel="stylesheet" href="/static/css/strideiq.css">
+  <style>
+    .page-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 24px;
+    }
+    .settings-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 48px;
+      width: 100%;
+      max-width: 760px;
+      box-shadow: var(--shadow-lg);
+    }
+    .page-logo {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: -0.5px;
+      margin-bottom: 2px;
+    }
+    .page-tagline {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .page-sub {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+    .action-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .action-link {
+      display: inline-block;
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: var(--transition);
+    }
+    .action-link-strava {
+      background: #fc4c02;
+      color: #fff;
+    }
+    .action-link-strava:hover { opacity: 0.9; transform: translateY(-1px); }
+    .action-link-back {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .action-link-back:hover { border-color: var(--border-bright); opacity: 1; }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 580px) {
+      .grid2 { grid-template-columns: 1fr; }
+      .settings-card { padding: 28px 20px; }
+    }
+    .form-row label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+    .form-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .submit-btn {
+      padding: 12px 32px;
+      background: var(--green);
+      color: #07090f;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .submit-btn:hover {
+      box-shadow: var(--shadow-glow);
+      transform: translateY(-1px);
+    }
+  </style>
 </head>
 <body>
-  <main class='wrap' style='max-width:760px;'>
-    <section class='card'>
-      <h1>Settings</h1>
-      <p class='sub'>Update your race goal or reconnect Strava.</p>
-      <p class='inline'>
-        <a class='btn' href='/connect/strava'>Reconnect Strava</a>
-        <a class='btn' href='/'>Back to Dashboard</a>
-      </p>
-      <form method='post'>
-        <div class='grid2'>
-          <div class='row'><label>Race name</label><input name='race_name' value='{{ goal.race_name if goal else "" }}' required></div>
-          <div class='row'><label>Race date</label><input type='date' name='race_date' value='{{ goal.race_date if goal else "" }}' required></div>
-          <div class='row'>
+  <div class="page-wrap">
+    <div class="settings-card">
+      <div class="page-logo">StrideIQ</div>
+      <div class="page-tagline">AI Marathon Coach</div>
+      <div class="page-title">Settings</div>
+      <div class="page-sub">Update your race goal or reconnect Strava.</div>
+      <div class="action-links">
+        <a class="action-link action-link-strava" href="/connect/strava">Reconnect Strava</a>
+        <a class="action-link action-link-back" href="/">Back to Dashboard</a>
+      </div>
+      <form method="post">
+        <div class="grid2">
+          <div class="form-row"><label>Race name</label><input name="race_name" value="{{ goal.race_name if goal else '' }}" required></div>
+          <div class="form-row"><label>Race date</label><input type="date" name="race_date" value="{{ goal.race_date if goal else '' }}" required></div>
+          <div class="form-row">
             <label>Race distance (km)</label>
-            <input name='race_distance' list='race-distance-options' inputmode='decimal' placeholder='5, 10, 21.1, 42.2 or custom' value='{{ goal.race_distance if goal else "" }}' required>
-            <div class='sub'>Quick picks: 5K, 10K, Half Marathon, Full Marathon</div>
+            <input name="race_distance" list="race-distance-options" inputmode="decimal" placeholder="5, 10, 21.1, 42.2 or custom" value="{{ goal.race_distance if goal else '' }}" required>
+            <div class="form-hint">Quick picks: 5K, 10K, Half Marathon, Full Marathon</div>
           </div>
-          <div class='row'><label>Goal time (HH:MM:SS)</label><input name='goal_time' value='{{ goal.goal_time if goal else "" }}' required></div>
-          <div class='row'>
+          <div class="form-row"><label>Goal time (HH:MM:SS)</label><input name="goal_time" value="{{ goal.goal_time if goal else '' }}" required></div>
+          <div class="form-row">
             <label>Elevation type</label>
-            <select name='elevation_type'>
-              <option value='flat' {% if goal and goal.elevation_type=='flat' %}selected{% endif %}>Flat</option>
-              <option value='moderate' {% if not goal or goal.elevation_type=='moderate' %}selected{% endif %}>Moderate</option>
-              <option value='hilly' {% if goal and goal.elevation_type=='hilly' %}selected{% endif %}>Hilly</option>
-              <option value='mountain' {% if goal and goal.elevation_type=='mountain' %}selected{% endif %}>Mountain</option>
+            <select name="elevation_type">
+              <option value="flat" {% if goal and goal.elevation_type=='flat' %}selected{% endif %}>Flat</option>
+              <option value="moderate" {% if not goal or goal.elevation_type=='moderate' %}selected{% endif %}>Moderate</option>
+              <option value="hilly" {% if goal and goal.elevation_type=='hilly' %}selected{% endif %}>Hilly</option>
+              <option value="mountain" {% if goal and goal.elevation_type=='mountain' %}selected{% endif %}>Mountain</option>
             </select>
           </div>
-          <div class='row'><label>Marathon PB (HH:MM:SS)</label><input name='current_pb' placeholder='e.g. 4:23:00' value='{{ goal.personal_best if goal else "" }}'></div>
-          <div class='row'><label>Half Marathon PB (H:MM:SS)</label><input name='pb_hm'  placeholder='e.g. 1:40:40' value='{{ goal.pb_hm  if goal else "" }}'></div>
-          <div class='row'><label>10K PB (MM:SS)</label><input name='pb_10k' placeholder='e.g. 47:13'  value='{{ goal.pb_10k if goal else "" }}'></div>
-          <div class='row'><label>5K PB (MM:SS)</label><input name='pb_5k'  placeholder='e.g. 23:20'  value='{{ goal.pb_5k  if goal else "" }}'></div>
+          <div class="form-row"><label>Marathon PB (HH:MM:SS)</label><input name="current_pb" placeholder="e.g. 4:23:00" value="{{ goal.personal_best if goal else '' }}"></div>
+          <div class="form-row"><label>Half Marathon PB (H:MM:SS)</label><input name="pb_hm" placeholder="e.g. 1:40:40" value="{{ goal.pb_hm if goal else '' }}"></div>
+          <div class="form-row"><label>10K PB (MM:SS)</label><input name="pb_10k" placeholder="e.g. 47:13" value="{{ goal.pb_10k if goal else '' }}"></div>
+          <div class="form-row"><label>5K PB (MM:SS)</label><input name="pb_5k" placeholder="e.g. 23:20" value="{{ goal.pb_5k if goal else '' }}"></div>
         </div>
-        <datalist id='race-distance-options'>
-          <option value='5'>5K</option>
-          <option value='10'>10K</option>
-          <option value='21.1'>Half Marathon</option>
-          <option value='42.2'>Full Marathon</option>
+        <datalist id="race-distance-options">
+          <option value="5">5K</option>
+          <option value="10">10K</option>
+          <option value="21.1">Half Marathon</option>
+          <option value="42.2">Full Marathon</option>
         </datalist>
-        <button type='submit'>Save Settings</button>
+        <button type="submit" class="submit-btn">Save Settings</button>
       </form>
-    </section>
-  </main>
+    </div>
+  </div>
 </body>
 </html>
-
-
