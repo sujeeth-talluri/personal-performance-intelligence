@@ -60,6 +60,9 @@ def test_register_and_login_flow(client):
 
 
 def test_onboarding_then_dashboard(client):
+    from ppi.extensions import db as _db
+    from ppi.models import RunnerProfile, User
+
     client.post(
         "/register",
         data={"name": "Runner", "email": "r@example.com", "password": "secret12"},
@@ -79,12 +82,48 @@ def test_onboarding_then_dashboard(client):
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/")
+    # After onboarding, user is redirected to coach-intro (not dashboard)
+    assert response.headers["Location"].endswith("/coach-intro")
+
+    # Simulate completing coach onboarding and seed Activity rows to pass data quality gate
+    from datetime import datetime, timedelta
+    from ppi.models import Activity
+
+    with client.application.app_context():
+        user = User.query.filter_by(email="r@example.com").first()
+        profile = RunnerProfile(
+            user_id=user.id,
+            consistency_level="consistent",
+            race_experience="once",
+            injury_status="healthy",
+            training_days_per_week=5,
+            long_run_day="sunday",
+            strength_days_per_week=2,
+            preferred_run_time="morning",
+            goal_priority="hit_time",
+            onboarding_completed=True,
+        )
+        _db.session.add(profile)
+
+        # Seed 8 runs over 8 weeks so DataQualityReport sees sufficient data
+        today = datetime.utcnow()
+        for weeks_ago in range(8, 0, -1):
+            act = Activity(
+                user_id=user.id,
+                strava_activity_id=1000 + weeks_ago,
+                activity_type="run",
+                date=today - timedelta(weeks=weeks_ago),
+                distance_km=10.0,
+                moving_time=3600.0,
+                elevation_gain=0,
+            )
+            _db.session.add(act)
+        _db.session.commit()
 
     dash = client.get("/", follow_redirects=False)
     assert dash.status_code == 200
-    assert b"Marathon Projection" in dash.data
-    assert b"Goal Time" in dash.data
+    assert b"StrideIQ" in dash.data
+    assert b"Weekly Plan" in dash.data
 
 
 def test_oauth_login_redirect(client):
@@ -122,16 +161,20 @@ def test_training_phase_thresholds():
 
 
 def test_long_run_ladder_requires_true_milestone_completion():
+    # Ladder is now [21, 24, 28, ...]. A run of 18.3 km has not yet cleared
+    # the 21 km milestone (needs >= 21 * 0.95 = 19.95 km), so completed_step
+    # is 0 and the runner is targeting 21 km next.
     runs = [{"date": date(2026, 3, 1), "distance_km": 18.3}]
     state = _long_run_progress_state(runs, date(2026, 3, 16))
-    assert state["completed_step"] == 18
+    assert state["completed_step"] == 0.0
     assert state["next_step"] == 21
 
 
-def test_weekly_plan_keeps_long_run_within_35_percent_of_week():
+def test_weekly_plan_advances_long_run_to_next_ladder_step():
+    # CTL-based template does not cap long run by weekly volume —
+    # it always advances to the next ladder milestone.
     weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
     long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
     plan = _weekly_plan_template(weekly_goal, long_run)
-    planned_km = sum(float(item.get("target_km") or 0.0) for item in plan.values() if item["workout_type"] == "RUN")
     long_target = float(plan[6]["target_km"])
-    assert long_target <= planned_km * 0.35 + 0.2
+    assert long_target >= 21.0  # next step after 18km in ladder

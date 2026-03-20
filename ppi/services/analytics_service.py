@@ -25,7 +25,10 @@ from .load_engine import (
 from .prediction_engine import (
     fit_half_equivalent as service_fit_half_equivalent,
     marathon_prediction_seconds as service_marathon_prediction_seconds,
+    marathon_wall_analysis as service_marathon_wall_analysis,
+    predict_all_distances as service_predict_all_distances,
     riegel_projection as service_riegel_projection,
+    vdot_from_race as service_vdot_from_race,
     vo2max_estimate_from_runs as service_vo2max_estimate_from_runs,
     vo2max_marathon_projection as service_vo2max_marathon_projection,
 )
@@ -196,13 +199,14 @@ def _phase_minimum_goal(desired_peak, phase):
     )
 
 
-def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, weekly_readiness_target, rolling_week_distance_km, phase):
+def _readiness_next_action(need_long, need_medium, need_weeks, need_weekly, weekly_readiness_target, rolling_week_distance_km, phase, weekly_goal_km=None):
     actions = []
     if need_long > 0:
         actions.append(f"Complete {need_long} more long run{'s' if need_long > 1 else ''} of 18 km or longer")
     if need_weekly > 0 and phase != "taper":
-        deficit = max(0.0, weekly_readiness_target - rolling_week_distance_km)
-        actions.append(f"Build this week to about {int(round(weekly_readiness_target))} km total ({round(deficit, 1)} km still to add)")
+        display_target = weekly_goal_km if weekly_goal_km and weekly_goal_km > 0 else weekly_readiness_target
+        remaining = round(max(0.0, display_target - rolling_week_distance_km), 1)
+        actions.append(f"Weekly target: {int(round(display_target))} km — {rolling_week_distance_km} km done, {remaining} km to go")
     if need_medium > 0:
         actions.append(f"Add {need_medium} more medium run{'s' if need_medium > 1 else ''} between 8 and 12 km")
     if need_weeks > 0:
@@ -445,21 +449,19 @@ def _daily_distance_series(distance_activities, today, days=14):
 
 
 def _long_run_progress_state(runs, today):
-    ladder = [16, 18, 21, 24, 26, 28, 30, 32]
-    recent = [r for r in runs if r["date"] >= today - timedelta(days=70)]
-    completed_step = 0.0
-    completed_count = 0
-    latest_target_attempt = None
-    for step in ladder:
-        qualified = [r for r in recent if r["distance_km"] >= step]
-        if qualified:
-            completed_step = step
-            completed_count += 1
-        else:
-            latest_target_attempt = step
-            break
-    next_step = latest_target_attempt or 32
-    last_long = max(recent, key=lambda r: (r["date"], r["distance_km"]), default=None)
+    # Milestone ladder: a step is "done" when the runner has covered ≥ 95% of it.
+    # next_step is derived purely from the longest completed run so that a run of
+    # e.g. 21.8 km correctly advances to 24 km rather than staying at 21 km.
+    LADDER = [21, 24, 28, 32]
+    # 63-day window: current training block only — avoids counting a stale long
+    # run from a different training cycle as a completed ladder milestone.
+    recent = [r for r in runs if r["date"] >= today - timedelta(days=63)]
+    last_long = max(recent, key=lambda r: r["distance_km"], default=None)
+    longest_km = last_long["distance_km"] if last_long else 0.0
+    # Strict threshold: a step is done only when an actual run >= that distance exists.
+    completed_count = sum(1 for step in LADDER if longest_km >= step)
+    completed_step  = max((step for step in LADDER if longest_km >= step), default=0.0)
+    next_step = next((step for step in LADDER if step > longest_km), 42)
     qualifying_longs = sorted([r for r in recent if r["distance_km"] >= 18], key=lambda r: r["date"])
     failed_recent = False
     if len(qualifying_longs) >= 2:
@@ -468,7 +470,7 @@ def _long_run_progress_state(runs, today):
         if previous >= 21 and latest < previous * 0.9:
             failed_recent = True
     return {
-        "ladder": ladder,
+        "ladder": LADDER,
         "completed_step": completed_step,
         "next_step": next_step,
         "milestones_completed": completed_count,
@@ -578,6 +580,10 @@ def build_goal_context(goal, today_local=None):
         "elevation_type": goal.elevation_type,
         "elevation_factor": _elevation_factor(goal.elevation_type),
         "projection_label": f"{goal.race_name} Projection ({goal.elevation_type.title()} Course)",
+        "personal_best": goal.personal_best,  # FM PB H:MM:SS string or None
+        "pb_hm":  getattr(goal, "pb_hm",  None),
+        "pb_10k": getattr(goal, "pb_10k", None),
+        "pb_5k":  getattr(goal, "pb_5k",  None),
     }
 
 
@@ -603,6 +609,42 @@ def _phase_goal_floor(desired_peak, phase):
         "rebuild": 0.28,
     }.get(phase, 0.50)
     return round(desired_peak * floor_factor, 1)
+
+
+def _safe_pb_seconds(pb_str: str | None, distance_km: float) -> float | None:
+    """Parse a personal-best time string (H:MM:SS) to seconds for marathon goals."""
+    if not pb_str or distance_km < 40.0:
+        return None
+    try:
+        return _hms_to_seconds(pb_str)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_time_str(pb_str: str | None) -> float | None:
+    """Parse H:MM:SS or MM:SS time string to seconds (no distance restriction)."""
+    if not pb_str:
+        return None
+    try:
+        return _hms_to_seconds(pb_str)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _best_pb_vdot(goal_ctx: dict) -> float | None:
+    """Return the highest VDOT derivable from any stored personal best."""
+    # Race distances in metres (mirrors prediction_engine constants)
+    _D = {"pb_hm": 21_097.5, "pb_10k": 10_000.0, "pb_5k": 5_000.0, "personal_best": 42_195.0}
+    best = None
+    for field, dist_m in _D.items():
+        pb_str = goal_ctx.get(field)
+        sec = _parse_time_str(pb_str)
+        if not sec or sec <= 0:
+            continue
+        v = service_vdot_from_race(dist_m, sec / 60.0)
+        if v and v >= 20:
+            best = max(best, v) if best is not None else v
+    return round(best, 2) if best is not None else None
 
 
 def _metrics_layer(user_id, goal_ctx, user_timezone=None):
@@ -687,7 +729,8 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     remaining_km = round(max(0.0, weekly_goal_km - completed_km), 1)
 
     runs_30d = [r for r in runs if r["date"] >= today - timedelta(days=30)]
-    longest_run = max(runs_8w, key=lambda x: x["distance_km"], default=None)
+    runs_12w = [r for r in runs if r["date"] >= today - timedelta(days=84)]
+    longest_run = max(runs_12w, key=lambda x: x["distance_km"], default=None)
     latest_long_run = max(runs_30d, key=lambda x: x["distance_km"], default=None)
     long_run_state = _long_run_progress_state(runs, today)
     race_sim_runs = _race_simulation_runs(runs_8w, goal_ctx["goal_seconds"] / 42.195)
@@ -847,6 +890,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         weekly_readiness_target,
         rolling_week_distance_km,
         phase,
+        weekly_goal_km=weekly_goal_km,
     )
     if week_closed and rolling_week_distance_km < weekly_readiness_target:
         next_requirement = f"Start next week by rebuilding to about {int(round(weekly_readiness_target))} km and protecting the long run."
@@ -964,6 +1008,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "moderate_fatigue": fatigue_flags["moderate_fatigue"],
             "long_run_failed_recent": long_run_state.get("failed_recent", False),
             "goal_marathon_pace_sec_per_km": goal_pace_sec_per_km,
+            "ctl_proxy": ctl_today,
         },
         "longest_run": longest_run,
         "latest_long_run": latest_long_run,
@@ -991,6 +1036,16 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "fri_status": fri_status,
             "fri_color": _status_color(fri_status),
             "fri_message": fri_message,
+        },
+        "personal_best_fm_seconds": _safe_pb_seconds(goal_ctx.get("personal_best"), goal_ctx["distance_km"]),
+        "pb_hm_seconds":  _parse_time_str(goal_ctx.get("pb_hm")),
+        "pb_10k_seconds": _parse_time_str(goal_ctx.get("pb_10k")),
+        "pb_5k_seconds":  _parse_time_str(goal_ctx.get("pb_5k")),
+        "best_pb_vdot":   _best_pb_vdot(goal_ctx),
+        "goal": {
+            "goal_seconds": goal_ctx["goal_seconds"],
+            "distance_km": goal_ctx["distance_km"],
+            "goal_time": goal_ctx["goal_time"],
         },
     }
 def _marathon_prediction_seconds(metrics):
@@ -1136,6 +1191,16 @@ def performance_intelligence(user_id, user_timezone=None):
     goal_ctx = build_goal_context(goal, today_local=today_local)
     metrics = _metrics_layer(user_id, goal_ctx, user_timezone=user_timezone)
     prediction = _prediction_layer(user_id, goal_ctx, metrics)
+
+    # Per-distance predictions via VDOT anchor (5K/10K/HM/FM).
+    # Uses PB_FLOORS as a guaranteed floor so predictions are never
+    # dragged below demonstrated fitness by sparse Strava data.
+    all_distances = service_predict_all_distances(metrics, today_local)
+
+    # Wall analysis — marathon only
+    wall_analysis = None
+    if goal_ctx["distance_km"] >= 40.0:
+        wall_analysis = service_marathon_wall_analysis(metrics)
 
     if goal_ctx["distance_km"] <= 10:
         target_ctl = 45
@@ -1345,6 +1410,8 @@ def performance_intelligence(user_id, user_timezone=None):
             "failed_recent": long_run_state.get("failed_recent", False),
             "progress": min(100, int((weekly["completed_km"] / max(1.0, weekly["weekly_goal_km"])) * 100)),
         },
+        "wall_analysis": wall_analysis,
+        "all_distances": all_distances,
     }
 def weekly_training_summary(user_id):
     metrics = fetch_metrics(user_id)
@@ -1407,6 +1474,7 @@ def recent_runs(user_id, limit=5, user_timezone=None):
                 "time": _fmt_hms(a.moving_time),
                 "pace": f"{int(pace//60)}:{int(pace%60):02d}/km" if pace else "--",
                 "hr": int(float(a.avg_hr)) if a.avg_hr else None,
+                "elevation": int(round(float(a.elevation_gain))) if a.elevation_gain and float(a.elevation_gain) > 0 else None,
             }
         )
         if len(out) >= limit:

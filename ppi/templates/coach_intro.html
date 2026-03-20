@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meet Coach Ike · StrideIQ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ───────────────────────────────────────────── */
+    .left-panel {
+      width: 38%;
+      min-width: 280px;
+      background: #10161f;
+      border-right: 1px solid #1e2a3a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 28px 32px;
+      gap: 28px;
+      overflow-y: auto;
+    }
+
+    .coach-avatar {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00C853 0%, #00897B 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      box-shadow: 0 0 32px rgba(0,200,83,.35);
+      flex-shrink: 0;
+    }
+
+    .coach-name {
+      text-align: center;
+    }
+    .coach-name h2 { font-size: 1.35rem; font-weight: 800; color: #fff; }
+    .coach-name p  { font-size: .8rem; color: #64748b; margin-top: 4px; }
+
+    .goal-card {
+      width: 100%;
+      background: #161b27;
+      border: 1px solid #1e2a3a;
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .goal-card-label {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #00C853;
+      margin-bottom: 12px;
+    }
+    .goal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px solid #1e2a3a;
+      font-size: .82rem;
+    }
+    .goal-row:last-child { border-bottom: none; }
+    .goal-row .gr-label { color: #64748b; }
+    .goal-row .gr-val   { color: #e0e0e0; font-weight: 600; }
+
+    .progress-section {
+      width: 100%;
+    }
+    .progress-label {
+      font-size: .72rem;
+      color: #64748b;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+    .dots {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .dot {
+      width: 28px;
+      height: 8px;
+      border-radius: 4px;
+      background: #1e2a3a;
+      transition: background .4s ease;
+    }
+    .dot.filled { background: #00C853; }
+    .dot.active { background: #00e676; box-shadow: 0 0 8px rgba(0,200,83,.6); }
+
+    /* ── Right chat panel ─────────────────────────────────────── */
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .progress-bar-wrap {
+      padding: 14px 24px 10px;
+      border-bottom: 1px solid #1a2230;
+      flex-shrink: 0;
+    }
+    .progress-bar-label {
+      font-size: .75rem;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .progress-bar-track {
+      height: 4px;
+      background: #1e2a3a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #00C853;
+      border-radius: 2px;
+      transition: width .5s ease;
+    }
+
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    /* Bubbles */
+    .bubble-wrap {
+      display: flex;
+      gap: 10px;
+      max-width: 82%;
+      animation: fadeSlideIn .35s ease;
+    }
+    .bubble-wrap.coach { align-self: flex-start; }
+    .bubble-wrap.user  { align-self: flex-end; flex-direction: row-reverse; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .bubble-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00C853, #00897B);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: .88rem;
+      line-height: 1.55;
+    }
+    .coach .bubble {
+      background: #161b27;
+      border-left: 3px solid #00C853;
+      border-radius: 4px 16px 16px 16px;
+      color: #d0d8e4;
+    }
+    .user .bubble {
+      background: #1a3a2a;
+      color: #00e676;
+      font-weight: 600;
+      border-radius: 16px 4px 16px 16px;
+    }
+
+    /* Typing indicator */
+    .typing-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+      animation: fadeSlideIn .3s ease;
+    }
+    .typing-dots {
+      display: flex;
+      gap: 5px;
+      padding: 12px 16px;
+      background: #161b27;
+      border-left: 3px solid #00C853;
+      border-radius: 4px 16px 16px 16px;
+    }
+    .typing-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #00C853;
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: scale(.7); opacity: .4; }
+      40%           { transform: scale(1);  opacity: 1;  }
+    }
+
+    /* Options */
+    .options-wrap {
+      padding: 8px 28px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      flex-shrink: 0;
+      border-top: 1px solid #1a2230;
+      background: #0d1117;
+    }
+    .opt-btn {
+      padding: 10px 18px;
+      border: 1.5px solid #00C853;
+      border-radius: 24px;
+      background: transparent;
+      color: #00C853;
+      font-size: .84rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s, color .2s, transform .15s;
+      white-space: nowrap;
+    }
+    .opt-btn:hover {
+      background: rgba(0,200,83,.12);
+      transform: translateY(-1px);
+    }
+    .opt-btn:active { transform: scale(.97); }
+    .opt-btn.selected {
+      background: #00C853;
+      color: #0d1117;
+      font-weight: 700;
+    }
+    .opt-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Done state */
+    .done-overlay {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      flex: 1;
+      padding: 40px;
+      text-align: center;
+    }
+    .done-overlay.visible { display: flex; }
+    .done-icon {
+      font-size: 64px;
+      animation: pulse 1s ease infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(1);    filter: brightness(1); }
+      to   { transform: scale(1.12); filter: brightness(1.3); }
+    }
+    .done-overlay h2 { font-size: 1.6rem; font-weight: 800; color: #fff; }
+    .done-overlay p  { color: #64748b; font-size: .95rem; }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .left-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Left panel ──────────────────────────────────────────────────────── -->
+<div class="left-panel">
+  <div class="coach-avatar">🏃</div>
+
+  <div class="coach-name">
+    <h2>Coach Ike</h2>
+    <p>AI Marathon Coach · StrideIQ</p>
+  </div>
+
+  <div class="goal-card">
+    <div class="goal-card-label">Your Goal</div>
+    <div class="goal-row">
+      <span class="gr-label">Race</span>
+      <span class="gr-val">{{ goal.race_name }}</span>
+    </div>
+    <div class="goal-row">
+      <span class="gr-label">Goal time</span>
+      <span class="gr-val">{{ goal.goal_time }}</span>
+    </div>
+    <div class="goal-row">
+      <span class="gr-label">Race date</span>
+      <span class="gr-val">{{ goal.race_date }}</span>
+    </div>
+    {% if days_to_race is not none %}
+    <div class="goal-row">
+      <span class="gr-label">Days to race</span>
+      <span class="gr-val">{{ days_to_race }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="progress-section">
+    <div class="progress-label">Your answers</div>
+    <div class="dots" id="sidebar-dots">
+      {% for i in range(8) %}
+      <div class="dot" id="dot-{{ i }}"></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ── Right chat panel ────────────────────────────────────────────────── -->
+<div class="right-panel">
+
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-label" id="progress-label">Question 1 of 8</div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="chat-area" id="chat-area"></div>
+
+  <div class="options-wrap" id="options-wrap"></div>
+
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-icon">🎯</div>
+    <h2>Your plan is ready!</h2>
+    <p>Taking you to your personalised dashboard…</p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const TOTAL_STEPS = 8;
+  let currentStep = 0;
+  let collected   = {};
+  let busy        = false;
+
+  const chatArea    = document.getElementById('chat-area');
+  const optionsWrap = document.getElementById('options-wrap');
+  const progressFill  = document.getElementById('progress-fill');
+  const progressLabel = document.getElementById('progress-label');
+  const doneOverlay   = document.getElementById('done-overlay');
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function updateProgress(step) {
+    const pct = Math.round((step / TOTAL_STEPS) * 100);
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = step < TOTAL_STEPS
+      ? 'Question ' + (step + 1) + ' of ' + TOTAL_STEPS
+      : 'All done!';
+    // Sidebar dots
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+      const dot = document.getElementById('dot-' + i);
+      if (!dot) continue;
+      dot.className = 'dot' + (i < step ? ' filled' : (i === step ? ' active' : ''));
+    }
+  }
+
+  function scrollToBottom() {
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  function addCoachBubble(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble-wrap coach';
+    wrap.innerHTML = `
+      <div class="bubble-icon">🏃</div>
+      <div class="bubble">${text.replace(/\n/g, '<br>')}</div>
+    `;
+    chatArea.appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function addUserBubble(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble-wrap user';
+    wrap.innerHTML = `<div class="bubble">${text}</div>`;
+    chatArea.appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function showTyping() {
+    const wrap = document.createElement('div');
+    wrap.className = 'typing-wrap';
+    wrap.id = 'typing-indicator';
+    wrap.innerHTML = `
+      <div class="bubble-icon">🏃</div>
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+    `;
+    chatArea.appendChild(wrap);
+    scrollToBottom();
+    return wrap;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+  }
+
+  function clearOptions() {
+    optionsWrap.innerHTML = '';
+  }
+
+  function showOptions(options) {
+    clearOptions();
+    options.forEach(function (opt) {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn';
+      btn.textContent = opt;
+      btn.addEventListener('click', function () {
+        if (busy) return;
+        handleAnswer(opt);
+      });
+      optionsWrap.appendChild(btn);
+    });
+  }
+
+  function disableOptions() {
+    optionsWrap.querySelectorAll('.opt-btn').forEach(function (b) {
+      b.disabled = true;
+    });
+  }
+
+  // ── Core conversation loop ────────────────────────────────────────────────
+
+  function handleAnswer(answer) {
+    busy = true;
+    disableOptions();
+
+    // Highlight selected
+    optionsWrap.querySelectorAll('.opt-btn').forEach(function (b) {
+      if (b.textContent === answer) b.classList.add('selected');
+    });
+
+    // Show as user bubble after brief delay
+    setTimeout(function () {
+      addUserBubble(answer);
+      clearOptions();
+
+      // Mark dot filled
+      const dot = document.getElementById('dot-' + currentStep);
+      if (dot) dot.className = 'dot filled';
+
+      const nextStep = currentStep + 1;
+      const typing = showTyping();
+
+      fetchNextMessage(nextStep, answer, collected, function (data) {
+        removeTyping();
+
+        if (data.done) {
+          showDone();
+          return;
+        }
+
+        collected = data.collected || collected;
+        currentStep = data.next_step;
+        updateProgress(currentStep);
+        addCoachBubble(data.message);
+
+        if (data.options && data.options.length) {
+          showOptions(data.options);
+        }
+        busy = false;
+      });
+    }, 300);
+  }
+
+  function fetchNextMessage(step, answer, col, callback) {
+    fetch('/api/coach-intro/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_step: step,
+        user_answer: answer,
+        collected: col,
+      }),
+    })
+    .then(function (r) { return r.json(); })
+    .then(callback)
+    .catch(function () {
+      // Network error fallback: show a generic message and retry option
+      removeTyping();
+      addCoachBubble("Let me think about that… (tap an option to continue)");
+      busy = false;
+    });
+  }
+
+  function showDone() {
+    clearOptions();
+    chatArea.style.display = 'none';
+    optionsWrap.style.display = 'none';
+    document.querySelector('.progress-bar-wrap').style.display = 'none';
+    doneOverlay.classList.add('visible');
+
+    // Update sidebar dots
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+      const dot = document.getElementById('dot-' + i);
+      if (dot) dot.className = 'dot filled';
+    }
+
+    progressFill.style.width = '100%';
+
+    setTimeout(function () {
+      window.location.href = '/';
+    }, 2200);
+  }
+
+  // ── Boot: load first message ──────────────────────────────────────────────
+
+  updateProgress(0);
+  const typing = showTyping();
+
+  fetch('/api/coach-intro/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_step: 0, user_answer: '', collected: {} }),
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    removeTyping();
+    if (data.done) { showDone(); return; }
+    collected = data.collected || {};
+    currentStep = data.next_step;
+    updateProgress(0);  // show step 0 active
+    addCoachBubble(data.message);
+    if (data.options && data.options.length) {
+      showOptions(data.options);
+    }
+  })
+  .catch(function () {
+    removeTyping();
+    addCoachBubble("Welcome! I'm Coach Ike. Let's build your personalised plan. How consistently have you been running recently?");
+    showOptions(["Just getting started (< 1 month)", "Getting back into it (had a break)", "Training consistently (3+ months)", "Well trained (6+ months solid)"]);
+  });
+
+})();
+</script>
+</body>
+</html>

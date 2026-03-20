@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sync Your Runs · StrideIQ</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    body { background: #0d1117; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .center-wrap { max-width: 520px; width: 100%; padding: 32px 20px; text-align: center; }
+
+    .big-icon {
+      font-size: 72px;
+      margin-bottom: 24px;
+      display: block;
+      animation: pulse 2s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(1);    opacity: .85; }
+      to   { transform: scale(1.08); opacity: 1;   }
+    }
+
+    h1 { font-size: 1.7rem; font-weight: 800; color: #fff; margin-bottom: 10px; }
+    .subtitle { color: #64748b; font-size: .95rem; line-height: 1.6; margin-bottom: 28px; }
+
+    .goal-card {
+      background: #161b27;
+      border: 1px solid #1e2a3a;
+      border-radius: 12px;
+      padding: 18px 22px;
+      text-align: left;
+      margin-bottom: 28px;
+    }
+    .goal-card-label {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: #00C853; margin-bottom: 12px;
+    }
+    .goal-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 6px 0; border-bottom: 1px solid #1e2a3a; font-size: .83rem;
+    }
+    .goal-row:last-child { border-bottom: none; }
+    .goal-row .gr-label { color: #64748b; }
+    .goal-row .gr-val   { color: #e0e0e0; font-weight: 600; }
+
+    .btn-primary {
+      display: inline-block; background: #00C853; color: #0d1117;
+      font-weight: 700; font-size: 1rem; padding: 14px 32px;
+      border-radius: 8px; text-decoration: none; margin-bottom: 14px;
+      transition: background .2s, transform .15s;
+    }
+    .btn-primary:hover { background: #00e676; transform: translateY(-1px); }
+
+    .secondary-link {
+      display: block; color: #64748b; font-size: .85rem; margin-top: 4px;
+      cursor: pointer; background: none; border: none; text-decoration: underline;
+    }
+    .secondary-link:hover { color: #94a3b8; }
+
+    .footer-note {
+      margin-top: 32px; padding: 16px 20px;
+      background: #10161f; border-radius: 8px;
+      color: #64748b; font-size: .8rem; line-height: 1.6;
+      border-left: 3px solid #1e2a3a;
+    }
+
+    .nav-top {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 14px 24px; display: flex; justify-content: space-between;
+      align-items: center; background: #10161f;
+      border-bottom: 1px solid #1e2a3a;
+    }
+    .nav-brand { font-weight: 800; font-size: 1.1rem; color: #00C853; text-decoration: none; }
+    .nav-links { display: flex; gap: 16px; }
+    .nav-links a { color: #64748b; font-size: .85rem; text-decoration: none; }
+    .nav-links a:hover { color: #e0e0e0; }
+  </style>
+</head>
+<body>
+
+<nav class="nav-top">
+  <a class="nav-brand" href="/">StrideIQ</a>
+  <div class="nav-links">
+    <a href="/settings">Settings</a>
+    <a href="/logout">Sign Out</a>
+  </div>
+</nav>
+
+<div class="center-wrap" style="margin-top: 64px;">
+  <span class="big-icon">🏃</span>
+
+  <h1>Let's get your training data</h1>
+  <p class="subtitle">
+    Connect your Strava runs to unlock your personalized coaching plan.
+    Coach Ike needs to see your training history to give you accurate guidance.
+  </p>
+
+  {% if goal %}
+  <div class="goal-card">
+    <div class="goal-card-label">Your Goal</div>
+    <div class="goal-row">
+      <span class="gr-label">Race</span>
+      <span class="gr-val">{{ goal.race_name }}</span>
+    </div>
+    <div class="goal-row">
+      <span class="gr-label">Goal time</span>
+      <span class="gr-val">{{ goal.goal_time }}</span>
+    </div>
+    <div class="goal-row">
+      <span class="gr-label">Race date</span>
+      <span class="gr-val">{{ goal.race_date }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <a class="btn-primary" href="/?sync=1">🔄 Sync Strava Now</a>
+  <br>
+  <button class="secondary-link" onclick="window.location.reload()">
+    Already synced? Refresh the page
+  </button>
+
+  <div class="footer-note">
+    We need at least <strong>4 weeks of running data</strong> to build your coaching plan.
+    The more consistent your training log, the smarter and more personalised your coach becomes.
+    If you're new to Strava, log a few runs first and come back.
+  </div>
+</div>
+
+</body>
+</html>

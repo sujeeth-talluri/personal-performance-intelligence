@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StrideIQ — Building Your Plan</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    /* ── Banner ── */
+    .dq-banner {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 18px; border-radius: 8px; margin-bottom: 20px;
+      font-size: .88rem; line-height: 1.5;
+    }
+    .dq-banner.warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
+    .dq-banner.info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
+    .dq-banner-body { flex: 1; }
+    .dq-banner-action {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 6px;
+      border: 1px solid currentColor; font-size: .82rem;
+      font-weight: 600; text-decoration: none; color: inherit;
+      white-space: nowrap; transition: background .2s;
+    }
+    .dq-banner-action:hover { background: rgba(255,255,255,.1); }
+
+    /* ── Progress unlock card ── */
+    .unlock-card {
+      background: #161b27; border: 1px solid #1e2a3a;
+      border-radius: 12px; padding: 24px 26px; margin-bottom: 20px;
+    }
+    .unlock-card h3 { font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .unlock-card p  { font-size: .85rem; color: #64748b; margin-bottom: 18px; line-height: 1.6; }
+
+    .weeks-row {
+      display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .week-pip {
+      flex: 1; min-width: 56px; padding: 10px 6px; border-radius: 8px;
+      text-align: center; font-size: .78rem; font-weight: 700;
+      transition: background .3s;
+    }
+    .week-pip.done    { background: #1a3a2a; color: #00C853; border: 1px solid #00C853; }
+    .week-pip.partial { background: #2a2a1a; color: #f59e0b; border: 1px solid #f59e0b; }
+    .week-pip.empty   { background: #1e2a3a; color: #3a4a5a; border: 1px dashed #2a3a4a; }
+
+    .progress-track {
+      height: 6px; background: #1e2a3a; border-radius: 3px; overflow: hidden; margin-bottom: 12px;
+    }
+    .progress-fill { height: 100%; background: #00C853; border-radius: 3px; transition: width .6s ease; }
+
+    .unlock-hint { font-size: .8rem; color: #64748b; text-align: center; }
+    .unlock-hint strong { color: #00C853; }
+
+    .btn-sync {
+      display: inline-block; background: #00C853; color: #0d1117;
+      font-weight: 700; padding: 11px 26px; border-radius: 8px;
+      text-decoration: none; font-size: .9rem;
+      transition: background .2s, transform .15s;
+    }
+    .btn-sync:hover { background: #00e676; transform: translateY(-1px); }
+
+    /* ── Runs list ── */
+    .runs-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .runs-table th {
+      text-align: left; padding: 8px 12px; font-size: .7rem;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: #64748b; border-bottom: 1px solid #1e2a3a;
+    }
+    .runs-table td { padding: 10px 12px; border-bottom: 1px solid #1a2230; color: #d0d8e4; }
+    .runs-table tr:last-child td { border-bottom: none; }
+    .runs-table tr:hover td { background: #161b27; }
+    .dist-badge {
+      font-weight: 700; color: #00C853;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- Sidebar (reuse app.css sidebar if present, else minimal) -->
+    <aside class="sidebar">
+      <div class="brand">StrideIQ</div>
+      <nav class="sidenav">
+        <a class="nav-link active" href="/">Dashboard</a>
+        <a class="nav-link" href="/settings">Settings</a>
+        <a class="nav-link" href="/connect/strava">Connect Strava</a>
+        <a class="nav-link" href="/logout">Sign Out</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+
+      <!-- ── Banner ────────────────────────────────────────────── -->
+      {% if banner and banner.message %}
+      <div class="dq-banner {{ banner.type }}">
+        <span style="font-size:1.2rem;flex-shrink:0">{{ banner.icon }}</span>
+        <div class="dq-banner-body">{{ banner.message }}</div>
+        {% if banner.action %}
+        <a class="dq-banner-action" href="{{ banner.action_url }}">{{ banner.action }}</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- ── Goal card ─────────────────────────────────────────── -->
+      {% if goal %}
+      <div class="section-label">Your Goal</div>
+      <div class="card" style="padding:18px 22px;">
+        <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:.88rem;">
+          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Race</div><strong>{{ goal.race_name }}</strong></div>
+          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Goal Time</div><strong>{{ goal.goal_time }}</strong></div>
+          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Race Date</div><strong>{{ goal.race_date }}</strong></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ── Coaching unlock progress ──────────────────────────── -->
+      <div class="section-label">Coaching Plan</div>
+      <div class="unlock-card">
+        <h3>Your personalized coaching plan is building</h3>
+        <p>
+          Coach Ike needs at least <strong style="color:#e0e0e0">4 weeks</strong> of training data
+          to generate accurate, personalized coaching. Keep logging your runs — the plan unlocks automatically.
+        </p>
+
+        {% set span = dq.data_span_weeks | int %}
+        {% set pct  = [(span / 4 * 100) | int, 100] | min %}
+
+        <div class="weeks-row">
+          {% for i in range(4) %}
+            {% if i < span %}
+              <div class="week-pip done">Week {{ i + 1 }}<br>✓</div>
+            {% elif i == span %}
+              <div class="week-pip partial">Week {{ i + 1 }}<br>…</div>
+            {% else %}
+              <div class="week-pip empty">Week {{ i + 1 }}<br>–</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill" style="width: {{ pct }}%"></div>
+        </div>
+        <div class="unlock-hint">
+          <strong>{{ dq.data_span_weeks }}</strong> of 4 weeks complete
+          &nbsp;·&nbsp; {{ dq.total_runs }} run{{ 's' if dq.total_runs != 1 }} logged
+          &nbsp;·&nbsp; Syncs automatically when you train
+        </div>
+
+        <div style="text-align:center;margin-top:20px;">
+          <a class="btn-sync" href="/?sync=1">🔄 Sync Latest Runs</a>
+        </div>
+      </div>
+
+      <!-- ── Recent Runs ───────────────────────────────────────── -->
+      {% if runs %}
+      <div class="section-label">Recent Runs</div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Distance</th>
+              <th>Time</th>
+              <th>Pace</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in runs %}
+            <tr>
+              <td>{{ run.date }}</td>
+              <td><span class="dist-badge">{{ run.distance_km }} km</span></td>
+              <td>{{ run.duration }}</td>
+              <td>{{ run.pace }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="section-label">Recent Runs</div>
+      <div class="card" style="padding:24px;text-align:center;color:#64748b;">
+        No runs logged yet. Sync your Strava to import your training history.
+        <br><br>
+        <a class="btn-sync" href="/?sync=1">🔄 Sync Strava Now</a>
+      </div>
+      {% endif %}
+
+    </main>
+  </div>
+</body>
+</html>

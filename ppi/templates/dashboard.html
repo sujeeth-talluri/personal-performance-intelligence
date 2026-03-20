@@ -1,249 +1,1240 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset='utf-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <title>StrideIQ AI Coach</title>
-  <link rel='stylesheet' href='/static/app.css'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StrideIQ — {{ user.name }}</title>
+  <style>
+    /* ─── Reset & Base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:    #00C853;
+      --green-d:  #009624;
+      --dark:     #0f1117;
+      --sidebar:  #161b27;
+      --card:     #ffffff;
+      --bg:       #f0f2f7;
+      --text:     #1a1d2e;
+      --muted:    #6b7280;
+      --border:   #e5e7eb;
+      --red:      #ef4444;
+      --amber:    #f59e0b;
+      --blue:     #3b82f6;
+      --radius:   12px;
+      --shadow:   0 2px 12px rgba(0,0,0,.08);
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px; min-height: 100vh; background: var(--sidebar);
+      display: flex; flex-direction: column; padding: 24px 16px;
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+    }
+    .sidebar-logo {
+      font-size: 1.3rem; font-weight: 800; color: var(--green);
+      letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .sidebar-tagline { font-size: .72rem; color: #64748b; margin-bottom: 32px; }
+    .sidebar nav { flex: 1; }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; color: #94a3b8;
+      text-decoration: none; font-size: .88rem; margin-bottom: 4px;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.07); color: #fff; }
+    .nav-link .icon { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-footer { border-top: 1px solid #1e2638; padding-top: 16px; }
+    .sidebar-user { font-size: .8rem; color: #94a3b8; margin-bottom: 8px; }
+    .sidebar-user strong { display: block; color: #e2e8f0; font-size: .85rem; }
+
+    .main { margin-left: 220px; padding: 28px; min-height: 100vh; }
+
+    /* ─── Cards ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+    }
+    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+
+    /* ─── Data quality banner ────────────────────────────────────── */
+    .data-quality-banner {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 18px; border-radius: 8px;
+      margin-bottom: 16px; font-size: .86rem; line-height: 1.5; flex-wrap: wrap;
+    }
+    .banner-warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
+    .banner-info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
+    .banner-success { background: #0d2a1a; border-left: 4px solid #00C853; color: #00C853; }
+    .banner-icon    { font-size: 1.1rem; flex-shrink: 0; }
+    .banner-message { flex: 1; }
+    .banner-action {
+      padding: 4px 12px; border: 1px solid currentColor; border-radius: 4px;
+      text-decoration: none; color: inherit; font-size: .82rem; font-weight: 600;
+      white-space: nowrap;
+    }
+    .banner-close {
+      margin-left: auto; background: none; border: none; color: inherit;
+      cursor: pointer; opacity: .6; font-size: .9rem; flex-shrink: 0;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ─── Hero bar ───────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #161b27 0%, #1e2638 100%);
+      border-radius: var(--radius); padding: 22px 26px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .hero-left h1 { font-size: 1.4rem; font-weight: 800; color: #fff; }
+    .hero-left .sub { font-size: .83rem; color: #94a3b8; margin-top: 4px; }
+    .hero-right { display: flex; gap: 10px; align-items: center; }
+    .hero-badge {
+      background: rgba(0,200,83,.15); color: var(--green);
+      padding: 6px 14px; border-radius: 20px; font-size: .8rem; font-weight: 700;
+    }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.07);
+      color: #94a3b8; display: inline-flex; align-items: center; justify-content: center;
+      text-decoration: none; font-size: 1.1rem; transition: background .15s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+    /* ─── Grid ───────────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .col-span-2 { grid-column: span 2; }
+
+    /* ─── Distance tiles ─────────────────────────────────────────── */
+    .dist-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dist-tile {
+      background: var(--bg); border-radius: 10px; padding: 16px 14px;
+      text-align: center; position: relative;
+    }
+    .dist-tile.fm { background: linear-gradient(135deg, #e8fff1 0%, #f0fdf4 100%); }
+    .dist-tile .label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+    .dist-tile .time { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+    .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
+    .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
+    /* Unified confidence badges — same style in tiles and legend */
+    .confidence-high, .confidence-moderate, .confidence-low {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      color: #fff; margin-top: 6px;
+    }
+    .confidence-high     { background: #00C853; }
+    .confidence-moderate { background: #f59e0b; }
+    .confidence-low      { background: #ef4444; }
+    .prediction-legend {
+      display: flex; align-items: center; gap: 16px;
+      padding: 8px 12px; background: rgba(0,0,0,.03);
+      border-radius: 6px; font-size: 12px; color: #888;
+      flex-wrap: wrap; margin-top: 10px;
+    }
+    .legend-title { color: #aaa; font-weight: 500; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+
+    /* ─── Wall analysis ──────────────────────────────────────────── */
+    .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .wall-risk-badge {
+      padding: 4px 14px; border-radius: 20px; font-size: .78rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .risk-high   { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+    .risk-medium { background: #fffbeb; color: #d97706; border: 1px solid #fed7aa; }
+    .risk-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .risk-unknown{ background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+
+    .wall-callout {
+      background: #fff7ed; border-left: 3px solid #f59e0b;
+      border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 16px;
+    }
+    .wall-callout.high { background: #fef2f2; border-left-color: #ef4444; }
+    .wall-callout .callout-num { font-size: 1.8rem; font-weight: 800; color: #ef4444; }
+    .wall-callout .callout-num.medium { color: #d97706; }
+    .wall-callout .callout-label { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
+    .vdot-bar-wrap { margin-bottom: 16px; }
+    .vdot-label-row { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 6px; }
+    .vdot-bars { display: flex; flex-direction: column; gap: 8px; }
+    .vdot-row { display: flex; align-items: center; gap: 10px; }
+    .vdot-row-label { font-size: .75rem; color: var(--muted); width: 28px; text-align: right; }
+    .vdot-track { flex: 1; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
+    .vdot-fill { height: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: .68rem; font-weight: 700; color: #fff; transition: width .6s ease; }
+    .vdot-fill.hm { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .vdot-fill.fm { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+    .fm-compare { display: flex; gap: 12px; margin-top: 12px; }
+    .fm-stat { flex: 1; background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; }
+    .fm-stat .fs-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .fm-stat .fs-val { font-size: 1.25rem; font-weight: 800; margin-top: 4px; }
+    .fm-stat .fs-val.green { color: var(--green-d); }
+    .fm-stat .fs-val.red   { color: var(--red); }
+
+    /* ─── Pace strategy table ────────────────────────────────────── */
+    .pace-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .pace-table th {
+      text-align: left; padding: 8px 12px; font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+      border-bottom: 2px solid var(--border);
+    }
+    .pace-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+    .pace-table tr:last-child td { border-bottom: none; }
+    .pace-table .seg-label { font-weight: 600; }
+    .pace-table .seg-pace  { font-family: monospace; font-size: .9rem; font-weight: 700; }
+    .pace-table tr.km32 { background: #fff7ed; }
+    .pace-table tr.km32 td { color: #92400e; }
+    .pace-table tr.km32 .seg-pace { color: #ef4444; font-weight: 800; }
+    .km32-warn { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: #92400e; margin-top: 12px; background: #fff7ed; padding: 10px 14px; border-radius: 8px; border: 1px solid #fde68a; }
+
+    /* ─── Fueling timeline ───────────────────────────────────────── */
+    .fuel-timeline { position: relative; padding-left: 28px; }
+    .fuel-timeline::before {
+      content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px;
+      width: 2px; background: var(--border);
+    }
+    .fuel-event { position: relative; margin-bottom: 14px; }
+    .fuel-event::before {
+      content: attr(data-icon); position: absolute; left: -22px; top: 0;
+      width: 20px; text-align: center; font-size: .95rem; line-height: 1.4;
+    }
+    .fuel-event .fe-time { font-size: .7rem; color: var(--muted); }
+    .fuel-event .fe-label { font-size: .83rem; font-weight: 600; margin: 1px 0; }
+    .fuel-event .fe-note  { font-size: .73rem; color: var(--muted); }
+    .fuel-rule { display: flex; gap: 10px; margin-top: 14px; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+    .fuel-rule .fr-icon { font-size: 1.1rem; }
+    .fuel-rule .fr-text  { font-size: .78rem; color: #1d4ed8; }
+    .fuel-rule .fr-text strong { display: block; font-size: .8rem; }
+
+    /* ─── Load tiles ─────────────────────────────────────────────── */
+    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .load-tile { background: var(--bg); border-radius: 10px; padding: 14px 12px; text-align: center; }
+    .load-tile .lt-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .load-tile .lt-val   { font-size: 2rem; font-weight: 800; line-height: 1; margin: 6px 0 4px; }
+    .load-tile .lt-sub   { font-size: .72rem; color: var(--muted); }
+    .lt-green { color: var(--green-d); }
+    .lt-amber { color: #d97706; }
+    .lt-red   { color: var(--red); }
+    .lt-blue  { color: var(--blue); }
+
+    /* ─── Mini chart ─────────────────────────────────────────────── */
+    .mini-chart-wrap { margin-top: 16px; }
+    .mini-chart-title { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
+    .mini-chart { width: 100%; height: 80px; }
+    .mini-chart .path { fill: none; stroke: var(--green); stroke-width: 2.5; }
+    .mini-chart .area { fill: rgba(0,200,83,.1); stroke: none; }
+
+    /* ─── Tooltips ───────────────────────────────────────────────── */
+    .tooltip-wrap {
+      position: relative; display: inline-flex; align-items: center;
+      gap: 4px; cursor: help;
+    }
+    .tooltip-wrap .tooltip-icon {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: rgba(0,0,0,.08); color: #888;
+      font-size: 10px; display: inline-flex;
+      align-items: center; justify-content: center; line-height: 1;
+      flex-shrink: 0;
+    }
+    .tooltip-wrap .tooltip-text {
+      visibility: hidden; opacity: 0;
+      background: #1e2736; color: #e0e0e0;
+      text-align: left; border-radius: 6px;
+      padding: 8px 12px; position: absolute;
+      z-index: 200; bottom: 130%; left: 50%;
+      transform: translateX(-50%);
+      width: 220px; font-size: 12px; line-height: 1.5;
+      border: 1px solid rgba(255,255,255,.1);
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      transition: opacity .2s ease; pointer-events: none;
+      white-space: normal; font-weight: 400;
+    }
+    .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+    .tooltip-wrap .tooltip-text::after {
+      content: ''; position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: #1e2736;
+    }
+
+    /* ─── Coaching card ──────────────────────────────────────────── */
+    .coaching-text {
+      font-size: .92rem; line-height: 1.65; color: var(--text);
+      background: #f8fafc; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px;
+      border-left: 3px solid var(--green);
+    }
+    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
+    .coaching-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--muted); }
+
+    /* ─── Weekly plan ────────────────────────────────────────────── */
+    .plan-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .84rem;
+    }
+    .plan-row:last-child { border-bottom: none; }
+    .plan-main { flex: 1; }
+    .plan-distance { font-weight: 700; font-size: .9rem; }
+    .plan-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .plan-status { font-size: .75rem; font-weight: 600; }
+    .done-row   .plan-distance { color: #16a34a; }
+    .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
+    .partial-row .plan-distance { color: #d97706; }
+    .status-green  { color: #16a34a; }
+    .status-orange { color: #d97706; }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+    .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
+
+    /* ─── Activity rows (unified grid) ──────────────────────────── */
+    .activity-row {
+      display: grid;
+      grid-template-columns: 26px 58px 1fr 72px 50px;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .82rem;
+    }
+    .activity-row:last-child { border-bottom: none; }
+    .activity-icon   { text-align: center; font-size: 1rem; }
+    .activity-date   { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+    .activity-main   { font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-hr     { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
+    .activity-dur    { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
+
+    /* ─── Pills ──────────────────────────────────────────────────── */
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-green  { background: #dcfce7; color: #16a34a; }
+    .pill-yellow { background: #fef9c3; color: #a16207; }
+    .pill-orange { background: #ffedd5; color: #c2410c; }
+
+    /* ─── Ladder ─────────────────────────────────────────────────── */
+    .ladder { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ladder-step {
+      flex: 1; text-align: center; background: var(--bg); border-radius: 8px;
+      padding: 10px 6px; font-size: .8rem; font-weight: 600; color: var(--muted);
+      border: 2px solid transparent;
+    }
+    .ladder-step.done   { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+    .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
+    .ladder-step .km    { font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
+
+    /* ─── Feasibility strip ──────────────────────────────────────── */
+    .feasibility-strip {
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 20px; border-radius: 8px;
+      background: white; border-left: 4px solid;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .strip-green  { border-color: #00C853; }
+    .strip-amber  { border-color: #f59e0b; }
+    .strip-orange { border-color: #f97316; }
+    .strip-red    { border-color: #ef4444; }
+    .strip-grey   { border-color: #9ca3af; }
+    .fs-out   { display: flex; flex-direction: column; gap: 2px; }
+    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; line-height: 1; }
+    .fs-label { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
+    .fs-score-explain { font-size: 11px; color: #888; white-space: nowrap; }
+    .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
+    .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
+
+    /* ─── Collapsible sections ───────────────────────────────────── */
+    .collapsible-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; padding: 4px 0; margin: 22px 0 10px;
+    }
+    .collapsible-header .section-label { margin: 0; }
+    .collapsible-toggle {
+      font-size: .75rem; color: var(--muted); background: none; border: none;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px;
+      transition: background .15s;
+    }
+    .collapsible-toggle:hover { background: var(--border); }
+    .collapsible-body { transition: none; }
+    .collapsible-body.collapsed { display: none; }
+
+    /* ─── Loading / error states ─────────────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .sk-line { height: 14px; margin-bottom: 8px; }
+    .sk-big  { height: 36px; margin-bottom: 10px; }
+    .error-box { background: #fef2f2; border-radius: 8px; padding: 16px; color: #dc2626; font-size: .85rem; text-align: center; }
+
+    /* ─── Utility ────────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .83rem; }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-row span { color: var(--muted); }
+    .metric-row strong { font-weight: 600; }
+    .text-green { color: var(--green-d); }
+    .text-red   { color: var(--red); }
+    .text-amber { color: #d97706; }
+    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 14px; }
+
+    /* ─── Mobile ─────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main    { margin-left: 0; padding: 16px; }
+      .dist-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2  { grid-template-columns: 1fr; }
+      .load-tiles { grid-template-columns: repeat(3, 1fr); }
+      .fm-compare { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      .dist-grid  { grid-template-columns: repeat(2, 1fr); }
+      .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <main class='wrap'>
-    <section class='card hero compact'>
-      <div class='header-row'>
-        <div>
-          <h1>{{ goal.race_name }}</h1>
-          <div class='sub'>Goal {{ goal.goal_time }} | Target {{ goal.target_pace }} | {{ goal.days_remaining }} days</div>
-          <div class='sub'>Phase {{ weekly_goal.display_phase|title }} | Focus {{ weekly_goal.week_type }} | Freshness {{ intel.fatigue_balance }}</div>
-          <div class='sub'>{{ intel.fatigue_balance_note }} (TSB {{ "%+.1f"|format(intel.current_tsb) }})</div>
-          <div class='sub'>Runner: {{ user.name }} | Today {{ today_date }}</div>
-        </div>
-        <div class='icon-actions'>
-          <a class='icon-btn' href='/settings' aria-label='Settings'>&#9881;</a>
-          <a class='icon-btn' href='/logout' aria-label='Logout'>&#128682;</a>
-        </div>
-      </div>
-    </section>
+<div class="app">
 
-    <section class='card coach-primary'>
-      <h2>Today's Training</h2>
-      <div class='sub'>{{ today_workout.date }}</div>
-      <div class='workout-head'>
-        <strong>{{ today_workout.workout }}</strong>
-        <span class='pill {{ "pill-green" if today_workout.status == "Completed" else ("pill-orange" if today_workout.status == "Partial" else "pill-yellow") }}'>{{ today_workout.status }}</span>
+  <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">StrideIQ</div>
+    <div class="sidebar-tagline">AI Marathon Coach</div>
+    <nav>
+      <a class="nav-link active" href="/"><span class="icon">🏃</span> Dashboard</a>
+      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span> Sync Strava</a>
+      <a class="nav-link" href="/settings"><span class="icon">⚙️</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <strong>{{ user.name }}</strong>
+        Signed in
       </div>
-      <div class='metric'><span>Workout Type</span><strong>{{ today_workout.workout_type }}</strong></div>
-      {% if today_workout.completed %}
-        <div class='metric'><span>Completed</span><strong>{{ today_workout.distance_actual }} (Target {{ today_workout.distance_target }})</strong></div>
+      {% if session.get('last_sync_at') %}
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px;line-height:1.4">
+          Last synced<br>
+          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:#64748b">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
+        </div>
       {% else %}
-        <div class='metric'><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px">Not yet synced</div>
       {% endif %}
-      <div class='metric'><span>Coming Up</span><strong>{{ today_workout.upcoming_run }}</strong></div>
-    </section>
+      <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
+    </div>
+  </aside>
 
-    <section class='card key-session'>
-      <h2>Key Session This Week</h2>
-      <div class='performance-number medium'>{{ key_session.day }} - {{ key_session.planned }} {{ key_session.session }}</div>
-      {% if key_session.planned_km %}
-        <div class='metric'><span>Target</span><strong>{{ key_session.planned }}</strong></div>
-        <div class='metric'><span>Completed</span><strong>{{ key_session.actual or "--" }}</strong></div>
-        <div class='metric'><span>Status</span><strong>{{ key_session.status_label }}</strong></div>
-      {% endif %}
-      <div class='split-2'>
-        <div>
-          <div class='label'>Purpose</div>
-          <div class='sub'>{{ key_session.purpose or 'Build marathon endurance' }}</div>
+  <!-- ═══ MAIN ═══════════════════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+    <div class="hero">
+      <div class="hero-left">
+        <h1>{{ intel.goal.race_name }}</h1>
+        <div class="sub" style="margin-top:5px">
+          Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
+          &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
+          &nbsp;·&nbsp; {{ today_date }}
         </div>
-        <div>
-          <div class='label'>Importance</div>
-          <div class='sub-strong'>{{ key_session_importance }}</div>
+        <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
+          {{ canonical_phase_label }}
+          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
+          {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
+          <span class="tooltip-wrap">
+            {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
+          </span>
+          &nbsp;·&nbsp; {{ intel.goal.target_pace }}/km goal pace
         </div>
       </div>
-    </section>
-
-    <section class='card'>
-      <h2>Weekly Plan</h2>
-      <div class='plan-list'>
-        {% for p in weekly_plan %}
-          <div class='plan-row {{ 'done-row' if p.status in ['completed', 'moved'] else '' }} {{ 'skip-row' if p.status in ['missed', 'skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }}'>
-            <div class='plan-main'>
-              <div class='plan-distance'>
-                {% if p.status in ['completed', 'overperformed'] and p.actual %}
-                  {{ p.actual }}
-                {% elif p.workout_type == 'STRENGTH' %}
-                  Gym
-                {% else %}
-                  {{ p.planned }}
-                {% endif %}
-              </div>
-              <div class='plan-meta'>{{ p.day }} {{ p.session }}</div>
-            </div>
-            <div class='plan-status'>
-                {% if p.status == 'completed' %}
-                  <strong class='status-green'>&#10003; done</strong>
-                {% elif p.status == 'moved' %}
-                  <strong class='status-green'>&#10003; moved</strong>
-                {% elif p.status == 'partial' %}
-                  <strong class='status-orange'>partial</strong>
-                {% elif p.status in ['missed', 'skipped'] %}
-                  <strong class='status-orange'>&#9888; missed</strong>
-                {% elif p.workout_type == 'STRENGTH' %}
-                  <strong>&#127947; strength</strong>
-              {% else %}
-                <strong>planned</strong>
-              {% endif %}
-            </div>
-          </div>
-        {% endfor %}
+      <div class="hero-right">
+        <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
+        <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
+        <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
       </div>
-      {% if week_closed %}
-        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Completed {{ weekly_plan_completed_km }} km | Completion {{ weekly_completion_pct }}%</div>
-        <div class='sub'><strong>Status:</strong> {{ weekly_status }}</div>
-      {% else %}
-        <div class='sub'>Goal {{ weekly_plan_goal_km }} km | Done {{ weekly_plan_completed_km }} km | Remaining {{ weekly_plan_remaining_km }} km</div>
-      {% endif %}
-      {% if race_week_distance_km > 0 %}
-        <div class='sub'>Race distance this week: {{ race_week_distance_km }} km{% if race_week_completed_km > 0 %} | Completed {{ race_week_completed_km }} km{% endif %}</div>
-      {% endif %}
-      {% if weekly_extra_km > 0 %}
-        <div class='sub'>Extra running outside the planned sessions: {{ weekly_extra_km }} km</div>
-      {% endif %}
-      <div class='sub'>{{ weekly_plan_note }}</div>
-      <div class='progress animated'><span style='width:{{ weekly_completion_pct }}%'></span></div>
-    </section>
+    </div>
 
-    <section class='card'>
-      <h2>Marathon Projection</h2>
-      <div class='projection-frame'>
-        <div class='label'>Goal Time</div>
-        <div class='sub-strong'>{{ intel.goal_time_display }}</div>
-        {% if intel.goal_milestone_label %}
-          <div class='sub'>{{ intel.goal_milestone_label }}</div>
+    <!-- ── Data quality banner ──────────────────────────────────────────── -->
+    {% if show_banner and banner and banner.message %}
+    <div class="data-quality-banner banner-{{ banner.type }}">
+      <span class="banner-icon">{{ banner.icon }}</span>
+      <span class="banner-message">{{ banner.message }}</span>
+      {% if banner.action %}
+      <a href="{{ banner.action_url }}" class="banner-action">{{ banner.action }}</a>
+      {% endif %}
+      <button class="banner-close" onclick="this.parentElement.style.display='none'">✕</button>
+    </div>
+    {% endif %}
+
+    <!-- ── Feasibility strip ────────────────────────────────────────────── -->
+    {% if canonical_feasibility_score %}
+    <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
+      <div class="fs-out">
+        <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
+        <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
+        {% if canonical_feasibility_factor_scores %}
+        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
         {% endif %}
       </div>
-      <div class='projection-frame'>
-        <div class='label'>Best Estimate Today</div>
-        <div class='performance-number'>{{ intel.current_projection_range }}</div>
-      </div>
-      <div class='projection-frame'>
-        <div class='label'>Race Day Projection</div>
-        <div class='performance-number medium'>{{ intel.race_day_projection_range }}</div>
-      </div>
-      <div class='sub'>{{ intel.prediction_note }}</div>
-      <div class='metric'><span>Readiness</span><strong>{{ intel.marathon_readiness_pct }}% ({{ intel.marathon_readiness_status }})</strong></div>
-      <div class='metric'><span>Prediction Confidence</span><strong>{{ prediction_confidence_label }} ({{ intel.prediction_confidence_pct }}%)</strong></div>
-      <div class='metric'><span>Goal Comparison</span><strong>{{ intel.goal_comparison }}</strong></div>
-      <div class='metric'><span>Gap to Goal</span><strong>{{ intel.gap_to_goal_range if intel.gap_to_goal_range != '--' else 'Too early to compare' }}</strong></div>
-    </section>
+      {% if canonical_honest_assessment %}
+      <span class="fs-text">{{ canonical_honest_assessment }}</span>
+      {% endif %}
+      {% if canonical_show_revised_goal and canonical_revised_goal %}
+      <span class="fs-revised">Realistic target: {{ canonical_revised_goal.revised_goal_time }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
 
-    <section class='card'>
-      <h2>Long Run Ladder</h2>
-      {% set longest = long_run.longest_km %}
-      <div class='ladder-item {{ 'done' if longest >= 21 else '' }}'>21 km {% if longest >= 21 %}&#10003;{% endif %}<span>Half Marathon</span></div>
-      <div class='ladder-item {{ 'next' if longest < 24 else ('done' if longest >= 24 else '') }}'>24 km {% if longest >= 24 %}&#10003;{% else %}NEXT{% endif %}<span>Next Step</span></div>
-      <div class='ladder-item {{ 'next' if longest >= 24 and longest < 28 else ('done' if longest >= 28 else '') }}'>28 km {% if longest >= 28 %}&#10003;{% endif %}<span>Endurance Builder</span></div>
-      <div class='ladder-item {{ 'next' if longest >= 28 and longest < 32 else ('done' if longest >= 32 else '') }}'>32 km {% if longest >= 32 %}&#10003;{% endif %}<span>Marathon Simulation</span></div>
-      <div class='sub'>Latest long run: {{ long_run.latest_km }} km{% if long_run.latest_date %} on {{ long_run.latest_date }}{% endif %}</div>
-      <div class='sub'>32 km long run typically indicates full marathon readiness.</div>
-    </section>
+    <!-- ── 3. Today + This Week ─────────────────────────────────────────── -->
+    <div class="section-label">This Week</div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Weekly Plan</h2>
+        <div>
+          {% for p in weekly_plan %}
+            <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
+              <div class="plan-main">
+                <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
+                <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
+                  {% if p.session_type == 'strength' %}
+                    💪 Gym
+                  {% elif p.status in ['completed', 'done'] %}
+                    ✓ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                  {% elif p.status == 'partial' %}
+                    ⚡ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                  {% elif p.status == 'missed' %}
+                    ✗ missed ({{ p.planned_km|int }}km planned)
+                  {% elif p.session_type == 'active_recovery' %}
+                    {{ p.planned_km|int }}km — easy run or walk
+                  {% elif p.status == 'bonus' %}
+                    🎁 {{ p.actual_km }}km bonus
+                  {% elif p.planned_km > 0 %}
+                    {{ p.planned_km|int }}km planned
+                  {% endif %}
+                </div>
+              </div>
+              <div class="plan-status">
+                {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
+                {% elif p.status == 'partial' %}<span class="status-orange">⚡ partial</span>
+                {% elif p.status == 'missed' %}<span class="status-orange">✗ missed</span>
+                {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">▶ today</span>
+                {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">💪 gym</span>
+                {% elif p.status == 'bonus' %}<span class="status-green">🎁 bonus</span>
+                {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% if week_closed %}
+          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
+        {% endif %}
+        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km }} km</strong></div>
+        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
+        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
+        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
+      </div>
 
-    <section class='card'>
-      <h2>Fitness Trend</h2>
-      <div class='performance-number medium'>{{ intel.fitness_trend_label }}</div>
-      <div class='metric'><span>Fitness Load</span><strong>{{ intel.fitness_load_label }}</strong></div>
-      <div class='metric'><span>Recent Load</span><strong>{{ intel.recent_load_label }}</strong></div>
-      <div class='metric'><span>Training Consistency</span><strong>{{ intel.training_consistency_label }}</strong></div>
-      <div class='metric'><span>Freshness</span><strong>{{ intel.fatigue_balance }} ({{ "%+.1f"|format(intel.current_tsb) }})</strong></div>
-      <div class='metric'><span>Training Momentum</span><strong>{{ intel.training_momentum }}</strong></div>
-      <div class='sub'>{{ intel.ctl_trend_text }}</div>
-      <div class='sub'>{{ intel.fatigue_balance_note }}</div>
-      <div class='sub'>{{ intel.load_terms_label }}</div>
-      <div class='line-chart-wrap'>
-        <svg id='fitness-line' class='line-chart' viewBox='0 0 320 66' preserveAspectRatio='none' data-points='{{ intel.charts.ctl_14 | tojson }}'>
-          <line class='line-chart-baseline' x1='0' y1='61' x2='320' y2='61'></line>
-          <polyline class='line-chart-path' points=''></polyline>
-        </svg>
-        <div class='chart-labels'>
-          <span>{{ intel.charts.ctl_14[0].label if intel.charts.ctl_14 else '' }}</span>
-          <span>{{ intel.charts.ctl_14[-1].label if intel.charts.ctl_14 else '' }}</span>
+      <div class="card">
+        <h2>Today's Session</h2>
+        <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
+        <div class="metric-row">
+          <span>Workout</span>
+          <strong>{{ today_workout.workout }}
+            <span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}" style="margin-left:6px">{{ today_workout.status }}</span>
+          </strong>
+        </div>
+        {% if today_workout.completed %}
+          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
+        {% else %}
+          <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+        {% endif %}
+        <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
+
+        <div class="divider"></div>
+        <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
+        {% if upcoming_long_runs %}
+          <div class="ladder">
+            {% for lr in upcoming_long_runs %}
+              <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
+                {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
+                <span class="km">{{ lr.target_km|int }} km</span>
+                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
+              </div>
+            {% endfor %}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
+            Longest recent: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
+            {% if upcoming_long_runs %}&nbsp;·&nbsp; Next: {{ upcoming_long_runs[0].target_km|int }}km on {{ upcoming_long_runs[0].week_date_display or upcoming_long_runs[0].week_date[5:] }}{% endif %}
+          </div>
+        {% else %}
+          <div class="ladder">
+            {# Fallback to static ladder when no progression data yet #}
+            {% set lk = long_run.longest_km %}
+            {% set nxt = long_run.next_milestone_km %}
+            {% for milestone in [21, 24, 28, 32] %}
+              <div class="ladder-step {{ 'done' if lk >= milestone else ('next' if nxt == milestone else '') }}">
+                {% if lk >= milestone %}✓{% elif nxt == milestone %}<span class="tooltip-wrap">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing.</span></span>{% endif %}<span class="km">{{ milestone }} km</span>
+              </div>
+            {% endfor %}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── 4. AI Coaching Insight (server-rendered) ─────────────────────── -->
+    {% if canonical_coaching_message %}
+    <div class="card" id="card-coaching">
+      <div class="card-title">AI Coaching Insight</div>
+      <div class="coaching-text">{{ canonical_coaching_message }}</div>
+      <div class="coaching-badge" style="margin-top:10px">
+        <span>🤖</span>
+        <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-text">This insight is generated by Claude AI, analyzing your last 16 weeks of Strava data, current fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
+        </span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── 5-7. Intelligence grid (fetched from /api/dashboard) ─────────── -->
+    <div id="intel-container">
+      <!-- skeleton while loading -->
+      <div id="intel-loading">
+        <div class="card">
+          <div class="card-title">Race Predictions</div>
+          <div class="dist-grid">
+            {% for _ in range(4) %}
+              <div class="dist-tile"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:70%"></div></div>
+          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:80%"></div></div>
         </div>
       </div>
-    </section>
+      <div id="intel-content" style="display:none"></div>
+      <div id="intel-error"   style="display:none"></div>
+    </div>
 
-    <section class='card'>
-      <h2>Endurance Profile</h2>
-      <div class='endurance-block'>
-        <div class='metric'><span>Long-Run Depth</span><strong>{{ intel.endurance_profile.long_run_depth }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.long_run_note }}</div>
-      </div>
-      <div class='endurance-block'>
-        <div class='metric'><span>Late-Run Durability</span><strong>{{ intel.endurance_profile.durability }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.durability_note }}</div>
-      </div>
-      <div class='endurance-block'>
-        <div class='metric'><span>Fueling Risk</span><strong class='status-{{ 'green' if intel.endurance_profile.fueling_risk in ['Low', 'Very Low'] else ('orange' if intel.endurance_profile.fueling_risk == 'Moderate' else 'red') }}'>{{ intel.endurance_profile.fueling_risk }}</strong></div>
-        <div class='sub'>{{ intel.endurance_profile.fueling_note }}</div>
-      </div>
-    </section>
-
-    <section class='card'>
-      <h2>Marathon Readiness</h2>
-      <div class='performance-number medium'>{{ intel.marathon_readiness_pct }}%</div>
-      <div class='metric'><span>Status</span><strong>{{ intel.marathon_readiness_status }}</strong></div>
-      <div class='metric'><span>Training Consistency</span><strong>{{ consistency_score }}%</strong></div>
-      <div class='metric'><span>Marathon Specificity</span><strong>{{ intel.marathon_specificity_pct }}%</strong></div>
-      <div class='metric'><span>Fatigue Control</span><strong>{{ intel.fatigue_control_pct }}%</strong></div>
-      <div class='progress animated'><span style='width:{{ intel.marathon_readiness_pct }}%'></span></div>
-      <div class='sub'><strong>Next Step:</strong> {{ intel.marathon_readiness_next_step }}</div>
-    </section>
-
-    <section class='card coaching'>
-      <h2>Coach Insight</h2>
-      <div class='sub'>{{ ai_summary }}</div>
-    </section>
-
-    <section class='card'>
-      <h2>Recent Runs</h2>
-      {% if runs %}
-        {% for run in runs %}
-          <div class='run-item'>
-            <div class='run-date'>{{ run.date_label }}</div>
-            <div class='run-stat strong'>{{ run.distance }} km</div>
-            <div class='run-stat'>{{ run.pace }}</div>
-            <div class='run-stat'>{% if run.hr %}HR {{ run.hr }}{% else %}HR --{% endif %}</div>
-            <div class='run-stat'>{{ run.time }}</div>
+    <!-- ── 8. Recent Activities ──────────────────────────────────────────── -->
+    <div class="section-label">Recent Activities</div>
+    <div class="card">
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Last 7 activities</div>
+      {% if recent_activities %}
+        {% for act in recent_activities %}
+          <div class="activity-row">
+            <div class="activity-icon">{{ act.icon }}</div>
+            <div class="activity-date">{{ act.date }}</div>
+            <div class="activity-main">
+              {% if act.is_run %}
+                {{ act.distance_km }}km{% if act.pace %} · {{ act.pace }}/km{% endif %}{% if act.elevation %} · +{{ act.elevation }}m{% endif %}
+              {% elif act.is_cross %}
+                {{ act.distance_km }}km · {{ act.type|title }}
+              {% else %}
+                {{ act.type|title }}
+              {% endif %}
+            </div>
+            <div class="activity-hr">{% if act.hr %}HR {{ act.hr }}{% endif %}</div>
+            <div class="activity-dur">{{ act.duration or '' }}</div>
           </div>
         {% endfor %}
       {% else %}
-        <p class='sub'>No synced runs yet.</p>
+        <p style="color:var(--muted);font-size:.85rem">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
       {% endif %}
-    </section>
-  </main>
+    </div>
 
-  <script>
-    (function () {
-      const svg = document.getElementById('fitness-line');
-      if (!svg) return;
-      const raw = svg.dataset.points;
-      if (!raw) return;
-      let points = [];
-      try { points = JSON.parse(raw); } catch (_) { return; }
-      const values = points.map(p => Number(p.value || 0));
-      if (!values.length) return;
-      const min = Math.min.apply(null, values);
-      const max = Math.max.apply(null, values);
-      const range = Math.max(1, max - min);
-      const viewBox = (svg.getAttribute('viewBox') || '0 0 320 66').split(' ');
-      const w = Number(viewBox[2] || 320);
-      const h = Number(viewBox[3] || 66);
-      const step = values.length > 1 ? (w / (values.length - 1)) : 0;
-      const coords = values.map((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 10) - 5;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      }).join(' ');
-      const line = svg.querySelector('.line-chart-path');
-      if (line) line.setAttribute('points', coords);
-    })();
-  </script>
+  </main>
+</div>
+
+<!-- ═══ INTELLIGENCE SECTIONS TEMPLATE ═════════════════════════════════ -->
+<!-- Rendered client-side from /api/dashboard JSON -->
+<template id="intel-template">
+  <!-- 1. RACE PREDICTIONS -->
+  <div class="card" id="card-predictions">
+    <div class="card-title">Race Predictions — All Distances</div>
+    <div class="dist-grid" id="dist-tiles"></div>
+    <div class="prediction-legend">
+      <span class="legend-title">Confidence:</span>
+      <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
+      <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
+      <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
+    </div>
+  </div>
+
+  <!-- 6. COLLAPSIBLE: Training Science (CTL + Wall) -->
+  <div class="collapsible-header" onclick="toggleSection('training-science')">
+    <div class="section-label">Training Science</div>
+    <button class="collapsible-toggle" id="btn-training-science">▲ Hide</button>
+  </div>
+  <div class="collapsible-body" id="training-science">
+    <div class="grid-2">
+      <!-- TRAINING LOAD -->
+      <div class="card" id="card-load">
+        <div class="card-title">Training Load — PMC</div>
+        <div class="load-tiles">
+          <div class="load-tile">
+            <div class="lt-label">
+              <span class="tooltip-wrap">FITNESS (CTL)<span class="tooltip-icon">?</span><span class="tooltip-text">Chronic Training Load — your 42-day fitness average. Higher = more fit. Builds slowly with consistent training. Target: 55–65 for sub-4 marathon.</span></span>
+            </div>
+            <div class="lt-val lt-blue" id="lt-ctl">—</div>
+            <div class="lt-sub">42-day load</div>
+          </div>
+          <div class="load-tile">
+            <div class="lt-label">
+              <span class="tooltip-wrap">FATIGUE (ATL)<span class="tooltip-icon">?</span><span class="tooltip-text">Acute Training Load — your 7-day fatigue average. Higher = more tired from recent training. Normal to be higher than CTL during hard weeks.</span></span>
+            </div>
+            <div class="lt-val" id="lt-atl" style="color:var(--red)">—</div>
+            <div class="lt-sub">7-day load</div>
+          </div>
+          <div class="load-tile">
+            <div class="lt-label">
+              <span class="tooltip-wrap">FORM<span class="tooltip-icon">?</span><span class="tooltip-text">Form = Fitness minus Fatigue (CTL − ATL). Positive = Fresh and ready to race. Negative = Tired, building fitness. Near zero = Balanced. Ideal race day form: +5 to +15.</span></span>
+            </div>
+            <div class="lt-val" id="lt-tsb">—</div>
+            <div class="lt-sub" id="lt-tsb-sub">Positive = Fresh / Negative = Tired</div>
+          </div>
+        </div>
+        <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
+        <div class="mini-chart-wrap">
+          <div class="mini-chart-title">CTL — 8-week trend</div>
+          <svg class="mini-chart" viewBox="0 0 300 80" preserveAspectRatio="xMidYMid meet" id="ctl-svg">
+            <path class="area" id="ctl-area" d=""/>
+            <path class="path" id="ctl-path" d=""/>
+            <g id="ctl-dots"></g>
+            <g id="ctl-labels"></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- WALL ANALYSIS -->
+      <div class="card" id="card-wall">
+        <div class="card-title">Wall Risk Analysis</div>
+        <div id="wall-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. COLLAPSIBLE: Race Day Prep (Pace + Fueling) -->
+  <div class="collapsible-header" onclick="toggleSection('race-day-prep')">
+    <div class="section-label">Race Day Prep</div>
+    <button class="collapsible-toggle" id="btn-race-day-prep">▼ Show</button>
+  </div>
+  <div class="collapsible-body collapsed" id="race-day-prep">
+    <!-- PACE STRATEGY TABLE -->
+    <div class="card" id="card-pace">
+      <div class="card-title">Marathon Pace Strategy — <span class="tooltip-wrap">Wall Prevention<span class="tooltip-icon">?</span><span class="tooltip-text">The wall = severe energy crash at km 30–35 when glycogen stores run out. This pace strategy prevents it by starting conservatively and building pace through the race (negative split).</span></span></div>
+      <table class="pace-table" id="pace-table">
+        <thead>
+          <tr>
+            <th>Segment</th>
+            <th>Target Pace</th>
+            <th>Segment Time</th>
+            <th>Elapsed</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="pace-tbody"></tbody>
+      </table>
+      <div id="km32-advisory" class="km32-warn" style="display:none">
+        ⚠️ <span id="km32-text"></span>
+      </div>
+    </div>
+
+    <!-- FUELING SCHEDULE -->
+    <div class="card" id="card-fuel">
+      <div class="card-title">Race-Day Fueling Plan</div>
+      <div class="grid-2">
+        <div>
+          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Gel Schedule</div>
+          <div class="fuel-timeline" id="gel-timeline"></div>
+        </div>
+        <div>
+          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Hydration & Electrolytes</div>
+          <div class="fuel-timeline" id="elec-timeline"></div>
+          <div id="hydration-rules" style="margin-top:14px"></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:.8rem;font-weight:600;margin-bottom:10px">Pre-Race Protocol</div>
+      <div id="prerace-rules"></div>
+      <div id="km32-fuel-note" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- placeholder comment -->
+</template>
+
+<script>
+  window._weeklyCTL = {{ weekly_ctl_json | safe }};
+  window._aerobicPaceDisplay = {{ aerobic_pace_display | tojson }};
+  window._wallMath = {
+    showEstimate:    {{ 'true' if show_wall_estimate else 'false' }},
+    baseSec:         {{ canonical_wall_adjusted_seconds - canonical_wall_cost_minutes * 60 if show_wall_estimate else 0 }},
+    baseDisplay:     {{ canonical_wall_base_display | tojson }},
+    factor:          {{ canonical_wall_factor }},
+    adjustedDisplay: {{ canonical_wall_adjusted_display | tojson }},
+    costMinutes:     {{ canonical_wall_cost_minutes }},
+    risk:            {{ canonical_wall_risk | tojson }},
+  };
+</script>
+<script>
+(function () {
+  "use strict";
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function el(id) { return document.getElementById(id); }
+
+  function confClass(c) {
+    if (!c) return 'confidence-low';
+    const l = c.toLowerCase();
+    return l === 'high' ? 'confidence-high' : (l === 'medium' || l === 'moderate') ? 'confidence-moderate' : 'confidence-low';
+  }
+
+  function riskClass(r) {
+    if (!r) return 'risk-unknown';
+    return { high: 'risk-high', medium: 'risk-medium', low: 'risk-low' }[r.toLowerCase()] || 'risk-unknown';
+  }
+
+  function tsb_color(tsb) {
+    if (tsb > 5)   return 'lt-green';
+    if (tsb > -10) return 'lt-amber';
+    return 'lt-red';
+  }
+
+  function pct_of(val, max) { return Math.min(100, Math.max(2, (val / max) * 100)).toFixed(1); }
+
+  function fmtPace(secPerKm) {
+    // Truncate (not round) so 339.85 → 5:39, not 5:40
+    const m = Math.floor(secPerKm / 60);
+    const s = Math.floor(secPerKm % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s + '/km';
+  }
+
+  // ── Build the intelligence DOM ───────────────────────────────────────────
+  function render(data) {
+    const tmpl = document.getElementById('intel-template');
+    const clone = tmpl.content.cloneNode(true);
+    el('intel-content').appendChild(clone);
+
+    const pred  = data.prediction  || {};
+    const ps    = data.pace_strategy || {};
+    const tr    = data.training_recommendations || {};
+    const load  = data.load || {};
+    const wall  = data.wall_analysis || null;
+    const coach = data.coaching_summary || '';
+
+    // ── 1. Race Predictions ──────────────────────────────────────────────
+    const tiles = [
+      { key: '5k',           label: '5K',            fm: false },
+      { key: '10k',          label: '10K',           fm: false },
+      { key: 'half_marathon',label: 'Half Marathon', fm: false },
+      { key: 'marathon',     label: 'Full Marathon', fm: true  },
+    ];
+    const conf    = pred.confidence || 'Low';
+    const distTiles = el('dist-tiles');
+    if (distTiles) {
+      tiles.forEach(({ key, label, fm }) => {
+        const d = ps[key] || {};
+        const wallAdjTime = fm && wall && wall.current_predicted_fm_display && wall.current_predicted_fm_display !== '--'
+          ? wall.current_predicted_fm_display : null;
+        const ptime = fm ? (wallAdjTime || pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
+        // FM sub-pace: show wall-adjusted projected pace (matches the wall-adjusted display time).
+        // Other distances: show avg_pace from pace strategy (based on VDOT).
+        const fmProjSec = fm && wall && wall.current_predicted_fm ? wall.current_predicted_fm : null;
+        const subPace = fm
+          ? (fmProjSec ? fmtPace(fmProjSec / 42.195) + ' projected avg' : (d.avg_pace ? d.avg_pace + ' avg' : ''))
+          : (d.avg_pace ? d.avg_pace + ' avg' : '');
+        const div = document.createElement('div');
+        div.className = 'dist-tile' + (fm ? ' fm' : '');
+        let inner = `
+          <div class="label">${label}</div>
+          <div class="time">${ptime}</div>
+          <div class="sub-time">${subPace}</div>
+          <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
+        `;
+        if (fm && wall && wall.optimal_fm_potential_display) {
+          const apPace = window._aerobicPaceDisplay || '';
+          inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span style="font-size:.68rem;color:var(--muted)">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
+        }
+        div.innerHTML = inner;
+        distTiles.appendChild(div);
+      });
+    }
+
+    // ── 2. Wall Analysis — 2-column layout ───────────────────────────────
+    // Left:  risk badge + callout + VDOT bars
+    // Right: aerobic vs actual comparison + fueling teaser
+    const wallEl = el('wall-content');
+    if (wallEl) {
+      if (wall) {
+        const risk    = wall.wall_risk || 'unknown';
+        const gap     = wall.vdot_gap != null ? wall.vdot_gap.toFixed(2) : null;
+        const hmv     = wall.hm_vdot  || 0;
+        const fmv     = wall.fm_vdot  || 0;
+        const maxV    = Math.max(hmv, fmv, 20) * 1.1;
+        const cost    = wall.wall_cost_minutes;
+        const costAbs = cost != null ? Math.abs(cost).toFixed(0) : null;
+        const opt     = wall.optimal_fm_potential_display || '--';
+        const cur     = wall.current_predicted_fm_display || '--';
+        const fueling = wall.fueling_plan || null;
+
+        // ── Left column ─────────────────────────────────────────────────
+        let leftHTML = `
+          <div class="wall-header">
+            <span class="tooltip-wrap wall-risk-badge ${riskClass(risk)}">${risk.toUpperCase()} WALL RISK<span class="tooltip-icon">?</span><span class="tooltip-text">Wall risk = likelihood of hitting the wall (severe glycogen depletion) at km 30–35. Your HM fitness is much higher than your FM fitness — this gap indicates pacing or fueling issues in past marathons, not lack of fitness.</span></span>
+            ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
+          </div>`;
+
+        const _wm = window._wallMath || {};
+        if (_wm.showEstimate && _wm.baseDisplay && _wm.adjustedDisplay) {
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px"><strong>${_wm.baseDisplay}</strong> base → <strong style="color:#ef4444">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
+        } else if (costAbs) {
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px">~<strong style="color:#ef4444">${costAbs} min</strong> estimated time lost to the wall</div>`;
+        }
+
+        if (hmv || fmv) {
+          leftHTML += `
+            <div class="vdot-bar-wrap">
+              <div class="vdot-label-row"><span class="tooltip-wrap">VDOT Score<span class="tooltip-icon">?</span><span class="tooltip-text">VDOT is your aerobic fitness score, developed by coach Jack Daniels. Higher = more fit. Calculated from your race times. Your HM score indicates your aerobic capacity for marathon racing.</span></span><span>${maxV.toFixed(0)} max</span></div>
+              <div class="vdot-bars">
+                <div class="vdot-row">
+                  <div class="vdot-row-label">HM</div>
+                  <div class="vdot-track"><div class="vdot-fill hm" style="width:${pct_of(hmv,maxV)}%">${hmv ? hmv.toFixed(1) : ''}</div></div>
+                </div>
+                <div class="vdot-row">
+                  <div class="vdot-row-label">FM</div>
+                  <div class="vdot-track"><div class="vdot-fill fm" style="width:${pct_of(fmv,maxV)}%">${fmv ? fmv.toFixed(1) : ''}</div></div>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        // ── Right column ────────────────────────────────────────────────
+        const wm = window._wallMath || {};
+        let wallAdjHTML = '';
+        if (wm.showEstimate && wm.baseDisplay && wm.adjustedDisplay) {
+          const factorPct = ((wm.factor - 1) * 100).toFixed(0);
+          const sign = wm.costMinutes > 0 ? '+' : '';
+          wallAdjHTML = `
+            <div class="fs-val red">${wm.adjustedDisplay}</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:3px">
+              Base ${wm.baseDisplay} × ${wm.factor.toFixed(2)} = ${wm.adjustedDisplay}
+              <span style="color:#ef4444;font-weight:600">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
+            </div>`;
+        } else {
+          wallAdjHTML = `<div class="fs-val red">${cur}</div>`;
+        }
+
+        let rightHTML = `
+          <div class="fm-compare" style="flex-direction:column;gap:10px">
+            <div class="fm-stat">
+              <div class="fs-label">Aerobic Potential</div>
+              <div class="fs-val green">${opt}</div>
+            </div>
+            <div class="fm-stat">
+              <div class="fs-label">Wall-Adjusted Prediction</div>
+              ${wallAdjHTML}
+            </div>
+          </div>`;
+
+        if (fueling) {
+          rightHTML += `
+            <div style="margin-top:14px;background:#f0fdf4;border-radius:8px;padding:12px 14px;border:1px solid #bbf7d0">
+              <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#16a34a;margin-bottom:8px">Fueling Plan</div>
+              <div style="font-size:.82rem;color:var(--text)">
+                🍬 <strong>${fueling.gel_count}</strong> gels &nbsp;·&nbsp;
+                ~<strong>${fueling.approx_carbs_per_hour_actual_g}g</strong> carbs/hr
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:4px">First gel at km 10 · every 45 min</div>
+              <a href="#card-fuel" style="font-size:.75rem;color:#16a34a;text-decoration:none;display:block;margin-top:8px;font-weight:600">→ See full schedule below</a>
+            </div>`;
+        }
+
+        wallEl.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div>${leftHTML}</div>
+            <div>${rightHTML}</div>
+          </div>`;
+      } else {
+        wallEl.innerHTML = '<div style="color:var(--muted);font-size:.83rem">Wall analysis requires a marathon PB entered in settings.</div>';
+      }
+    }
+
+    // ── 3. Pace Strategy Table ───────────────────────────────────────────
+    const fmPs = ps.marathon || {};
+    const tbody = el('pace-tbody');
+    const wallSegs = wall && wall.wall_prevention_pacing && wall.wall_prevention_pacing.segments;
+
+    function fmtPaceSec(secPerKm) {
+      const s = Math.round(secPerKm);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '/km';
+    }
+    function fmtMmss(totalSec) {
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    if (tbody && wallSegs && wallSegs.length) {
+      // PRIMARY: wall prevention pacing segments from wall analysis
+      wallSegs.forEach(seg => {
+        const is32 = seg.start_km >= 32.0;
+        const tr_el = document.createElement('tr');
+        if (is32) tr_el.className = 'km32';
+        const endKm = seg.end_km !== undefined ? seg.end_km : (seg.start_km + 10);
+        const label = `km ${seg.start_km}–${Math.round(endKm)}`;
+        tr_el.innerHTML = `
+          <td class="seg-label">${label}${is32 ? ' ⚠️' : ''}</td>
+          <td class="seg-pace">${seg.pace_display || ''}</td>
+          <td>${seg.segment_time || '—'}</td>
+          <td>${seg.elapsed_at_end || '—'}</td>
+          <td style="font-size:.75rem;color:var(--muted)">${seg.note || ''}</td>
+        `;
+        tbody.appendChild(tr_el);
+      });
+    } else if (tbody) {
+      // FALLBACK: compute differentiated segments from predicted_seconds
+      const predSec = fmPs.predicted_seconds || 0;
+      const avgPaceSec = predSec > 0 ? predSec / 42.195 : 0;
+      const segments = [
+        { a: 0,  b: 10, offset: +20, note: 'Conservative start' },
+        { a: 10, b: 21, offset: +10, note: 'Settle into pace' },
+        { a: 21, b: 32, offset:   0, note: 'Race pace' },
+        { a: 32, b: 42, offset:  -5, note: 'Push if able' },
+      ];
+      let elapsed = 0;
+      segments.forEach(({ a, b, offset, note }) => {
+        const paceSec = avgPaceSec > 0 ? avgPaceSec + offset : 0;
+        const distKm = b - a;
+        const segSec = Math.round(paceSec * distKm);
+        elapsed += segSec;
+        const tr_el = document.createElement('tr');
+        if (a === 32) tr_el.className = 'km32';
+        const paceStr = avgPaceSec > 0 ? fmtPaceSec(paceSec) : '—';
+        const segStr  = avgPaceSec > 0 ? fmtMmss(segSec) : '—';
+        const elStr   = avgPaceSec > 0 ? fmtMmss(elapsed) : '—';
+        tr_el.innerHTML = `
+          <td class="seg-label">km ${a}–${b}${a===32?' ⚠️':''}</td>
+          <td class="seg-pace">${paceStr}</td>
+          <td>${segStr}</td>
+          <td>${elStr}</td>
+          <td style="font-size:.75rem;color:var(--muted)">${note}</td>
+        `;
+        tbody.appendChild(tr_el);
+      });
+    }
+
+    // km 32 checkpoint advisory
+    const wallPacing = wall && wall.wall_prevention_pacing;
+    const km32adv = el('km32-advisory');
+    const km32txt = el('km32-text');
+    if (km32adv && km32txt && wallPacing && wallPacing.km_32_checkpoint) {
+      const ck = wallPacing.km_32_checkpoint;
+      km32txt.textContent = `${ck.description} If feeling strain: ${ck.if_strain}`;
+      km32adv.style.display = 'flex';
+    }
+
+    // ── 4. Fueling Schedule ──────────────────────────────────────────────
+    const fueling = wall && wall.fueling_plan;
+    if (fueling) {
+      const gelTL = el('gel-timeline');
+      if (gelTL && fueling.gel_schedule) {
+        fueling.gel_schedule.forEach((g, i) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-event';
+          div.dataset.icon = '🍬';
+          div.innerHTML = `
+            <div class="fe-time">${g.elapsed} · ~km ${g.approx_km}</div>
+            <div class="fe-label">Gel #${g.gel}</div>
+            <div class="fe-note">${g.note}</div>`;
+          gelTL.appendChild(div);
+        });
+        // Summary
+        const sumDiv = document.createElement('div');
+        sumDiv.className = 'fuel-rule';
+        sumDiv.innerHTML = `<div class="fr-icon">📊</div><div class="fr-text"><strong>${fueling.gel_count} gels total · ~${fueling.approx_carbs_per_hour_actual_g}g carbs/hr</strong>${fueling.gel_note}</div>`;
+        gelTL.parentNode.appendChild(sumDiv);
+      }
+
+      const elecTL = el('elec-timeline');
+      if (elecTL && fueling.electrolyte_stops) {
+        fueling.electrolyte_stops.forEach(e => {
+          const div = document.createElement('div');
+          div.className = 'fuel-event';
+          div.dataset.icon = '💧';
+          div.innerHTML = `
+            <div class="fe-time">${e.elapsed} · km ${e.km}</div>
+            <div class="fe-label">Electrolytes</div>
+            <div class="fe-note">${e.action}</div>`;
+          elecTL.appendChild(div);
+        });
+      }
+
+      const hydRules = el('hydration-rules');
+      if (hydRules && fueling.hydration) {
+        const h = fueling.hydration;
+        [
+          { icon: '💧', text: h.every_aid_station },
+          { icon: '⚡', text: h.electrolytes },
+          { icon: '⚠️', text: h.warning },
+        ].forEach(({ icon, text }) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-rule';
+          div.innerHTML = `<div class="fr-icon">${icon}</div><div class="fr-text">${text}</div>`;
+          hydRules.appendChild(div);
+        });
+      }
+
+      const preRace = el('prerace-rules');
+      if (preRace && fueling.pre_race_protocol) {
+        const pr = fueling.pre_race_protocol;
+        [
+          ['🌙', 'Night Before', pr.night_before],
+          ['🌅', 'Race Morning', pr.morning_of],
+          ['⏱️', 'Final 30 Min', pr.final_30_min],
+        ].forEach(([icon, label, text]) => {
+          const div = document.createElement('div');
+          div.className = 'fuel-rule';
+          div.innerHTML = `<div class="fr-icon">${icon}</div><div class="fr-text"><strong>${label}</strong>${text}</div>`;
+          preRace.appendChild(div);
+        });
+      }
+
+      const km32FuelNote = el('km32-fuel-note');
+      if (km32FuelNote && fueling.km_32_fueling_note) {
+        km32FuelNote.innerHTML = `<div class="km32-warn">⚠️ ${fueling.km_32_fueling_note}</div>`;
+        km32FuelNote.style.display = 'block';
+      }
+    } else {
+      const cardFuel = el('card-fuel');
+      if (cardFuel) {
+        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div style="color:var(--muted);font-size:.83rem">Fueling plan available once a marathon PB is saved in settings.</div>';
+      }
+    }
+
+    // ── 5. Training Load ─────────────────────────────────────────────────
+    const ltCtl   = el('lt-ctl');
+    const ltAtl   = el('lt-atl');
+    const ltTsb   = el('lt-tsb');
+    const ltTrend = el('lt-trend');
+
+    if (ltCtl)  ltCtl.textContent = (load.ctl || tr.ctl || 0).toFixed(1);
+    if (ltAtl)  ltAtl.textContent = (load.atl || tr.atl || 0).toFixed(1);
+    const tsbVal = load.tsb != null ? load.tsb : (tr.tsb || 0);
+    if (ltTsb) {
+      ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
+      ltTsb.className = 'lt-val ' + tsb_color(tsbVal);
+      const tsbSub = el('lt-tsb-sub');
+      if (tsbSub) tsbSub.textContent = tsbVal >= 5 ? 'Fresh' : tsbVal >= -5 ? 'Neutral' : 'Tired';
+    }
+    if (ltTrend) ltTrend.textContent = load.fitness_trend || '—';
+
+    // Mini CTL chart — 8-week weekly averages
+    const weeklyCTL = (window._weeklyCTL && window._weeklyCTL.length) ? window._weeklyCTL : (load.ctl_series || []).map(p => ({ ctl: +p.value, week: p.date || '' }));
+    if (weeklyCTL.length > 1) {
+      const vals  = weeklyCTL.map(p => +(p.ctl != null ? p.ctl : (p.value || 0)));
+      const weeks = weeklyCTL.map(p => p.week || '');
+      const minV  = Math.min(...vals) - 2;
+      const maxV  = Math.max(...vals) + 2;
+      const rng   = Math.max(1, maxV - minV);
+      const W = 290, CHART_H = 55, PAD_X = 8, PAD_Y = 4, LABEL_Y = 74;
+      const pts = vals.map((v, i) => {
+        const x = PAD_X + i * ((W - PAD_X) / Math.max(1, vals.length - 1));
+        const y = PAD_Y + (1 - (v - minV) / rng) * (CHART_H - PAD_Y * 2);
+        return [+x.toFixed(1), +y.toFixed(1)];
+      });
+      const pathD = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+      const areaD = `${pathD} L${pts[pts.length-1][0]},${CHART_H} L${pts[0][0]},${CHART_H} Z`;
+      const pathEl = el('ctl-path');
+      const areaEl = el('ctl-area');
+      if (pathEl) pathEl.setAttribute('d', pathD);
+      if (areaEl) areaEl.setAttribute('d', areaD);
+      // Dots with hover tooltips
+      const dotsEl = el('ctl-dots');
+      if (dotsEl) {
+        dotsEl.innerHTML = pts.map((p, i) => {
+          const isLast = i === pts.length - 1;
+          const fill = isLast ? 'var(--green)' : '#fff';
+          const r = isLast ? 4 : 3;
+          const wk  = (weeks[i] || '').replace(/'/g, '&apos;');
+          const ctlV = vals[i].toFixed(1);
+          let dot = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="var(--green)" stroke-width="1.5" style="cursor:pointer" data-week="${wk}" data-ctl="${ctlV}" onmouseover="showCTLTooltip(this)" onmouseout="hideCTLTooltip()"/>`;
+          if (isLast) dot += `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--green)" style="pointer-events:none">${ctlV}</text>`;
+          return dot;
+        }).join('');
+      }
+      // Week labels (show every other + last)
+      const labelsEl = el('ctl-labels');
+      if (labelsEl) {
+        labelsEl.innerHTML = pts.map((p, i) => {
+          if (i % 2 !== 0 && i !== pts.length - 1) return '';
+          return `<text x="${p[0]}" y="${LABEL_Y}" text-anchor="middle" font-size="8" fill="#9ca3af">${weeks[i]}</text>`;
+        }).join('');
+      }
+    }
+
+    // ── 6. AI Coaching Summary ───────────────────────────────────────────
+    const coachText = el('coaching-text');
+    if (coachText) coachText.textContent = coach || 'Coaching insight loading…';
+  }
+
+  // ── Fetch & orchestrate ──────────────────────────────────────────────────
+  function showError(msg) {
+    const errEl = el('intel-error');
+    if (errEl) {
+      errEl.innerHTML = `<div class="error-box">⚠️ ${msg}</div>`;
+      errEl.style.display = 'block';
+    }
+    const loadEl = el('intel-loading');
+    if (loadEl) loadEl.style.display = 'none';
+  }
+
+  fetch('/api/dashboard')
+    .then(r => {
+      if (!r.ok) return r.json().then(j => { throw new Error(j.message || `HTTP ${r.status}`); });
+      return r.json();
+    })
+    .then(data => {
+      const loadEl = el('intel-loading');
+      const contentEl = el('intel-content');
+      if (loadEl) loadEl.style.display = 'none';
+      if (contentEl) contentEl.style.display = 'block';
+      render(data);
+    })
+    .catch(err => {
+      showError('Could not load intelligence data: ' + err.message);
+    });
+
+})();
+</script>
+
+<!-- CTL graph hover tooltip -->
+<div id="ctl-tooltip" style="display:none;position:fixed;background:#1e2736;color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;border:1px solid rgba(255,255,255,0.1);z-index:1000;line-height:1.5;"></div>
+<script>
+function showCTLTooltip(el) {
+  const tt = document.getElementById('ctl-tooltip');
+  tt.innerHTML = '<strong>' + el.dataset.week + '</strong><br>CTL: ' + el.dataset.ctl;
+  tt.style.display = 'block';
+  document.addEventListener('mousemove', moveCTLTooltip);
+}
+function moveCTLTooltip(e) {
+  const tt = document.getElementById('ctl-tooltip');
+  tt.style.left = (e.clientX + 12) + 'px';
+  tt.style.top  = (e.clientY - 36) + 'px';
+}
+function hideCTLTooltip() {
+  document.getElementById('ctl-tooltip').style.display = 'none';
+  document.removeEventListener('mousemove', moveCTLTooltip);
+}
+function toggleSection(id) {
+  const body = document.getElementById(id);
+  const btn  = document.getElementById('btn-' + id);
+  if (!body) return;
+  const collapsed = body.classList.toggle('collapsed');
+  if (btn) btn.textContent = collapsed ? '▼ Show' : '▲ Hide';
+}
+</script>
 </body>
 </html>
