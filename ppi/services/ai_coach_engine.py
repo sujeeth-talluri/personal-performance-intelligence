@@ -865,6 +865,20 @@ Generate for ALL weeks until race day inclusive."""
             existing_alerts = plan.get("alerts", [])
             plan["alerts"] = [mandatory_alert] + existing_alerts
 
+        # Round all daily km values to nearest 0.5 for clean display
+        daily = this_week.get("daily_plan", {})
+        for session in daily.values():
+            if float(session.get("km", 0)) > 0:
+                session["km"] = round(float(session["km"]) * 2) / 2
+
+        # Round long run km to nearest 0.5
+        if "long_run" in this_week and this_week["long_run"].get("km", 0) > 0:
+            this_week["long_run"]["km"] = round(float(this_week["long_run"]["km"]) * 2) / 2
+            # Keep long run day in sync
+            long_run_day = profile.get("long_run_day", "sunday")
+            if long_run_day in daily and daily[long_run_day].get("type") == "long":
+                daily[long_run_day]["km"] = this_week["long_run"]["km"]
+
         plan["validation"] = {
             "weekly_target_enforced":    weekly_enforced,
             "long_run_enforced":         long_enforced,

@@ -526,7 +526,7 @@
         {% if week_closed %}
           <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
         {% endif %}
-        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km }} km</strong></div>
+        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
         <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
         <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
         <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
