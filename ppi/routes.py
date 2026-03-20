@@ -1905,6 +1905,39 @@ def strava_login():
         return redirect(url_for("web.onboarding", error="Strava OAuth is not configured. Set CLIENT_ID, CLIENT_SECRET and STRAVA_REDIRECT_URI in Render."))
 
 
+@web.route("/debug/weekly-target")
+@login_required
+def debug_weekly_target():
+    """Temporary debug endpoint — shows daily plan km and weekly target calculation."""
+    from ppi.models import CoachingPlan
+    import json as _json
+    user = _current_user()
+    cp = CoachingPlan.query.filter_by(user_id=user.id).order_by(CoachingPlan.id.desc()).first()
+    if not cp:
+        return jsonify({"error": "no coaching plan found"})
+    plan = _json.loads(cp.plan_json)
+    this_week = plan.get("this_week", {})
+    daily = this_week.get("daily_plan", {})
+    _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    rows = []
+    total = 0.0
+    for day in _WEEK_DAYS:
+        s = daily.get(day, {})
+        km = float(s.get("km", 0))
+        total += km
+        rows.append({"day": day, "type": s.get("type", "—"), "km": km, "session": s.get("session", "")})
+    running_rows = [r for r in rows if r["type"] not in ("strength", "rest") and r["km"] > 0]
+    running_sum = round(sum(r["km"] for r in running_rows), 1)
+    return jsonify({
+        "daily_plan": rows,
+        "ai_weekly_target_km": this_week.get("weekly_target_km"),
+        "calculated_sum_all_km": round(total, 2),
+        "calculated_sum_running_km": running_sum,
+        "canonical_weekly_target_km": running_sum,
+        "long_run_km": this_week.get("long_run", {}).get("km"),
+    })
+
+
 @web.route("/auth/strava/callback")
 def strava_callback():
     expected = session.get("strava_state")
