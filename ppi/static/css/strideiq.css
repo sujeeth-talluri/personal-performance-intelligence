@@ -1341,6 +1341,28 @@ button, .btn {
 .plan-priority.medium { color: var(--state-warning); }
 .plan-priority.low    { color: var(--text-muted); }
 
+/* ── REDUNDANCY REMOVAL — hide duplicate elements ───────────────────────── */
+/* Weekly plan totals — duplicates Today Command Card */
+.weekly-plan-totals { display: none !important; }
+
+/* Today's Session rows — date/workout/target in Command Card already */
+.today-redundant-rows { display: none !important; }
+
+/* Feasibility factor breakdown — not actionable at a glance */
+.feasibility-factors-detail { display: none !important; }
+
+/* Coaching stats panel — duplicates weekly plan totals */
+.coaching-stats-panel { display: none !important; }
+
+/* When coaching stats panel is hidden, make coaching text full width */
+.coaching-split {
+  display: block !important;
+}
+.coaching-split > div:first-child {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 /* ── TODAY'S SESSION CARD — dominant ───────────────────────────────────── */
 .card:has(h2) h2:first-child,
 .card > h2:first-child { /* scope only if needed */ }

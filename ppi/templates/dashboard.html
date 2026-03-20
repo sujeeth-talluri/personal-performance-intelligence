@@ -356,6 +356,7 @@
       </div>
 
       <div class="command-workout">{{ today_workout.workout }}</div>
+      {% if _cmd.session_type not in ('strength', 'active_recovery', 'rest') %}
       <div class="command-distance">
         {{ today_workout.distance_target }}
         {% if _cmd.pace %}
@@ -363,6 +364,7 @@
           {{ _cmd.pace }}
         {% endif %}
       </div>
+      {% endif %}
 
       <div class="command-metrics">
         <div class="command-metric">
@@ -426,7 +428,9 @@
           {% if _fs >= 85 %}Strong trajectory — fitness and volume both on target{% elif _fs >= 70 %}On track — address consistency to close the gap{% elif _fs >= 55 %}Achievable with focused effort over next 4 weeks{% elif _fs >= 40 %}Stretch goal — meaningful improvement still possible{% else %}Current gap is significant — consider adjusting target{% endif %}
         </div>
         {% if canonical_feasibility_factor_scores %}
-        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+        <div class="feasibility-factors-detail">
+          <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+        </div>
         {% endif %}
       </div>
       {% if canonical_honest_assessment %}
@@ -500,40 +504,44 @@
             </div>
           {% endfor %}
         </div>
-        {% if week_closed %}
-          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
-        {% endif %}
-        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
-        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
-        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
-        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
-        {% if progress_pct >= 100 %}
-          <span class="badge badge-success feedback-tag">💪 Strong Week</span>
-        {% elif progress_pct >= 70 %}
-          <span class="badge badge-success feedback-tag">🔥 On Track</span>
-        {% elif progress_pct >= 40 %}
-          <span class="badge badge-warning feedback-tag">Building</span>
-        {% elif week_closed %}
-          <span class="badge badge-neutral feedback-tag">Week Complete</span>
-        {% else %}
-          <span class="badge badge-neutral feedback-tag">In Progress</span>
-        {% endif %}
+        <div class="weekly-plan-totals">
+          {% if week_closed %}
+            <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
+          {% endif %}
+          <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
+          <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
+          <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
+          <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
+          {% if progress_pct >= 100 %}
+            <span class="badge badge-success feedback-tag">💪 Strong Week</span>
+          {% elif progress_pct >= 70 %}
+            <span class="badge badge-success feedback-tag">🔥 On Track</span>
+          {% elif progress_pct >= 40 %}
+            <span class="badge badge-warning feedback-tag">Building</span>
+          {% elif week_closed %}
+            <span class="badge badge-neutral feedback-tag">Week Complete</span>
+          {% else %}
+            <span class="badge badge-neutral feedback-tag">In Progress</span>
+          {% endif %}
+        </div>
       </div>
 
       <div class="card">
-        <h2>Today's Session</h2>
-        <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
-        <div class="metric-row">
-          <span>Workout</span>
-          <strong>{{ today_workout.workout }}
-            &nbsp;<span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}">{{ today_workout.status }}</span>
-          </strong>
+        <h2>Up Next</h2>
+        <div class="today-redundant-rows">
+          <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
+          <div class="metric-row">
+            <span>Workout</span>
+            <strong>{{ today_workout.workout }}
+              &nbsp;<span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}">{{ today_workout.status }}</span>
+            </strong>
+          </div>
+          {% if today_workout.completed %}
+            <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
+          {% else %}
+            <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+          {% endif %}
         </div>
-        {% if today_workout.completed %}
-          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
-        {% else %}
-          <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
-        {% endif %}
         <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 
         <div class="today-progress-bar">
@@ -619,34 +627,36 @@
           </div>
         </div>
 
-        <!-- Right: Computed action targets -->
-        <div class="coaching-action-box">
-          <div class="coaching-section-label action">This Week's Action</div>
-          <div class="coaching-action-item">
-            <span class="coaching-action-key">Weekly target</span>
-            <span class="coaching-action-val">{{ canonical_weekly_target_km|int }} km</span>
-          </div>
-          {% if canonical_long_run_km and canonical_long_run_km > 0 %}
-          <div class="coaching-action-item">
-            <span class="coaching-action-key">Long run</span>
-            <span class="coaching-action-val">{{ canonical_long_run_km|int }} km</span>
-          </div>
-          {% endif %}
-          <div class="coaching-action-item">
-            <span class="coaching-action-key">Completed</span>
-            <span class="coaching-action-val">{{ week_actual_km }} km</span>
-          </div>
-          <div class="coaching-action-item">
-            <span class="coaching-action-key">Remaining</span>
-            <span class="coaching-action-val {% if [canonical_weekly_target_km - week_actual_km, 0]|max == 0 %}on-track{% endif %}">
-              {{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km
-            </span>
-          </div>
-          <div class="coaching-action-item">
-            <span class="coaching-action-key">Progress</span>
-            <span class="coaching-action-val {% if progress_pct >= 100 %}on-track{% elif progress_pct < 30 %}behind{% endif %}">
-              {{ progress_pct|int }}%
-            </span>
+        <!-- Right: Computed action targets (hidden — duplicates weekly plan totals) -->
+        <div class="coaching-stats-panel">
+          <div class="coaching-action-box">
+            <div class="coaching-section-label action">This Week's Action</div>
+            <div class="coaching-action-item">
+              <span class="coaching-action-key">Weekly target</span>
+              <span class="coaching-action-val">{{ canonical_weekly_target_km|int }} km</span>
+            </div>
+            {% if canonical_long_run_km and canonical_long_run_km > 0 %}
+            <div class="coaching-action-item">
+              <span class="coaching-action-key">Long run</span>
+              <span class="coaching-action-val">{{ canonical_long_run_km|int }} km</span>
+            </div>
+            {% endif %}
+            <div class="coaching-action-item">
+              <span class="coaching-action-key">Completed</span>
+              <span class="coaching-action-val">{{ week_actual_km }} km</span>
+            </div>
+            <div class="coaching-action-item">
+              <span class="coaching-action-key">Remaining</span>
+              <span class="coaching-action-val {% if [canonical_weekly_target_km - week_actual_km, 0]|max == 0 %}on-track{% endif %}">
+                {{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km
+              </span>
+            </div>
+            <div class="coaching-action-item">
+              <span class="coaching-action-key">Progress</span>
+              <span class="coaching-action-val {% if progress_pct >= 100 %}on-track{% elif progress_pct < 30 %}behind{% endif %}">
+                {{ progress_pct|int }}%
+              </span>
+            </div>
           </div>
         </div>
 
@@ -982,19 +992,6 @@
                   <div class="vdot-track"><div class="vdot-fill fm" style="width:${pct_of(fmv,maxV)}%">${fmv ? fmv.toFixed(1) : ''}</div></div>
                 </div>
               </div>
-            </div>`;
-        }
-
-        if (risk === 'high' || risk === 'medium') {
-          const recs = risk === 'high'
-            ? ['Complete all scheduled long runs (24 km+)', 'Start race first 10 km at least 15 sec/km slower than goal pace', 'Follow the fueling plan strictly — gel every 45 min from km 10', 'Build weekly mileage to 50+ km before race week']
-            : ['Complete your long runs as planned', 'Run the first 5 km conservatively — resist early surge', 'Take gels on schedule — don\'t wait until you\'re hungry'];
-          leftHTML += `
-            <div class="wall-actions">
-              <div class="wall-actions-title">To reduce wall risk:</div>
-              <ul class="wall-actions-list">
-                ${recs.map(r => `<li>${r}</li>`).join('')}
-              </ul>
             </div>`;
         }
 
