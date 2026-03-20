@@ -1033,11 +1033,322 @@ button, .btn {
 .sync-age { color: var(--text-muted) !important; font-family: var(--font-mono) !important; font-size: 11px !important; }
 .sync-info { font-size: 11px !important; color: var(--text-muted) !important; }
 
+/* ═══════════════════════════════════════
+   TODAY'S COMMAND CARD
+   Primary coaching element — most prominent.
+   Every other card is secondary.
+   ═══════════════════════════════════════ */
+.command-card {
+  background: linear-gradient(135deg, #0b1f14 0%, #0d1b2a 55%, #131929 100%);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  box-shadow:
+    0 0 0 1px rgba(0,255,135,0.06) inset,
+    0 8px 40px rgba(0,0,0,0.5),
+    0 0 80px rgba(0,255,135,0.04);
+  position: relative;
+  overflow: hidden;
+}
+/* Top accent line */
+.command-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--green) 40%, transparent 100%);
+  opacity: 0.7;
+}
+
+.command-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.command-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--green);
+}
+
+.command-workout {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.command-distance {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--green);
+  margin-bottom: 20px;
+}
+.command-distance .cmd-dist-sep { color: var(--border-bright); margin: 0 8px; }
+
+.command-metrics {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.command-metric { display: flex; flex-direction: column; gap: 4px; }
+.command-metric-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.command-metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.command-metric-value.done { color: var(--state-success); }
+
+.command-motivator {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 14px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* Fatigue signal pill */
+.command-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.command-signal.fresh    { background: var(--surface-success-soft); color: var(--state-success); border: 1px solid var(--border-success); }
+.command-signal.balanced { background: rgba(96,165,250,0.08);       color: var(--state-info);    border: 1px solid rgba(96,165,250,0.25); }
+.command-signal.tired    { background: var(--surface-warning-soft); color: var(--state-warning); border: 1px solid var(--border-warning); }
+.command-signal.fatigued { background: var(--surface-danger-soft);  color: var(--text-on-danger);border: 1px solid var(--border-danger); }
+
+/* ═══════════════════════════════════════
+   EFFORT ZONE BADGES
+   Inline label on plan rows
+   ═══════════════════════════════════════ */
+.effort-zone {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-family: var(--font-mono);
+}
+.zone-easy     { background: rgba(96,165,250,0.12);  color: var(--state-info); }
+.zone-tempo    { background: rgba(245,158,11,0.12);  color: var(--state-warning); }
+.zone-long     { background: rgba(0,255,135,0.10);   color: var(--state-success); }
+.zone-hard     { background: rgba(255,71,87,0.12);   color: var(--state-danger); }
+.zone-recovery { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+.zone-strength { background: rgba(245,158,11,0.10);  color: var(--state-warning); }
+
+/* ═══════════════════════════════════════
+   UNIFIED BADGE SYSTEM  .badge + modifier
+   ═══════════════════════════════════════ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.badge-success { background: var(--green-dim);     color: var(--state-success); border: 1px solid var(--border-success); }
+.badge-warning { background: var(--amber-dim);     color: var(--state-warning); border: 1px solid var(--border-warning); }
+.badge-danger  { background: var(--red-dim);       color: var(--state-danger);  border: 1px solid var(--border-danger); }
+.badge-neutral { background: var(--surface-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+.badge-info    { background: var(--blue-dim);      color: var(--state-info);    border: 1px solid rgba(96,165,250,0.25); }
+
+/* Feedback tag — weekly progress emotional label */
+.feedback-tag { margin-top: 10px; }
+
+/* ═══════════════════════════════════════
+   COACHING INSIGHT + ACTION SPLIT
+   ═══════════════════════════════════════ */
+.coaching-split {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .coaching-split { grid-template-columns: 1fr; }
+}
+
+.coaching-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 10px;
+  color: var(--text-muted);
+}
+.coaching-section-label.action { color: var(--green); }
+
+.coaching-action-box {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+}
+.coaching-action-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.coaching-action-item:last-child { border-bottom: none; padding-bottom: 0; }
+.coaching-action-key {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.coaching-action-val {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+.coaching-action-val.on-track { color: var(--state-success); }
+.coaching-action-val.behind   { color: var(--state-danger); }
+
+/* ═══════════════════════════════════════
+   WALL RISK ACTION BLOCK
+   ═══════════════════════════════════════ */
+.wall-actions {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface-warning-soft);
+  border: 1px solid var(--border-warning);
+  border-radius: var(--radius-sm);
+}
+.wall-actions-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--state-warning);
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+.wall-actions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.wall-actions-list li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+  padding-left: 14px;
+  position: relative;
+}
+.wall-actions-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--state-warning);
+  font-size: 11px;
+}
+
+/* ═══════════════════════════════════════
+   FUELING PERSONALIZATION HEADER
+   ═══════════════════════════════════════ */
+.fueling-personal-header {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--green);
+  line-height: 1.5;
+}
+.fueling-personal-header strong { color: var(--text-primary); }
+
+/* ═══════════════════════════════════════
+   SECTION DIVIDERS (coach mode labels)
+   ═══════════════════════════════════════ */
+.coach-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin: 24px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.coach-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Feasibility interpretation text */
+.fs-interpretation {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  font-style: italic;
+}
+
+/* Weekly plan priority tag */
+.plan-priority {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+.plan-priority.high   { color: var(--state-danger); }
+.plan-priority.medium { color: var(--state-warning); }
+.plan-priority.low    { color: var(--text-muted); }
+
 /* Mobile */
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .dist-grid { grid-template-columns: repeat(2, 1fr); }
   .load-tiles { grid-template-columns: repeat(3, 1fr); }
+  .command-card { padding: 20px; }
+  .command-workout { font-size: 22px; }
+  .coaching-split { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .dist-grid  { grid-template-columns: repeat(2, 1fr); }

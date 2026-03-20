@@ -330,12 +330,101 @@
     </div>
     {% endif %}
 
+    <!-- ══ TODAY'S COMMAND CARD ══════════════════════════════════════════ -->
+    {# Resolve today's plan entry for pace guidance and session type #}
+    {% set _cmd = namespace(pace='', session_type='', planned_km=0) %}
+    {% for p in weekly_plan %}
+      {% if p.is_today %}
+        {% set _cmd.pace = p.pace_guidance or '' %}
+        {% set _cmd.session_type = p.session_type or '' %}
+        {% set _cmd.planned_km = p.planned_km %}
+      {% endif %}
+    {% endfor %}
+    {% set _tsb_cmd = intel.current_tsb %}
+    <div class="command-card">
+      <div class="command-header">
+        <span class="command-eyebrow">Today's Plan &nbsp;·&nbsp; {{ today_workout.date }}</span>
+        {% if _tsb_cmd > 10 %}
+          <span class="command-signal fresh">⚡ Feeling Fresh — push the pace</span>
+        {% elif _tsb_cmd > 0 %}
+          <span class="command-signal balanced">✓ Balanced Form — train as planned</span>
+        {% elif _tsb_cmd > -10 %}
+          <span class="command-signal tired">⚠ Slight Fatigue — keep effort easy</span>
+        {% else %}
+          <span class="command-signal fatigued">⛔ High Fatigue — prioritize recovery</span>
+        {% endif %}
+      </div>
+
+      <div class="command-workout">{{ today_workout.workout }}</div>
+      <div class="command-distance">
+        {{ today_workout.distance_target }}
+        {% if _cmd.pace %}
+          <span class="cmd-dist-sep">·</span>
+          {{ _cmd.pace }}
+        {% endif %}
+      </div>
+
+      <div class="command-metrics">
+        <div class="command-metric">
+          <span class="command-metric-label">Form (TSB)</span>
+          <span class="command-metric-value">
+            {{ '+' if _tsb_cmd >= 0 else '' }}{{ '%.1f'|format(_tsb_cmd) }}
+            &nbsp;<span class="sync-info">{% if _tsb_cmd > 5 %}fresh{% elif _tsb_cmd > -5 %}neutral{% else %}tired{% endif %}</span>
+          </span>
+        </div>
+
+        <div class="command-metric">
+          <span class="command-metric-label">Status</span>
+          <span class="command-metric-value">
+            {% if today_workout.completed %}
+              <span class="command-metric-value done">✓ {{ today_workout.distance_actual }}</span>
+            {% else %}
+              {{ today_workout.status }}
+            {% endif %}
+          </span>
+        </div>
+
+        <div class="command-metric">
+          <span class="command-metric-label">Tomorrow</span>
+          <span class="command-metric-value">{{ today_workout.tomorrow }}</span>
+        </div>
+
+        <div class="command-metric">
+          <span class="command-metric-label">Week Progress</span>
+          <span class="command-metric-value">
+            {{ week_actual_km }} / {{ canonical_weekly_target_km|int }} km
+            &nbsp;<span class="sync-info">{{ progress_pct|int }}%</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="command-motivator">
+        {% if today_workout.completed %}
+          ✓ Session complete. Rest up — you've done the work today.
+        {% elif progress_pct >= 100 %}
+          💪 You've already hit this week's target. Bonus session — keep it easy.
+        {% elif progress_pct >= 75 %}
+          🔥 On track this week. Every session compounds toward race day.
+        {% elif _tsb_cmd < -15 %}
+          Recovery is training. Easy effort today is the smartest move.
+        {% elif canonical_feasibility_score and canonical_feasibility_score >= 75 %}
+          You're dialing in — stay consistent and race day will take care of itself.
+        {% else %}
+          Each run is a deposit. Show up, execute the plan, trust the process.
+        {% endif %}
+      </div>
+    </div>
+
     <!-- ── Feasibility strip ────────────────────────────────────────────── -->
     {% if canonical_feasibility_score %}
     <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
       <div class="fs-out">
-        <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
+        <span class="fs-score">{{ canonical_feasibility_score|int }}<span class="sync-info">/100</span></span>
         <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
+        <div class="fs-interpretation">
+          {% set _fs = canonical_feasibility_score|int %}
+          {% if _fs >= 85 %}Strong trajectory — fitness and volume both on target{% elif _fs >= 70 %}On track — address consistency to close the gap{% elif _fs >= 55 %}Achievable with focused effort over next 4 weeks{% elif _fs >= 40 %}Stretch goal — meaningful improvement still possible{% else %}Current gap is significant — consider adjusting target{% endif %}
+        </div>
         {% if canonical_feasibility_factor_scores %}
         <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
         {% endif %}
@@ -358,7 +447,23 @@
           {% for p in weekly_plan %}
             <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
               <div class="plan-main">
-                <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
+                <div class="plan-meta">
+                  {{ p.day }} · {{ p.session }}
+                  {# Effort zone badge #}
+                  {% if p.session_type in ['easy', 'recovery'] %}
+                    <span class="effort-zone zone-easy">Z2</span>
+                  {% elif p.session_type == 'tempo' %}
+                    <span class="effort-zone zone-tempo">Z4</span>
+                  {% elif p.session_type in ['long', 'medium_long'] %}
+                    <span class="effort-zone zone-long">Long</span>
+                  {% elif p.session_type in ['interval', 'vo2max'] %}
+                    <span class="effort-zone zone-hard">Z5</span>
+                  {% elif p.session_type == 'active_recovery' %}
+                    <span class="effort-zone zone-recovery">Z1</span>
+                  {% elif p.session_type == 'strength' %}
+                    <span class="effort-zone zone-strength">Gym</span>
+                  {% endif %}
+                </div>
                 <div class="plan-distance" style="font-size:.78rem;margin-top:2px">
                   {% if p.session_type == 'strength' %}
                     💪 Gym
@@ -399,6 +504,17 @@
         <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
         <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
         <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
+        {% if progress_pct >= 100 %}
+          <span class="badge badge-success feedback-tag">💪 Strong Week</span>
+        {% elif progress_pct >= 70 %}
+          <span class="badge badge-success feedback-tag">🔥 On Track</span>
+        {% elif progress_pct >= 40 %}
+          <span class="badge badge-warning feedback-tag">Building</span>
+        {% elif week_closed %}
+          <span class="badge badge-neutral feedback-tag">Week Complete</span>
+        {% else %}
+          <span class="badge badge-neutral feedback-tag">In Progress</span>
+        {% endif %}
       </div>
 
       <div class="card">
@@ -456,31 +572,71 @@
       </div>
     </div>
 
-    <!-- ── 4. AI Coaching Insight (server-rendered) ─────────────────────── -->
+    <!-- ── 4. AI Coaching — Insight + Action split ──────────────────────── -->
     {% if canonical_coaching_message %}
+    {# Apply canonical number replacements to coaching message #}
+    {% set _msg = canonical_coaching_message %}
+    {% set _target = canonical_weekly_target_km|int|string %}
+    {% set _long = canonical_long_run_km|int|string %}
+    {% set _msg = _msg|replace("25-28km", _target + "km") %}
+    {% set _msg = _msg|replace("25km", _target + "km") %}
+    {% set _msg = _msg|replace("28km", _target + "km") %}
+    {% set _msg = _msg|replace("25 km", _target + "km") %}
+    {% set _msg = _msg|replace("26km", _target + "km") %}
+    {% set _msg = _msg|replace("27km", _target + "km") %}
+    {% set _msg = _msg|replace("29km", _target + "km") %}
+    {% set _msg = _msg|replace("30km", _target + "km") %}
+    {% set _msg = _msg|replace("18km long run", _long + "km long run") %}
+    {% set _msg = _msg|replace("20km long run", _long + "km long run") %}
+    {% set _msg = _msg|replace("21km long run", _long + "km long run") %}
     <div class="card" id="card-coaching">
-      <div class="card-title">AI Coaching Insight</div>
-      <div class="coaching-text">{% set _msg = canonical_coaching_message %}
-{% set _target = canonical_weekly_target_km|int|string %}
-{% set _long = canonical_long_run_km|int|string %}
-{% set _msg = _msg|replace("25-28km", _target + "km") %}
-{% set _msg = _msg|replace("25km", _target + "km") %}
-{% set _msg = _msg|replace("28km", _target + "km") %}
-{% set _msg = _msg|replace("25 km", _target + "km") %}
-{% set _msg = _msg|replace("26km", _target + "km") %}
-{% set _msg = _msg|replace("27km", _target + "km") %}
-{% set _msg = _msg|replace("29km", _target + "km") %}
-{% set _msg = _msg|replace("30km", _target + "km") %}
-{% set _msg = _msg|replace("18km long run", _long + "km long run") %}
-{% set _msg = _msg|replace("20km long run", _long + "km long run") %}
-{% set _msg = _msg|replace("21km long run", _long + "km long run") %}
-{{ _msg }}</div>
-      <div class="coaching-badge" style="margin-top:10px">
-        <span>🤖</span>
-        <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-text">This insight is generated by Claude AI, analyzing your last 16 weeks of Strava data, current fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
-        </span>
+      <div class="card-title">Coach Insight</div>
+      <div class="coaching-split">
+
+        <!-- Left: AI insight text -->
+        <div>
+          <div class="coaching-section-label">What the data says</div>
+          <div class="coaching-text">{{ _msg }}</div>
+          <div class="coaching-badge" style="margin-top:12px">
+            <span>🤖</span>
+            <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Generated by Claude AI using your last 16 weeks of Strava data, fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Right: Computed action targets -->
+        <div class="coaching-action-box">
+          <div class="coaching-section-label action">This Week's Action</div>
+          <div class="coaching-action-item">
+            <span class="coaching-action-key">Weekly target</span>
+            <span class="coaching-action-val">{{ canonical_weekly_target_km|int }} km</span>
+          </div>
+          {% if canonical_long_run_km and canonical_long_run_km > 0 %}
+          <div class="coaching-action-item">
+            <span class="coaching-action-key">Long run</span>
+            <span class="coaching-action-val">{{ canonical_long_run_km|int }} km</span>
+          </div>
+          {% endif %}
+          <div class="coaching-action-item">
+            <span class="coaching-action-key">Completed</span>
+            <span class="coaching-action-val">{{ week_actual_km }} km</span>
+          </div>
+          <div class="coaching-action-item">
+            <span class="coaching-action-key">Remaining</span>
+            <span class="coaching-action-val {% if [canonical_weekly_target_km - week_actual_km, 0]|max == 0 %}on-track{% endif %}">
+              {{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km
+            </span>
+          </div>
+          <div class="coaching-action-item">
+            <span class="coaching-action-key">Progress</span>
+            <span class="coaching-action-val {% if progress_pct >= 100 %}on-track{% elif progress_pct < 30 %}behind{% endif %}">
+              {{ progress_pct|int }}%
+            </span>
+          </div>
+        </div>
+
       </div>
     </div>
     {% endif %}
@@ -539,15 +695,21 @@
 <!-- ═══ INTELLIGENCE SECTIONS TEMPLATE ═════════════════════════════════ -->
 <!-- Rendered client-side from /api/dashboard JSON -->
 <template id="intel-template">
-  <!-- 1. RACE PREDICTIONS -->
-  <div class="card" id="card-predictions">
-    <div class="card-title">Race Predictions — All Distances</div>
-    <div class="dist-grid" id="dist-tiles"></div>
-    <div class="prediction-legend">
-      <span class="legend-title">Confidence:</span>
-      <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
-      <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
-      <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
+  <!-- 1. RACE PREDICTIONS — collapsed by default -->
+  <div class="collapsible-header" onclick="toggleSection('race-predictions')">
+    <div class="section-label">Race Predictions</div>
+    <button class="collapsible-toggle" id="btn-race-predictions">▼ Show</button>
+  </div>
+  <div class="collapsible-body collapsed" id="race-predictions">
+    <div class="card" id="card-predictions">
+      <div class="card-title">Race Predictions — All Distances</div>
+      <div class="dist-grid" id="dist-tiles"></div>
+      <div class="prediction-legend">
+        <span class="legend-title">Confidence:</span>
+        <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
+        <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
+        <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
+      </div>
     </div>
   </div>
 
@@ -567,14 +729,14 @@
               <span class="tooltip-wrap">FITNESS (CTL)<span class="tooltip-icon">?</span><span class="tooltip-text">Chronic Training Load — your 42-day fitness average. Higher = more fit. Builds slowly with consistent training. Target: 55–65 for sub-4 marathon.</span></span>
             </div>
             <div class="lt-val lt-blue" id="lt-ctl">—</div>
-            <div class="lt-sub">42-day load</div>
+            <div class="lt-sub" id="lt-ctl-sub">42-day load</div>
           </div>
           <div class="load-tile">
             <div class="lt-label">
               <span class="tooltip-wrap">FATIGUE (ATL)<span class="tooltip-icon">?</span><span class="tooltip-text">Acute Training Load — your 7-day fatigue average. Higher = more tired from recent training. Normal to be higher than CTL during hard weeks.</span></span>
             </div>
-            <div class="lt-val" id="lt-atl" style="color:var(--red)">—</div>
-            <div class="lt-sub">7-day load</div>
+            <div class="lt-val lt-red" id="lt-atl">—</div>
+            <div class="lt-sub" id="lt-atl-sub">7-day load</div>
           </div>
           <div class="load-tile">
             <div class="lt-label">
@@ -799,6 +961,19 @@
             </div>`;
         }
 
+        if (risk === 'high' || risk === 'medium') {
+          const recs = risk === 'high'
+            ? ['Complete all scheduled long runs (24 km+)', 'Start race first 10 km at least 15 sec/km slower than goal pace', 'Follow the fueling plan strictly — gel every 45 min from km 10', 'Build weekly mileage to 50+ km before race week']
+            : ['Complete your long runs as planned', 'Run the first 5 km conservatively — resist early surge', 'Take gels on schedule — don\'t wait until you\'re hungry'];
+          leftHTML += `
+            <div class="wall-actions">
+              <div class="wall-actions-title">To reduce wall risk:</div>
+              <ul class="wall-actions-list">
+                ${recs.map(r => `<li>${r}</li>`).join('')}
+              </ul>
+            </div>`;
+        }
+
         // ── Right column ────────────────────────────────────────────────
         const wm = window._wallMath || {};
         let wallAdjHTML = '';
@@ -929,6 +1104,20 @@
     // ── 4. Fueling Schedule ──────────────────────────────────────────────
     const fueling = wall && wall.fueling_plan;
     if (fueling) {
+      // Personalized header tied to projected finish time
+      const cardFuel = el('card-fuel');
+      if (cardFuel) {
+        const _wm = window._wallMath || {};
+        const projTime = (_wm.adjustedDisplay && _wm.adjustedDisplay !== '--')
+          ? _wm.adjustedDisplay
+          : (wall.current_predicted_fm_display || '—');
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'fueling-personal-header';
+        headerDiv.innerHTML = `Based on your <strong>${projTime}</strong> projected marathon — you need <strong>~${fueling.approx_carbs_per_hour_actual_g}g carbs/hr</strong> → <strong>${fueling.gel_count} gels</strong> recommended`;
+        const titleEl = cardFuel.querySelector('.card-title');
+        if (titleEl) titleEl.after(headerDiv);
+      }
+
       const gelTL = el('gel-timeline');
       if (gelTL && fueling.gel_schedule) {
         fueling.gel_schedule.forEach((g, i) => {
@@ -1010,8 +1199,14 @@
     const ltTsb   = el('lt-tsb');
     const ltTrend = el('lt-trend');
 
-    if (ltCtl)  ltCtl.textContent = (load.ctl || tr.ctl || 0).toFixed(1);
-    if (ltAtl)  ltAtl.textContent = (load.atl || tr.atl || 0).toFixed(1);
+    const ctlVal = (load.ctl || tr.ctl || 0);
+    const atlVal = (load.atl || tr.atl || 0);
+    if (ltCtl)  ltCtl.textContent = ctlVal.toFixed(1);
+    if (ltAtl)  ltAtl.textContent = atlVal.toFixed(1);
+    const ctlSub = el('lt-ctl-sub');
+    if (ctlSub) ctlSub.textContent = ctlVal >= 55 ? 'High fitness' : ctlVal >= 40 ? 'Good base' : ctlVal >= 25 ? 'Building' : 'Low base';
+    const atlSub = el('lt-atl-sub');
+    if (atlSub) atlSub.textContent = atlVal >= 60 ? 'Very high stress' : atlVal >= 45 ? 'Heavy load' : atlVal >= 30 ? 'Moderate load' : 'Low load';
     const tsbVal = load.tsb != null ? load.tsb : (tr.tsb || 0);
     if (ltTsb) {
       ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
