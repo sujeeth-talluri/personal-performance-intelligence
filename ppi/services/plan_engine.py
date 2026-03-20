@@ -264,11 +264,16 @@ def apply_adaptive_plan(plan_items, today_local, weekly_goal):
     moderate_fatigue = bool(weekly_goal.get("moderate_fatigue"))
     atl_spike = bool(weekly_goal.get("atl_spike"))
     allow_progression = bool(weekly_goal.get("allow_progression"))
-    missed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "missed"]
+    missed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] in {"missed", "different_activity", "skipped"}]
     partial_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and item["status"] == "partial"]
-    overperformed_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] < today_local and (item.get("extra_km") or 0.0) >= 1.0]
+    overperformed_runs = [
+        item for item in plan_items
+        if item["workout_type"] == "RUN"
+        and item["date"] < today_local
+        and (item["status"] == "overdone" or (item.get("extra_km") or 0.0) >= 1.0)
+    ]
     completed_run_km = sum(item["actual_km"] or 0.0 for item in plan_items if item["workout_type"] == "RUN" and item["actual_km"])
-    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] == "planned"]
+    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] in {"planned", "today"}]
     if not future_runs:
         return plan_items
 
@@ -348,18 +353,27 @@ def apply_adaptive_plan(plan_items, today_local, weekly_goal):
     if allow_progression and phase not in {"taper", "rebuild", "recovery"} and not missed_runs and not partial_runs:
         next_key = next((item for item in future_runs if item["session"] in {"Long Run", "Marathon Pace Run", "Aerobic Run"}), None)
         if next_key:
-            increase = 1.0 if next_key["session"] == "Long Run" else 0.5
-            next_key["planned_km"] = round(min(max_safe_run if next_key["session"] == "Long Run" else next_key["planned_km"] + increase, (next_key["planned_km"] or 0.0) + increase), 1)
+            base_km = float(next_key["planned_km"] or 0.0)
+            increase = 0.5 if next_key["session"] == "Long Run" else 0.3
+            next_key["planned_km"] = round(
+                min(
+                    max_safe_run if next_key["session"] == "Long Run" else base_km + increase,
+                    base_km + increase,
+                ),
+                1,
+            )
             next_key["planned"] = f"{int(round(next_key['planned_km']))} km"
             next_key["adaptive_note"] = "Small progression allowed because fatigue is low and consistency is good."
 
-    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] == "planned"]
+    future_runs = [item for item in plan_items if item["workout_type"] == "RUN" and item["date"] >= today_local and item["status"] in {"planned", "today"}]
     target_remaining = max(0.0, weekly_goal_km - completed_run_km)
     future_total = sum(item["planned_km"] or 0.0 for item in future_runs)
     if future_runs and future_total > 0:
-        scale = min(1.15, max(0.8, target_remaining / future_total if target_remaining > 0 else 0.8))
+        scale = min(1.05, max(0.85, target_remaining / future_total if target_remaining > 0 else 0.85))
         if phase == "taper":
             scale = min(scale, 1.0)
+        if allow_progression:
+            scale = min(scale, 1.03)
         for item in future_runs:
             base = float(item["planned_km"] or 0.0)
             if item["session"] == "Long Run":
@@ -381,7 +395,7 @@ def apply_adaptive_plan(plan_items, today_local, weekly_goal):
 
 def training_consistency_score(logs):
     planned_runs = [log for log in logs if getattr(log, "workout_type", None) == "RUN"]
-    completed_runs = [log for log in planned_runs if getattr(log, "status", None) in {"completed", "moved"}]
+    completed_runs = [log for log in planned_runs if getattr(log, "status", None) in {"completed", "moved", "overdone"}]
     if not planned_runs:
         return 0
     return int(round((len(completed_runs) / len(planned_runs)) * 100))

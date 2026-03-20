@@ -1,8 +1,9 @@
 import json
+import copy
 import re
 import secrets
 import smtplib
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -55,6 +56,26 @@ from .services.prediction_engine import vdot_from_race, vdot_to_race_time_second
 from .services.strava_service import sync_strava_data
 from .services.data_quality import DataQualityReport
 from .services.ai_coach_engine import AICoachEngine
+from .services.training_state_engine import (
+    CROSS_TRAIN,
+    DIFFERENT_ACTIVITY,
+    DONE,
+    MISSED,
+    OVERDONE,
+    PARTIAL,
+    PLANNED,
+    REST,
+    RUN,
+    SKIPPED,
+    STRENGTH,
+    TODAY,
+    WALK,
+    aggregate_actual_activities,
+    build_week_plan_state,
+    build_weekly_plan_snapshot,
+    compute_week_metrics,
+    today_session_from_plan,
+)
 from .models import Activity, CoachingPlan, Goal, Metric, RunnerProfile, WorkoutLog
 from .extensions import db
 
@@ -112,6 +133,38 @@ def _save_coaching_freeze_state(plan_row, freeze_state):
     plan_row.context_json = json.dumps(context, default=str)
     db.session.add(plan_row)
     db.session.commit()
+
+
+def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
+    freeze_state = _load_coaching_freeze_state(plan_row)
+    snapshots = freeze_state.setdefault("weekly_plan_snapshots", {})
+    key = week_start.isoformat()
+    snapshot = snapshots.get(key)
+    if not snapshot:
+        snapshot = build_weekly_plan_snapshot(week_start, daily_plan)
+        snapshots[key] = snapshot
+        _save_coaching_freeze_state(plan_row, freeze_state)
+    return snapshot
+
+
+def _persist_snapshot_workout_logs(user_id, snapshot):
+    for day_key, planned in snapshot.get("days", {}).items():
+        day_date = date.fromisoformat(day_key)
+        if WorkoutLog.query.filter_by(user_id=user_id, workout_date=day_date).first():
+            continue
+        upsert_workout_log(
+            user_id=user_id,
+            workout_date=day_date,
+            workout_type=planned["workout_type"],
+            session_name=planned["session_name"],
+            target_distance_km=planned["planned_distance_km"] if planned["planned_distance_km"] > 0 else None,
+            status="planned",
+            actual_distance_km=None,
+            notes=planned.get("notes", ""),
+            source="engine",
+            auto_commit=False,
+        )
+    commit_all()
 
 def _parse_iso_datetime(value):
     if not value:
@@ -1057,27 +1110,15 @@ def dashboard():
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
 
-    # Compute weekly target accounting for overruns on completed days
+    # Compute weekly target from the frozen weekly snapshot only.
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-
-    # Sum of all planned running km (AI plan total) — interim value, finalised after week_actual_km
-    planned_total = sum(
-        float(_daily_plan.get(day, {}).get('km', 0))
-        for day in _WEEK_DAYS
-        if _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
-        and float(_daily_plan.get(day, {}).get('km', 0)) > 0
-    )
     _plan_row = _get_coaching_plan_row(user.id)
-    _freeze_state = _load_coaching_freeze_state(_plan_row)
-    _weekly_targets = _freeze_state.setdefault("weekly_targets", {})
-    _freeze_key = week_start.isoformat()
-    if _freeze_key in _weekly_targets:
-        canonical_weekly_target_km = round(float(_weekly_targets[_freeze_key] or planned_total or 0.0), 1)
-    else:
-        canonical_weekly_target_km = round(planned_total, 1)
-        _weekly_targets[_freeze_key] = canonical_weekly_target_km
-        _save_coaching_freeze_state(_plan_row, _freeze_state)
-    current_app.logger.debug(f"[weekly_target] planned_total={planned_total:.1f} frozen={canonical_weekly_target_km:.1f}")
+    weekly_snapshot = _load_or_create_weekly_snapshot(_plan_row, week_start, _daily_plan)
+    _persist_snapshot_workout_logs(user.id, weekly_snapshot)
+    canonical_weekly_target_km = round(float(weekly_snapshot.get("weekly_target_km") or 0.0), 1)
+    current_app.logger.debug(
+        f"[weekly_target] frozen_snapshot week={week_start.isoformat()} target={canonical_weekly_target_km:.1f}"
+    )
 
     # Post-process coaching message — replace stale km targets + fix AI grammar
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
@@ -1285,134 +1326,111 @@ def dashboard():
     def _run_acts(acts):
         return [a for a in acts if (a.activity_type or "").lower() in _RUN_TYPES]
 
-    def _strength_acts(acts):
-        return [a for a in acts if (a.activity_type or "").lower() in _STRENGTH_TYPES]
-
-    def _cross_acts(acts):
-        return [a for a in acts if (a.activity_type or "").lower() in _CROSS_TRAINING_TYPES]
-
-    week_actual_km = round(
-        sum(a.distance_km or 0 for a in week_activities if (a.activity_type or "").lower() in _RUN_TYPES),
-        1,
-    )
-
-    # Finalise weekly target: max(planned_total, actual_so_far + remaining_planned)
-    # This handles overruns — if runner did more than planned on past days, target rises
-    _remaining_planned_km = max(0.0, round(canonical_weekly_target_km - week_actual_km, 1))
-
-    current_app.logger.debug(
-        f"[weekly_target] actual={week_actual_km} remaining={_remaining_planned_km:.1f} "
-        f"planned_total={planned_total:.1f} final={canonical_weekly_target_km}"
-    )
-
-    # ── Build weekly plan from AI daily_plan ──────────────────────────────────
-    _SESSION_NAMES = {
-        "easy":            "Easy Run",
-        "long":            "Long Run",
-        "tempo":           "Tempo Run",
-        "recovery":        "Recovery Run",
-        "active_recovery": "Active Recovery",
-        "intervals":       "Interval Session",
-        "marathon_pace":   "Marathon Pace Run",
+    logs_by_date = {
+        log.workout_date.isoformat(): log
+        for log in WorkoutLog.query.filter(
+            WorkoutLog.user_id == user.id,
+            WorkoutLog.workout_date >= week_start,
+            WorkoutLog.workout_date <= week_end,
+        ).all()
     }
-    _DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    for day_key, frozen_day in weekly_snapshot.get("days", {}).items():
+        if day_key >= today_local.isoformat():
+            continue
+        frozen_log = logs_by_date.get(day_key)
+        if not frozen_log:
+            continue
+        frozen_day["workout_type"] = frozen_log.workout_type or frozen_day["workout_type"]
+        frozen_day["session_name"] = frozen_log.session_name or frozen_day["session_name"]
+        frozen_day["planned_distance_km"] = round(float(frozen_log.target_distance_km or frozen_day["planned_distance_km"] or 0.0), 1)
 
+    actual_by_date = aggregate_actual_activities(
+        week_activities,
+        lambda dt_value: _activity_local_date(dt_value, user_tz),
+    )
+    week_plan_state = build_week_plan_state(weekly_snapshot, actual_by_date, today_local)
+    week_metrics = compute_week_metrics(week_plan_state, actual_by_date)
+    week_actual_km = week_metrics["actual_km"]
+
+    _state_to_status = {
+        DONE: "completed",
+        OVERDONE: "overdone",
+        PARTIAL: "partial",
+        MISSED: "missed",
+        SKIPPED: "skipped",
+        DIFFERENT_ACTIVITY: "different_activity",
+        PLANNED: "planned",
+        TODAY: "today",
+    }
     weekly_plan = []
-    for i, day_name in enumerate(_DAY_NAMES):
-        day_date     = week_start + timedelta(days=i)
-        day_info     = _daily_plan.get(day_name, {"type": "rest", "km": 0, "notes": ""})
-        session_type = day_info.get("type", "rest")
-        planned_km   = float(day_info.get("km", 0) or 0)
-        is_today     = day_date == today_local
-        is_past      = day_date < today_local
-        acts          = _day_acts(day_date)
-        runs          = _run_acts(acts)
-        strengths     = _strength_acts(acts)
-        crosses       = _cross_acts(acts)
-
-        if session_type == "strength":
-            ai_workout_type = "STRENGTH"
-            ai_session_name = "Strength & Conditioning"
-        elif session_type == "rest":
-            ai_workout_type = "REST"
-            ai_session_name = "Rest Day"
-        else:
-            ai_workout_type = "RUN"
-            ai_session_name = _SESSION_NAMES.get(session_type, session_type.replace("_", " ").title())
-
-        frozen_log = WorkoutLog.query.filter_by(user_id=user.id, workout_date=day_date).first()
-        if is_past and frozen_log:
-            workout_type = frozen_log.workout_type
-            session_name = frozen_log.session_name
-            planned_km = float(frozen_log.target_distance_km or 0.0)
-        else:
-            workout_type = ai_workout_type
-            session_name = ai_session_name
-
-        # Status + actual_km logic per workout type
-        if workout_type == "RUN":
-            actual_km = round(sum(a.distance_km or 0 for a in runs), 1)
-            if runs:
-                done   = True
-                status = "completed" if actual_km >= planned_km * 0.80 else "partial"
-            elif is_past:
-                done, status = False, "missed"
-            elif is_today:
-                done, status = False, "today"
-            else:
-                done, status = False, "planned"
-
-        elif workout_type == "STRENGTH":
-            actual_km = 0.0
-            if strengths:
-                done, status = True, "completed"
-            elif crosses:
-                done, status = True, "completed"  # cross-training counts on strength day
-            elif is_past:
-                done, status = False, "missed"
-            elif is_today:
-                done, status = False, "today"
-            else:
-                done, status = False, "planned"
-
-        else:  # REST
-            actual_km = round(sum(a.distance_km or 0 for a in acts), 1)
-            done      = True
-            status    = "bonus" if acts else "rest"
-
+    for item in week_plan_state:
+        day_date = date.fromisoformat(item["date"])
         weekly_plan.append({
-            "day":           day_name.capitalize(),
-            "day_date":      day_date,
-            "workout_type":  workout_type,
-            "session_type":  session_type,
-            "session":       session_name,
-            "planned_km":    planned_km,
-            "actual_km":     actual_km,
-            "done":          done,
-            "status":        status,
-            "is_today":      is_today,
-            "pace_guidance": day_info.get("pace_guidance", ""),
-            "notes":         day_info.get("notes", ""),
+            "day": item["day_name"].capitalize(),
+            "day_date": day_date,
+            "date": day_date,
+            "workout_type": item["workout_type"],
+            "session_type": item["session_type"],
+            "session": item["session_name"],
+            "planned_km": item["planned_distance_km"],
+            "actual_km": item["actual_run_km"],
+            "done": item["state"] == DONE,
+            "status": _state_to_status[item["state"]],
+            "state": item["state"],
+            "is_today": item["state"] == TODAY,
+            "pace_guidance": item.get("pace_guidance", ""),
+            "notes": item.get("notes", ""),
+            "actual_strength_count": item["actual_strength_count"],
+            "actual_walk_km": item["actual_walk_km"],
+            "actual_cross_train_km": item["actual_cross_train_km"],
         })
+        persisted_status = "planned" if item["state"] in {PLANNED, TODAY} else _state_to_status[item["state"]]
         upsert_workout_log(
             user_id=user.id,
             workout_date=day_date,
-            workout_type=workout_type,
-            session_name=session_name,
-            target_distance_km=planned_km if planned_km > 0 else None,
-            status=status if status not in {"today", "planned", "rest", "bonus"} else "planned",
-            actual_distance_km=actual_km if actual_km > 0 else None,
-            notes=day_info.get("notes", ""),
+            workout_type=item["workout_type"],
+            session_name=item["session_name"],
+            target_distance_km=item["planned_distance_km"] if item["planned_distance_km"] > 0 else None,
+            status=persisted_status,
+            actual_distance_km=item["actual_run_km"] if item["actual_run_km"] > 0 else None,
+            notes=item.get("notes", ""),
             source="engine",
             auto_commit=False,
         )
     commit_all()
 
-    # ── Derived weekly stats ──────────────────────────────────────────────────
-    mileage_plan_runs        = [w for w in weekly_plan if w["workout_type"] == "RUN"]
-    weekly_plan_goal_km      = round(sum(w["planned_km"] for w in mileage_plan_runs), 1)
-    weekly_plan_completed_km = round(sum(w["actual_km"] for w in mileage_plan_runs), 1)
-    weekly_plan_remaining_km = round(max(0.0, weekly_plan_goal_km - weekly_plan_completed_km), 1)
+    weekly_plan_goal_km = week_metrics["planned_km"]
+    weekly_plan_completed_km = week_metrics["actual_km"]
+    weekly_plan_remaining_km = week_metrics["remaining_km"]
+    weekly_longest_run_km = week_metrics["longest_run_km"]
+    weekly_planned_long_run_km = week_metrics["planned_long_run_km"]
+    weekly_long_run_goal_met = week_metrics["long_run_goal_met"]
+    weekly_quality_goal_met = week_metrics["quality_goal_met"]
+    weekly_strength_goal_met = week_metrics["strength_goal_met"]
+
+    adaptive_weekly_goal = {
+        "weekly_goal_km": canonical_weekly_target_km,
+        "phase": str(intel.get("goal", {}).get("phase", "") or canonical_phase_label).lower(),
+        "rebuild_mode": bool(intel.get("goal", {}).get("rebuild_mode")),
+        "max_safe_run": max(10.0, canonical_weekly_target_km * 0.35),
+        "long_run_failed_recent": not weekly_long_run_goal_met and weekly_planned_long_run_km >= 16.0 and today_local.weekday() >= 5,
+        "high_fatigue": any(
+            item["workout_type"] == "RUN"
+            and item["date"] < today_local
+            and item["status"] == "overdone"
+            and item["actual_km"] >= max(10.0, item["planned_km"] * 1.5 if item["planned_km"] else 10.0)
+            for item in weekly_plan
+        ),
+        "moderate_fatigue": any(
+            item["workout_type"] == "RUN"
+            and item["date"] < today_local
+            and item["status"] in {"overdone", "partial"}
+            for item in weekly_plan
+        ),
+        "atl_spike": bool(intel.get("fitness_trend", {}).get("tsb", 0) < -10),
+        "allow_progression": bool(intel.get("fitness_trend", {}).get("tsb", 0) > 5),
+    }
+    weekly_plan = _apply_adaptive_plan(copy.deepcopy(weekly_plan), today_local, adaptive_weekly_goal)
     weekly_plan_completion_pct = (
         min(100, int(round(weekly_plan_completed_km / max(1.0, weekly_plan_goal_km) * 100)))
         if weekly_plan_goal_km > 0 else 0
@@ -1426,27 +1444,27 @@ def dashboard():
         else "Goal not achieved" if week_closed
         else "In progress"
     )
-    weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
-    progress_pct    = min(100, round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100, 1))
+    weekly_extra_km = 0.0
+    progress_pct = min(100, round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100, 1))
 
-    # ── Weekly signal ─────────────────────────────────────────────────────────
+    # ?? Weekly signal ?????????????????????????????????????????????????????????
     if progress_pct >= 100:
-        weekly_signal       = "Strong consistency 💪"
+        weekly_signal       = "Strong consistency ??"
         weekly_signal_color = "green"
     elif progress_pct >= 70:
-        weekly_signal       = "On track ⚡"
+        weekly_signal       = "On track ?"
         weekly_signal_color = "green"
     elif week_closed and progress_pct < 50:
-        weekly_signal       = "Tough week — fresh start 🔄"
+        weekly_signal       = "Tough week ? fresh start ??"
         weekly_signal_color = "muted"
     elif progress_pct >= 40:
-        weekly_signal       = "Building ↗"
+        weekly_signal       = "Building ?"
         weekly_signal_color = "green"
     else:
-        weekly_signal       = "Consistency slipping ⚠️"
+        weekly_signal       = "Consistency slipping ??"
         weekly_signal_color = "amber"
 
-    # ── Upcoming long runs — with formatted display dates ────────────────────
+    # ?? Upcoming long runs ? with formatted display dates ????????????????????
     _today_str = today_local.strftime("%Y-%m-%d")
     upcoming_long_runs = [
         w for w in canonical_long_run_progression
@@ -1459,7 +1477,6 @@ def dashboard():
         except Exception:
             _w["week_date_display"] = _w.get("week_date", "")
 
-    # Format longest recent run date for display
     _lr_date_raw = intel.get("long_run", {}).get("longest_date")
     if _lr_date_raw:
         try:
@@ -1470,79 +1487,72 @@ def dashboard():
     else:
         longest_date_display = None
 
-    # ── Today's workout card (BUG 3 FIX: field names match dashboard.html template) ──
-    today_item    = next((w for w in weekly_plan if w["is_today"]), None)
+    # ?? Today's workout card ? single source is weekly_plan[today] ???????????
+    today_plan_state = today_session_from_plan(week_plan_state, today_local)
+    today_item = next((w for w in weekly_plan if w["day_date"] == today_local), None)
     tomorrow_item = weekly_plan[today_local.weekday() + 1] if today_local.weekday() < 6 else None
 
-    # ISSUE 3: Build tomorrow display with date
     if tomorrow_item:
         _tmrw_date = today_local + timedelta(days=1)
         _tmrw_session = tomorrow_item["session"]
         _tmrw_km = tomorrow_item.get("planned_km", 0)
         _tmrw_type = tomorrow_item.get("session_type", "")
         _tmrw_km_str = (
-            f" · {int(_tmrw_km)}km" if _tmrw_km > 0 and _tmrw_type not in ("strength", "rest", "active_recovery")
+            f" ? {int(_tmrw_km)}km" if _tmrw_km > 0 and _tmrw_type not in ("strength", "rest", "active_recovery")
             else ""
         )
-        tomorrow_display = f"{_tmrw_date.strftime('%a %d %b')} · {_tmrw_session}{_tmrw_km_str}"
+        tomorrow_display = f"{_tmrw_date.strftime('%a %d %b')} ? {_tmrw_session}{_tmrw_km_str}"
     else:
         tomorrow_display = "Rest Day"
 
-    # Upgrade rest → active_recovery: no day should be complete rest
-    if today_item and today_item.get("session_type") in ("rest", None, ""):
-        today_item = dict(today_item)  # don't mutate the weekly_plan list
-        today_item["session_type"] = "active_recovery"
-        today_item["session"]      = "Active Recovery"
-        today_item["workout_type"] = "RUN"
-        today_item["planned_km"]   = today_item["planned_km"] or 5.0
-        today_item["notes"]        = today_item.get("notes") or "Active recovery — easy 5km jog or 40min walk"
-
     def _fmt_km(km):
-        return f"{km} km" if km else "—"
+        return f"{km} km" if km else "?"
 
     _status_label = {
         "completed": "Completed",
-        "missed":    "Missed",
-        "today":     "Planned",
-        "planned":   "Planned",
-        "rest":      "Rest",
+        "overdone": "Overdone",
+        "partial": "Partial",
+        "missed": "Missed",
+        "skipped": "Skipped",
+        "different_activity": "Different Activity",
+        "today": "Planned",
+        "planned": "Planned",
+        "rest": "Rest",
     }
     today_workout = {
-        # Fields the template actually uses
         "date":            today_local.strftime("%A, %d %b"),
-        "workout":         today_item["session"]      if today_item else "Rest Day",
-        "workout_type":    today_item["workout_type"] if today_item else "REST",
+        "workout":         today_item["session"] if today_item else (today_plan_state["session_name"] if today_plan_state else "Rest Day"),
+        "workout_type":    today_item["workout_type"] if today_item else (today_plan_state["workout_type"] if today_plan_state else "REST"),
         "status":          _status_label.get(today_item["status"], "Planned") if today_item else "Rest",
-        "completed":       today_item["done"]         if today_item else False,
-        "distance_actual": _fmt_km(today_item["actual_km"])  if today_item else "—",
+        "completed":       today_item["done"] if today_item else False,
+        "distance_actual": _fmt_km(today_item["actual_km"]) if today_item else "?",
         "distance_target": (
-            "Gym — strength session"
+            "Gym ? strength session"
             if today_item and today_item.get("session_type") == "strength"
-            else _fmt_km(today_item["planned_km"]) if today_item else "—"
+            else _fmt_km(today_item["planned_km"]) if today_item else "?"
         ),
         "tomorrow":        tomorrow_display,
-        # Extra fields used elsewhere (show_today_plan, pace card)
-        "session":         today_item["session"]      if today_item else "Rest Day",
-        "planned_km":      today_item["planned_km"]   if today_item else 0,
-        "actual_km":       today_item["actual_km"]    if today_item else 0,
+        "session":         today_item["session"] if today_item else "Rest Day",
+        "planned_km":      today_item["planned_km"] if today_item else 0,
+        "actual_km":       today_item["actual_km"] if today_item else 0,
         "pace_guidance":   today_item["pace_guidance"] if today_item else "",
-        "notes":           today_item["notes"]        if today_item else "",
+        "notes":           today_item["notes"] if today_item else "",
     }
 
     consistency_score = _training_consistency_score(user.id, today_local)
 
-    # ── Recent Activities (all types) ────────────────────────────────────────
+    # ?? Recent Activities (all types) ????????????????????????????????????????
     _TYPE_ICONS = {
-        "run": "🏃", "trail run": "🏃", "trail_run": "🏃", "track": "🏃",
-        "virtualrun": "🏃", "treadmill": "🏃",
-        "strength": "💪", "weight_training": "💪", "strength_training": "💪",
-        "crossfit": "💪", "core": "💪", "workout": "💪", "flexibility": "🧘",
-        "yoga": "🧘", "pilates": "🧘",
-        "walk": "🚶", "hike": "🥾",
-        "ride": "🚴", "virtualride": "🚴", "cycling": "🚴",
-        "swim": "🏊", "swimming": "🏊",
-        "rowing": "🚣", "elliptical": "⚡", "stairstepper": "⚡",
-        "hiit": "🔥", "aerobics": "🔥",
+        "run": "??", "trail run": "??", "trail_run": "??", "track": "??",
+        "virtualrun": "??", "treadmill": "??",
+        "strength": "??", "weight_training": "??", "strength_training": "??",
+        "crossfit": "??", "core": "??", "workout": "??", "flexibility": "??",
+        "yoga": "??", "pilates": "??",
+        "walk": "??", "hike": "??",
+        "ride": "??", "virtualride": "??", "cycling": "??",
+        "swim": "??", "swimming": "??",
+        "rowing": "??", "elliptical": "?", "stairstepper": "?",
+        "hiit": "??", "aerobics": "??",
     }
 
     def _fmt_pace(moving_time, distance_km):
@@ -1572,7 +1582,7 @@ def dashboard():
         recent_activities.append({
             "date":        _dt,
             "type":        _a.activity_type or "unknown",
-            "icon":        _TYPE_ICONS.get(_typ, "⚡"),
+            "icon":        _TYPE_ICONS.get(_typ, "?"),
             "distance_km": round(_a.distance_km or 0, 1),
             "show_distance": bool((_a.distance_km or 0) > 0),
             "pace":        _fmt_pace(_a.moving_time, _a.distance_km),
@@ -1585,8 +1595,8 @@ def dashboard():
             "is_recovery": _typ in _RECOVERY_TYPES,
         })
 
-    runs = recent_runs(user.id, limit=5, user_timezone=user_tz)  # kept for backwards compat
-    weekly_summary   = weekly_training_summary(user.id)
+    runs = recent_runs(user.id, limit=5, user_timezone=user_tz)
+    weekly_summary = weekly_training_summary(user.id)
     weekly_plan_note = (
         "If you do both gym and a run on a strength day, the gym session counts as completed"
         " and the run counts toward weekly mileage."
@@ -1616,6 +1626,11 @@ def dashboard():
         weekly_status=weekly_status,
         weekly_plan_note=weekly_plan_note,
         week_closed=week_closed,
+        weekly_longest_run_km=weekly_longest_run_km,
+        weekly_planned_long_run_km=weekly_planned_long_run_km,
+        weekly_long_run_goal_met=weekly_long_run_goal_met,
+        weekly_quality_goal_met=weekly_quality_goal_met,
+        weekly_strength_goal_met=weekly_strength_goal_met,
         recent_activities=recent_activities,
         runs=runs,
         sync_info=sync_info,
@@ -1624,7 +1639,6 @@ def dashboard():
         banner=dq_report["banner"],
         show_banner=dq_report["show_banner"],
         dq=dq_report,
-        # ── AI Coach canonical values ─────────────────────────────────────
         canonical_phase_label=canonical_phase_label,
         canonical_weekly_target_km=canonical_weekly_target_km,
         canonical_long_run_km=canonical_long_run_km,
@@ -1662,7 +1676,6 @@ def dashboard():
         weekly_signal=weekly_signal,
         weekly_signal_color=weekly_signal_color,
     )
-
 
 # ---------------------------------------------------------------------------
 # Coach intro — conversational AI onboarding (between /onboarding and /)

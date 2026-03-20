@@ -1,9 +1,23 @@
+import json
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from ppi.services.load_engine import classify_run_intensity, load_model, running_stress_score
 from ppi.services.plan_engine import apply_adaptive_plan, build_weekly_plan_template, classify_run_completion, training_consistency_score
 from ppi.services.prediction_engine import marathon_prediction_seconds
+from ppi.services.training_state_engine import (
+    DIFFERENT_ACTIVITY,
+    DONE,
+    MISSED,
+    OVERDONE,
+    RUN,
+    SKIPPED,
+    STRENGTH,
+    aggregate_actual_activities,
+    build_week_plan_state,
+    build_weekly_plan_snapshot,
+    compute_week_metrics,
+)
 
 
 # ── DataQualityReport helpers ────────────────────────────────────────────────
@@ -45,6 +59,13 @@ class DummyLog:
     def __init__(self, workout_type, status):
         self.workout_type = workout_type
         self.status = status
+
+
+class DummyActivity:
+    def __init__(self, activity_date, activity_type, distance_km=0.0):
+        self.date = activity_date
+        self.activity_type = activity_type
+        self.distance_km = distance_km
 
 
 def test_plan_engine_caps_completion_and_tracks_extra_distance():
@@ -89,6 +110,203 @@ def test_training_consistency_score_uses_last_planned_runs():
 def test_training_consistency_counts_moved_session_as_completed():
     logs = [DummyLog("RUN", "completed"), DummyLog("RUN", "moved"), DummyLog("RUN", "missed")]
     assert training_consistency_score(logs) == 67
+
+
+def test_training_state_sums_multiple_runs_same_day():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 10.0},
+            "tuesday": {"type": "rest", "km": 0},
+            "wednesday": {"type": "rest", "km": 0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "rest", "km": 0},
+            "saturday": {"type": "rest", "km": 0},
+            "sunday": {"type": "rest", "km": 0},
+        },
+    )
+    activities = [
+        DummyActivity(datetime(2026, 3, 16, 6), "run", 6.0),
+        DummyActivity(datetime(2026, 3, 16, 18), "run", 5.0),
+        DummyActivity(datetime(2026, 3, 16, 20), "strength", 0.0),
+    ]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 16))
+    monday = plan_items[0]
+    assert monday["workout_type"] == RUN
+    assert monday["actual_run_km"] == 11.0
+    assert monday["actual_strength_count"] == 1
+    assert monday["state"] == DONE
+
+
+def test_training_state_marks_run_as_skipped_when_only_strength_done():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 8.0},
+            "tuesday": {"type": "rest", "km": 0},
+            "wednesday": {"type": "rest", "km": 0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "rest", "km": 0},
+            "saturday": {"type": "rest", "km": 0},
+            "sunday": {"type": "rest", "km": 0},
+        },
+    )
+    activities = [DummyActivity(datetime(2026, 3, 16, 18), "strength", 0.0)]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 17))
+    monday = plan_items[0]
+    assert monday["workout_type"] == RUN
+    assert monday["actual_run_km"] == 0.0
+    assert monday["state"] == DIFFERENT_ACTIVITY
+
+
+def test_training_state_does_not_reassign_moved_long_run():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 8.0},
+            "tuesday": {"type": "strength", "km": 0},
+            "wednesday": {"type": "rest", "km": 0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "easy", "km": 6.0},
+            "saturday": {"type": "easy", "km": 6.0},
+            "sunday": {"type": "long", "km": 18.0},
+        },
+    )
+    activities = [
+        DummyActivity(datetime(2026, 3, 21, 7), "run", 18.5),
+    ]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 22))
+    saturday = next(item for item in plan_items if item["date"] == "2026-03-21")
+    sunday = next(item for item in plan_items if item["date"] == "2026-03-22")
+    assert saturday["state"] == OVERDONE
+    assert saturday["actual_run_km"] == 18.5
+    assert sunday["state"] == "TODAY"
+    assert sunday["actual_run_km"] == 0.0
+
+
+def test_week_metrics_capture_long_run_goal_even_if_done_on_wrong_day():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 8.0},
+            "tuesday": {"type": "strength", "km": 0},
+            "wednesday": {"type": "tempo", "km": 10.0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "easy", "km": 7.0},
+            "saturday": {"type": "easy", "km": 6.0},
+            "sunday": {"type": "long", "km": 18.0},
+        },
+    )
+    activities = [DummyActivity(datetime(2026, 3, 21, 7), "run", 18.5)]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 22))
+    metrics = compute_week_metrics(plan_items, actual_by_date)
+    assert metrics["actual_km"] == 18.5
+    assert metrics["longest_run_km"] == 18.5
+    assert metrics["planned_long_run_km"] == 18.0
+    assert metrics["long_run_goal_met"] is True
+
+
+def test_training_state_strength_plus_run_stays_literal_not_reassigned():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 8.0},
+            "tuesday": {"type": "strength", "km": 0},
+            "wednesday": {"type": "tempo", "km": 10.0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "easy", "km": 7.0},
+            "saturday": {"type": "easy", "km": 6.0},
+            "sunday": {"type": "long", "km": 18.0},
+        },
+    )
+    activities = [
+        DummyActivity(datetime(2026, 3, 17, 7), "strength", 0.0),
+        DummyActivity(datetime(2026, 3, 17, 18), "run", 6.0),
+    ]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 22))
+    tuesday = next(item for item in plan_items if item["date"] == "2026-03-17")
+    wednesday = next(item for item in plan_items if item["date"] == "2026-03-18")
+    assert tuesday["state"] == DONE
+    assert tuesday["actual_strength_count"] == 1
+    assert tuesday["actual_run_km"] == 6.0
+    assert wednesday["state"] == MISSED
+    assert wednesday["actual_run_km"] == 0.0
+
+
+def test_training_state_plan_snapshot_is_immutable_after_ai_changes():
+    original = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 8.0},
+            "tuesday": {"type": "strength", "km": 0},
+            "wednesday": {"type": "tempo", "km": 10.0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "easy", "km": 6.0},
+            "saturday": {"type": "rest", "km": 0},
+            "sunday": {"type": "long", "km": 18.0},
+        },
+    )
+    regenerated = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "strength", "km": 0},
+            "tuesday": {"type": "easy", "km": 5.0},
+            "wednesday": {"type": "rest", "km": 0},
+            "thursday": {"type": "easy", "km": 8.0},
+            "friday": {"type": "strength", "km": 0},
+            "saturday": {"type": "easy", "km": 6.0},
+            "sunday": {"type": "long", "km": 12.0},
+        },
+    )
+    assert original["days"]["2026-03-16"]["session_name"] == "Easy Run"
+    assert original["days"]["2026-03-16"]["planned_distance_km"] == 8.0
+    assert regenerated["days"]["2026-03-16"]["session_name"] == "Strength & Conditioning"
+    assert original["weekly_target_km"] != regenerated["weekly_target_km"]
+
+
+def test_weekly_snapshot_loader_keeps_first_plan_for_the_week():
+    from types import SimpleNamespace
+    from ppi import routes
+
+    plan_row = SimpleNamespace(context_json="{}")
+    saved_contexts = []
+
+    def _fake_save(row, freeze_state):
+        row.context_json = json.dumps({"freeze_state": freeze_state})
+        saved_contexts.append(freeze_state)
+
+    first_daily_plan = {
+        "monday": {"type": "easy", "km": 8.0},
+        "tuesday": {"type": "strength", "km": 0},
+        "wednesday": {"type": "tempo", "km": 10.0},
+        "thursday": {"type": "rest", "km": 0},
+        "friday": {"type": "easy", "km": 6.0},
+        "saturday": {"type": "rest", "km": 0},
+        "sunday": {"type": "long", "km": 18.0},
+    }
+    second_daily_plan = {
+        "monday": {"type": "strength", "km": 0},
+        "tuesday": {"type": "easy", "km": 5.0},
+        "wednesday": {"type": "rest", "km": 0},
+        "thursday": {"type": "easy", "km": 8.0},
+        "friday": {"type": "strength", "km": 0},
+        "saturday": {"type": "easy", "km": 6.0},
+        "sunday": {"type": "long", "km": 12.0},
+    }
+
+    with patch.object(routes, "_save_coaching_freeze_state", side_effect=_fake_save):
+        first = routes._load_or_create_weekly_snapshot(plan_row, date(2026, 3, 16), first_daily_plan)
+        second = routes._load_or_create_weekly_snapshot(plan_row, date(2026, 3, 16), second_daily_plan)
+
+    assert first["days"]["2026-03-16"]["session_name"] == "Easy Run"
+    assert second["days"]["2026-03-16"]["session_name"] == "Easy Run"
+    assert second["weekly_target_km"] == first["weekly_target_km"]
+    assert len(saved_contexts) == 1
 
 
 def test_load_engine_uses_distance_and_intensity():
