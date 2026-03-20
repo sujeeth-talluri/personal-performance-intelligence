@@ -50,7 +50,7 @@ from .services.strava_oauth_service import (
     link_oauth_identity,
 )
 from .services.ai_recommendation_service import build_pace_strategy, generate_coaching_output
-from .services.load_engine import running_stress_score as _rss_fn
+from .services.load_engine import running_stress_score as _rss_fn, STRESS_TYPE_FACTOR as _STRESS_TYPE_FACTOR
 from .services.prediction_engine import vdot_from_race, vdot_to_race_time_seconds
 from .services.strava_service import sync_strava_data
 from .services.data_quality import DataQualityReport
@@ -98,6 +98,42 @@ def _should_sync_now(last_sync_at, cooldown_min):
     if not last_sync_at:
         return True
     return (datetime.now(timezone.utc) - last_sync_at) >= timedelta(minutes=cooldown_min)
+
+
+def fix_coaching_numbers(msg, weekly_target, long_run):
+    """Replace stale km numbers in coaching messages with canonical values.
+
+    Handles ranges like "25-28km" or "25 to 28km", single values with weekly
+    context, targeting phrases, and long-run mentions.
+    """
+    # Match ranges like "25-28km" or "25 to 28km" near weekly context
+    msg = re.sub(
+        r'\b\d+\.?\d*\s*(?:to|-)\s*\d+\.?\d*\s*km'
+        r'(?:\s*(?:per week|weekly|target|a week))?',
+        f'{weekly_target:.0f}km',
+        msg, flags=re.IGNORECASE
+    )
+    # Match single values like "25km target" or "25km per week"
+    msg = re.sub(
+        r'\b\d+\.?\d*\s*km\s*'
+        r'(?:per week|weekly|target|a week|this week)',
+        f'{weekly_target:.0f}km this week',
+        msg, flags=re.IGNORECASE
+    )
+    # Match "targeting Xkm" or "target of Xkm"
+    msg = re.sub(
+        r'(?:target(?:ing)?(?:\s+of)?)\s+\d+\.?\d*\s*km',
+        f'targeting {weekly_target:.0f}km',
+        msg, flags=re.IGNORECASE
+    )
+    # Match long run mentions (including ranges)
+    msg = re.sub(
+        r'(?:long run|long-run)\s+(?:of\s+)'
+        r'(?:\d+\.?\d*\s*(?:to|-)\s*)?\d+\.?\d*\s*km',
+        f'long run of {long_run:.0f}km',
+        msg, flags=re.IGNORECASE
+    )
+    return msg
 
 
 
@@ -1003,27 +1039,12 @@ def dashboard():
     canonical_weekly_target_km = weekly_plan_run_km if weekly_plan_run_km > 0 else _ai_weekly_target
 
     # Post-process coaching message — replace stale km targets + fix AI grammar
-    import re as _re
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
-    _raw_coaching_message = _re.sub(
-        r'\b(\d+\.?\d*)\s*km\s*(per week|weekly|a week|this week)',
-        f'{canonical_weekly_target_km:.0f}km this week',
-        _raw_coaching_message, flags=_re.IGNORECASE,
-    )
-    _raw_coaching_message = _re.sub(
-        r'(?:long run|long-run)\s+(?:of\s+)?\d+\.?\d*\s*km',
-        f'long run of {canonical_long_run_km:.0f}km',
-        _raw_coaching_message, flags=_re.IGNORECASE,
-    )
-    _raw_coaching_message = _re.sub(
-        r"[Tt]arget\s+\d+\.?\d*\s*km",
-        f"target {canonical_weekly_target_km:.0f}km",
+    # Apply broader coaching number replacements (handles ranges like "25-28km")
+    _raw_coaching_message = fix_coaching_numbers(
         _raw_coaching_message,
-    )
-    _raw_coaching_message = _re.sub(
-        r"target of \d+\.?\d*\s*km",
-        f"target of {canonical_weekly_target_km:.0f}km",
-        _raw_coaching_message,
+        canonical_weekly_target_km,
+        canonical_long_run_km,
     )
     for _pat, _rep in [
         (r"\bjumping from\b", "building from"),
@@ -1033,7 +1054,7 @@ def dashboard():
         (r"\blet's\b",        "focus on"),
         (r"\bwe're\b",        "you're"),
     ]:
-        _raw_coaching_message = _re.sub(_pat, _rep, _raw_coaching_message, flags=_re.IGNORECASE)
+        _raw_coaching_message = re.sub(_pat, _rep, _raw_coaching_message, flags=re.IGNORECASE)
     canonical_coaching_message = _raw_coaching_message
 
     # ── Aerobic potential pace + wall math transparency ──────────────────────
@@ -1093,9 +1114,27 @@ def dashboard():
     for _a in _all_acts_raw:
         _d = float(_a.distance_km or 0)
         _t = float(_a.moving_time or 0)
+        _a_type = (_a.activity_type or "").lower()
+        # Apply the same filters as analytics_service._load_activities so the graph
+        # matches the CTL card value from performance_intelligence():
+        #   - only activity types in STRESS_TYPE_FACTOR
+        #   - exclude races
+        #   - exclude runs shorter than 3 km
+        #   - exclude zero-duration activities
+        #   - exclude implausible ultra distances
+        if _a_type not in _STRESS_TYPE_FACTOR:
+            continue
+        if getattr(_a, "is_race", False):
+            continue
+        if _a_type in {"run", "trailrun"} and _d < 3.0:
+            continue
+        if _t <= 0:
+            continue
+        if _d and _d > 50.0:
+            continue
         _a_date = _activity_local_date(_a.date, user_tz)
         _act_dict = {
-            "type": (_a.activity_type or "").lower(),
+            "type": _a_type,
             "moving_time_sec": _t,
             "distance_km": _d,
             "pace_sec_per_km": (_t / _d) if _d > 0 and _t > 0 else None,
