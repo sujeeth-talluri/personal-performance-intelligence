@@ -4,75 +4,193 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StrideIQ — {{ user.name }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     /* ─── Reset & Base ───────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --green:    #00C853;
-      --green-d:  #009624;
-      --dark:     #0f1117;
-      --sidebar:  #161b27;
-      --card:     #ffffff;
-      --bg:       #f0f2f7;
-      --text:     #1a1d2e;
-      --muted:    #6b7280;
-      --border:   #e5e7eb;
-      --red:      #ef4444;
-      --amber:    #f59e0b;
-      --blue:     #3b82f6;
-      --radius:   12px;
-      --shadow:   0 2px 12px rgba(0,0,0,.08);
+      --bg-deep: #07090f;
+      --bg-base: #0d1117;
+      --bg-card: #131929;
+      --bg-card-hover: #1a2235;
+      --bg-elevated: #1e2a42;
+      --border: rgba(255,255,255,0.06);
+      --border-bright: rgba(255,255,255,0.12);
+      --accent-green: #00ff87;
+      --accent-green-dim: rgba(0,200,83,0.5);
+      --accent-green-glow: 0 0 20px rgba(0,255,135,0.3);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245,158,11,0.15);
+      --red: #ff4757;
+      --red-dim: rgba(255,71,87,0.15);
+      --blue: #3b82f6;
+      --text-primary: #f0f4ff;
+      --text-secondary: #8892a4;
+      --text-muted: #4a5568;
+      --text-accent: #00ff87;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 40px rgba(0,255,135,0.15);
+      --transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+      /* Legacy compat */
+      --green: #00ff87;
+      --green-d: #00C853;
+      --muted: #4a5568;
+      --border-legacy: rgba(255,255,255,0.06);
     }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
 
     /* ─── Layout ─────────────────────────────────────────────────── */
-    .app { display: flex; min-height: 100vh; }
+    .app-layout { display: flex; min-height: 100vh; }
 
     .sidebar {
-      width: 220px; min-height: 100vh; background: var(--sidebar);
-      display: flex; flex-direction: column; padding: 24px 16px;
+      width: 240px; min-height: 100vh;
+      background: var(--bg-deep);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 28px 16px;
       position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
     }
     .sidebar-logo {
-      font-size: 1.3rem; font-weight: 800; color: var(--green);
-      letter-spacing: -0.5px; margin-bottom: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 1.4rem; font-weight: 700;
+      color: var(--accent-green);
+      letter-spacing: -0.5px; margin-bottom: 4px;
     }
-    .sidebar-tagline { font-size: .72rem; color: #64748b; margin-bottom: 32px; }
+    .sidebar-tagline {
+      font-family: 'DM Mono', monospace;
+      font-size: .68rem; color: var(--text-muted);
+      margin-bottom: 36px; letter-spacing: .04em;
+    }
     .sidebar nav { flex: 1; }
     .nav-link {
       display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px; border-radius: 8px; color: #94a3b8;
-      text-decoration: none; font-size: .88rem; margin-bottom: 4px;
-      transition: background .15s, color .15s;
+      padding: 10px 14px; border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem; font-weight: 500;
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+      transition: var(--transition);
     }
-    .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.07); color: #fff; }
+    .nav-link:hover { background: rgba(255,255,255,.05); color: var(--text-primary); }
+    .nav-link.active {
+      background: rgba(0,255,135,0.08);
+      color: var(--accent-green);
+      border: 1px solid rgba(0,255,135,0.2);
+    }
     .nav-link .icon { font-size: 1rem; width: 20px; text-align: center; }
-    .sidebar-footer { border-top: 1px solid #1e2638; padding-top: 16px; }
-    .sidebar-user { font-size: .8rem; color: #94a3b8; margin-bottom: 8px; }
-    .sidebar-user strong { display: block; color: #e2e8f0; font-size: .85rem; }
+    .sidebar-footer { border-top: 1px solid var(--border); padding-top: 16px; }
+    .sidebar-user {
+      font-family: 'Inter', sans-serif;
+      font-size: .78rem; color: var(--text-secondary); margin-bottom: 8px; padding: 0 4px;
+    }
+    .sidebar-user strong { display: block; color: var(--text-primary); font-size: .85rem; margin-bottom: 2px; }
 
-    .main { margin-left: 220px; padding: 28px; min-height: 100vh; }
+    .main-content { margin-left: 240px; flex: 1; min-height: 100vh; }
+
+    /* ─── Hero Bar ───────────────────────────────────────────────── */
+    .hero-bar {
+      background: linear-gradient(135deg, #131929 0%, #1a2235 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 12px;
+    }
+    .hero-left {}
+    .hero-race-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.25rem; font-weight: 700;
+      color: var(--text-primary); margin-bottom: 2px;
+    }
+    .hero-goal {
+      font-family: 'DM Mono', monospace;
+      font-size: .78rem; color: var(--text-secondary);
+    }
+    .hero-goal strong { color: var(--text-primary); }
+    .hero-center { display: flex; gap: 28px; align-items: center; }
+    .hero-stat {}
+    .hero-stat-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.1rem; font-weight: 500;
+      color: var(--text-primary); line-height: 1.1;
+    }
+    .hero-stat-lbl {
+      font-family: 'Syne', sans-serif;
+      font-size: .62rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--text-muted); margin-top: 2px;
+    }
+    .hero-divider { width: 1px; height: 32px; background: var(--border-bright); }
+    .hero-right { display: flex; gap: 8px; align-items: center; }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: rgba(255,255,255,.06);
+      color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center;
+      text-decoration: none; font-size: 1rem;
+      border: 1px solid var(--border);
+      transition: var(--transition);
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.12); color: var(--text-primary); }
+
+    /* ─── Page content padding ───────────────────────────────────── */
+    .page-content { padding: 28px 32px; }
 
     /* ─── Cards ──────────────────────────────────────────────────── */
     .card {
-      background: var(--card); border-radius: var(--radius);
-      box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 20px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+      padding: 22px 24px; margin-bottom: 20px;
+      animation: card-reveal 0.4s ease forwards;
+      opacity: 0; transform: translateY(8px);
     }
+    .card:nth-child(1) { animation-delay: 0.05s; }
+    .card:nth-child(2) { animation-delay: 0.10s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.20s; }
+    .card:nth-child(5) { animation-delay: 0.25s; }
+    .card:nth-child(6) { animation-delay: 0.30s; }
+    .card:nth-child(7) { animation-delay: 0.35s; }
+    .card:nth-child(8) { animation-delay: 0.40s; }
+    @keyframes card-reveal { to { opacity: 1; transform: translateY(0); } }
+
+    .card:hover { background: var(--bg-card-hover); transition: var(--transition); }
+
     .card-title {
-      font-size: .72rem; font-weight: 700; letter-spacing: .08em;
-      text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+      font-family: 'Syne', sans-serif;
+      font-size: .68rem; font-weight: 700; letter-spacing: .10em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px;
     }
-    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+    .card h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: .95rem; font-weight: 700;
+      margin-bottom: 14px; color: var(--text-primary);
+    }
 
     /* ─── Data quality banner ────────────────────────────────────── */
     .data-quality-banner {
       display: flex; align-items: center; gap: 12px;
-      padding: 12px 18px; border-radius: 8px;
+      padding: 12px 18px; border-radius: var(--radius-sm);
       margin-bottom: 16px; font-size: .86rem; line-height: 1.5; flex-wrap: wrap;
     }
-    .banner-warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
-    .banner-info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
-    .banner-success { background: #0d2a1a; border-left: 4px solid #00C853; color: #00C853; }
+    .banner-warning { background: rgba(245,158,11,0.12); border-left: 4px solid var(--amber); color: #fbbf24; }
+    .banner-info    { background: rgba(59,130,246,0.12); border-left: 4px solid var(--blue); color: #93c5fd; }
+    .banner-success { background: rgba(0,255,135,0.08); border-left: 4px solid var(--accent-green); color: var(--accent-green); }
     .banner-icon    { font-size: 1.1rem; flex-shrink: 0; }
     .banner-message { flex: 1; }
     .banner-action {
@@ -86,113 +204,406 @@
     }
     .banner-close:hover { opacity: 1; }
 
-    /* ─── Hero bar ───────────────────────────────────────────────── */
-    .hero {
-      background: linear-gradient(135deg, #161b27 0%, #1e2638 100%);
-      border-radius: var(--radius); padding: 22px 26px; margin-bottom: 24px;
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    /* ─── Feasibility strip ──────────────────────────────────────── */
+    .feasibility-strip {
+      display: flex; align-items: center; gap: 20px;
+      padding: 16px 22px; border-radius: var(--radius-md);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-left: 4px solid;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 24px; flex-wrap: wrap;
     }
-    .hero-left h1 { font-size: 1.4rem; font-weight: 800; color: #fff; }
-    .hero-left .sub { font-size: .83rem; color: #94a3b8; margin-top: 4px; }
-    .hero-right { display: flex; gap: 10px; align-items: center; }
-    .hero-badge {
-      background: rgba(0,200,83,.15); color: var(--green);
-      padding: 6px 14px; border-radius: 20px; font-size: .8rem; font-weight: 700;
+    .strip-green  { border-left-color: var(--accent-green); }
+    .strip-amber  { border-left-color: var(--amber); }
+    .strip-orange { border-left-color: #f97316; }
+    .strip-red    { border-left-color: var(--red); }
+    .strip-grey   { border-left-color: var(--text-muted); }
+    .fs-out   { display: flex; flex-direction: column; gap: 3px; }
+    .fs-score {
+      font-family: 'DM Mono', monospace;
+      font-size: 28px; font-weight: 500; color: var(--text-primary); min-width: 48px; line-height: 1;
     }
-    .icon-btn {
-      width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.07);
-      color: #94a3b8; display: inline-flex; align-items: center; justify-content: center;
-      text-decoration: none; font-size: 1.1rem; transition: background .15s;
+    .fs-score sup { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+    .fs-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap;
     }
-    .icon-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+    .fs-score-explain {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; color: var(--text-muted); white-space: nowrap;
+    }
+    .fs-text  { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-secondary); flex: 1; line-height: 1.5; }
+    .fs-revised {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px; color: var(--red); font-weight: 500; white-space: nowrap;
+    }
 
-    /* ─── Grid ───────────────────────────────────────────────────── */
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .col-span-2 { grid-column: span 2; }
+    /* ─── This-week 60/40 grid ───────────────────────────────────── */
+    .this-week-grid {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 20px;
+      margin-bottom: 0;
+    }
+    .right-stack { display: flex; flex-direction: column; gap: 20px; }
 
-    /* ─── Distance tiles ─────────────────────────────────────────── */
-    .dist-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    /* ─── Weekly Plan card ───────────────────────────────────────── */
+    .plan-row {
+      display: grid;
+      grid-template-columns: 80px 1fr auto 80px;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .83rem;
+    }
+    .plan-row:last-child { border-bottom: none; }
+    .plan-day-label {
+      font-family: 'Syne', sans-serif;
+      font-size: .72rem; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .plan-main { flex: 1; }
+    .plan-distance {
+      font-family: 'DM Mono', monospace;
+      font-weight: 500; font-size: .88rem; color: var(--text-primary);
+    }
+    .plan-meta { font-family: 'Inter', sans-serif; font-size: .72rem; color: var(--text-muted); margin-top: 2px; }
+    .plan-status { font-size: .72rem; font-weight: 600; text-align: right; }
+    .done-row   .plan-distance { color: var(--accent-green); }
+    .skip-row   .plan-distance { color: var(--text-muted); text-decoration: line-through; }
+    .partial-row .plan-distance { color: var(--amber); }
+    .today-row { background: rgba(0,255,135,0.04); border-radius: var(--radius-sm); padding: 10px 8px; }
+    .today-row .plan-day-label { color: var(--accent-green); }
+    .status-green  { color: var(--accent-green); }
+    .status-orange { color: var(--amber); }
+
+    .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 16px; }
+    .progress-bar span { display: block; height: 100%; background: var(--accent-green); border-radius: 2px; }
+    .week-progress-fill {
+      width: 0 !important;
+      animation: fill-bar 1s 0.5s ease forwards;
+    }
+    @keyframes fill-bar { to { width: var(--target-width); } }
+
+    .weekly-stats {
+      display: flex; gap: 20px; margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .weekly-stat { flex: 1; }
+    .weekly-stat-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.1rem; color: var(--text-primary);
+    }
+    .weekly-stat-lbl {
+      font-family: 'Syne', sans-serif;
+      font-size: .62rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted); margin-top: 2px;
+    }
+
+    /* ─── Today's Session hero card ──────────────────────────────── */
+    .today-hero-card {
+      background: linear-gradient(135deg, #131929 0%, #1a2235 100%);
+      border: 1px solid rgba(0,255,135,0.15);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 0;
+      animation: card-reveal 0.4s 0.1s ease forwards;
+      opacity: 0; transform: translateY(8px);
+    }
+    .today-hero-card::before {
+      content: '';
+      position: absolute; top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(0,255,135,0.08) 0%, transparent 70%);
+      animation: pulse-glow 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    .today-workout-label {
+      font-family: 'Syne', sans-serif;
+      font-size: .62rem; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .today-workout-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.5rem; font-weight: 800;
+      color: var(--text-primary); line-height: 1.15; margin-bottom: 8px;
+    }
+    .today-distance {
+      font-family: 'DM Mono', monospace;
+      font-size: 3rem; font-weight: 500;
+      color: var(--accent-green); line-height: 1;
+      margin-bottom: 4px;
+    }
+    .today-distance-unit {
+      font-family: 'DM Mono', monospace;
+      font-size: 1rem; color: var(--text-muted);
+    }
+    .today-pace-hint {
+      font-family: 'Inter', sans-serif;
+      font-size: .8rem; color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    .status-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .badge-completed { background: rgba(0,255,135,0.12); color: var(--accent-green); border: 1px solid rgba(0,255,135,0.25); }
+    .badge-planned   { background: rgba(59,130,246,0.12); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
+    .badge-partial   { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+    .today-tomorrow {
+      font-family: 'Inter', sans-serif;
+      font-size: .75rem; color: var(--text-muted);
+      border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px;
+    }
+    .today-tomorrow strong { color: var(--text-secondary); }
+    .today-metric-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .8rem;
+    }
+    .today-metric-row:last-of-type { border-bottom: none; }
+    .today-metric-row span { color: var(--text-muted); font-family: 'Inter', sans-serif; }
+    .today-metric-row strong {
+      color: var(--text-primary); font-family: 'DM Mono', monospace; font-weight: 400;
+    }
+
+    /* ─── Upcoming long runs ─────────────────────────────────────── */
+    .upcoming-card { flex: 1; }
+    .ladder { display: flex; gap: 6px; margin-bottom: 10px; }
+    .ladder-step {
+      flex: 1; text-align: center;
+      background: rgba(255,255,255,0.04);
+      border-radius: var(--radius-sm);
+      padding: 10px 6px; font-size: .78rem; font-weight: 600;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .ladder-step.done   { background: rgba(0,255,135,0.08); color: var(--accent-green); border-color: rgba(0,255,135,0.2); }
+    .ladder-step.next   { background: var(--amber-dim); color: var(--amber); border-color: rgba(245,158,11,0.3); font-weight: 700; }
+    .ladder-step .km    { font-family: 'DM Mono', monospace; font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
+
+    /* ─── AI Coaching card ───────────────────────────────────────── */
+    .coaching-text {
+      font-family: 'Inter', sans-serif;
+      font-size: .9rem; line-height: 1.7; color: var(--text-secondary);
+      background: rgba(255,255,255,0.02);
+      border-radius: var(--radius-sm); padding: 16px 18px; margin-bottom: 14px;
+      border-left: 3px solid var(--accent-green);
+    }
+    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--text-muted); }
+
+    /* ─── Race Predictions ───────────────────────────────────────── */
+    .pred-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .dist-tile {
-      background: var(--bg); border-radius: 10px; padding: 16px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 18px 14px;
       text-align: center; position: relative;
+      transition: var(--transition);
     }
-    .dist-tile.fm { background: linear-gradient(135deg, #e8fff1 0%, #f0fdf4 100%); }
-    .dist-tile .label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
-    .dist-tile .time { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
-    .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
-    .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
-    .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
-    /* Unified confidence badges — same style in tiles and legend */
+    .dist-tile:hover { background: var(--bg-elevated); border-color: var(--border-bright); }
+    .dist-tile.fm {
+      background: linear-gradient(135deg, rgba(0,255,135,0.06) 0%, rgba(0,200,83,0.03) 100%);
+      border-color: rgba(0,255,135,0.2);
+    }
+    .dist-tile .label {
+      font-family: 'Syne', sans-serif;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .dist-tile .time {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.6rem; font-weight: 400; color: var(--text-primary); line-height: 1;
+    }
+    .dist-tile.fm .time { color: var(--accent-green); }
+    .dist-tile .sub-time {
+      font-family: 'DM Mono', monospace;
+      font-size: .72rem; color: var(--text-muted); margin-top: 4px;
+    }
+    .dist-tile .potential {
+      font-family: 'Inter', sans-serif;
+      font-size: .78rem; color: var(--accent-green); font-weight: 600; margin-top: 8px;
+    }
+    .dist-tile .potential span { font-size: .68rem; color: var(--text-muted); display: block; }
     .confidence-high, .confidence-moderate, .confidence-low {
       display: inline-block; padding: 2px 8px; border-radius: 4px;
-      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      font-family: 'Syne', sans-serif;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
       color: #fff; margin-top: 6px;
     }
-    .confidence-high     { background: #00C853; }
-    .confidence-moderate { background: #f59e0b; }
-    .confidence-low      { background: #ef4444; }
+    .confidence-high     { background: rgba(0,200,83,0.8); }
+    .confidence-moderate { background: rgba(245,158,11,0.8); }
+    .confidence-low      { background: rgba(255,71,87,0.8); }
     .prediction-legend {
       display: flex; align-items: center; gap: 16px;
-      padding: 8px 12px; background: rgba(0,0,0,.03);
-      border-radius: 6px; font-size: 12px; color: #888;
-      flex-wrap: wrap; margin-top: 10px;
+      padding: 10px 12px; background: rgba(255,255,255,0.02);
+      border-radius: var(--radius-sm); font-size: 11px; color: var(--text-muted);
+      flex-wrap: wrap; margin-top: 14px;
+      border: 1px solid var(--border);
     }
-    .legend-title { color: #aaa; font-weight: 500; }
+    .legend-title { color: var(--text-secondary); font-weight: 500; }
     .legend-item { display: flex; align-items: center; gap: 6px; }
+
+    /* ─── Section labels / collapsible ──────────────────────────── */
+    .section-label {
+      font-family: 'Syne', sans-serif;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .10em; color: var(--text-muted); margin: 28px 0 14px;
+    }
+    .collapsible-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; padding: 4px 0; margin: 22px 0 10px;
+    }
+    .collapsible-header .section-label { margin: 0; }
+    .collapsible-toggle {
+      font-family: 'DM Mono', monospace;
+      font-size: .72rem; color: var(--text-muted);
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      cursor: pointer; padding: 3px 10px; border-radius: var(--radius-sm);
+      transition: var(--transition);
+    }
+    .collapsible-toggle:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+    .collapsible-body { transition: none; }
+    .collapsible-body.collapsed { display: none; }
+
+    /* ─── Training Load tiles ────────────────────────────────────── */
+    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .load-tile {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 12px; text-align: center;
+    }
+    .load-tile .lt-label {
+      font-family: 'Syne', sans-serif;
+      font-size: .62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted);
+    }
+    .load-tile .lt-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 2.2rem; font-weight: 400; line-height: 1; margin: 8px 0 4px;
+      color: var(--text-primary);
+    }
+    .load-tile .lt-sub {
+      font-family: 'Inter', sans-serif;
+      font-size: .68rem; color: var(--text-muted);
+    }
+    .lt-green { color: var(--accent-green) !important; }
+    .lt-amber { color: var(--amber) !important; }
+    .lt-red   { color: var(--red) !important; }
+    .lt-blue  { color: var(--blue) !important; }
+
+    /* ─── Mini CTL chart ─────────────────────────────────────────── */
+    .mini-chart-wrap { margin-top: 16px; }
+    .mini-chart-title {
+      font-family: 'Syne', sans-serif;
+      font-size: .65rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .mini-chart { width: 100%; height: 80px; }
+    .mini-chart .path { fill: none; stroke: var(--blue); stroke-width: 2; }
+    .mini-chart .area { fill: rgba(59,130,246,0.08); stroke: none; }
+
+    /* ─── Tooltips ───────────────────────────────────────────────── */
+    .tooltip-wrap {
+      position: relative; display: inline-flex; align-items: center;
+      gap: 4px; cursor: help;
+    }
+    .tooltip-wrap .tooltip-icon {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: rgba(255,255,255,.08); color: var(--text-muted);
+      font-size: 10px; display: inline-flex;
+      align-items: center; justify-content: center; line-height: 1;
+      flex-shrink: 0;
+    }
+    .tooltip-wrap .tooltip-text {
+      visibility: hidden; opacity: 0;
+      background: #0d1117; color: #e0e0e0;
+      text-align: left; border-radius: var(--radius-sm);
+      padding: 8px 12px; position: absolute;
+      z-index: 200; bottom: 130%; left: 50%;
+      transform: translateX(-50%);
+      width: 220px; font-size: 12px; line-height: 1.5;
+      border: 1px solid var(--border-bright);
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      transition: opacity .2s ease; pointer-events: none;
+      white-space: normal; font-weight: 400;
+      font-family: 'Inter', sans-serif;
+    }
+    .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+    .tooltip-wrap .tooltip-text::after {
+      content: ''; position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: #0d1117;
+    }
 
     /* ─── Wall analysis ──────────────────────────────────────────── */
     .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .wall-risk-badge {
-      padding: 4px 14px; border-radius: 20px; font-size: .78rem; font-weight: 800;
-      text-transform: uppercase; letter-spacing: .05em;
+      padding: 4px 14px; border-radius: 20px;
+      font-family: 'Syne', sans-serif;
+      font-size: .72rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .06em;
     }
-    .risk-high   { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
-    .risk-medium { background: #fffbeb; color: #d97706; border: 1px solid #fed7aa; }
-    .risk-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-    .risk-unknown{ background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+    .risk-high   { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
+    .risk-medium { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .risk-low    { background: rgba(0,255,135,0.1); color: var(--accent-green); border: 1px solid rgba(0,255,135,0.25); }
+    .risk-unknown{ background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid var(--border); }
 
     .wall-callout {
-      background: #fff7ed; border-left: 3px solid #f59e0b;
-      border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 16px;
+      background: var(--amber-dim); border-left: 3px solid var(--amber);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px 16px; margin-bottom: 16px;
     }
-    .wall-callout.high { background: #fef2f2; border-left-color: #ef4444; }
-    .wall-callout .callout-num { font-size: 1.8rem; font-weight: 800; color: #ef4444; }
-    .wall-callout .callout-num.medium { color: #d97706; }
-    .wall-callout .callout-label { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .wall-callout.high { background: var(--red-dim); border-left-color: var(--red); }
+    .wall-callout .callout-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 2.8rem; font-weight: 400; color: var(--red); line-height: 1;
+    }
+    .wall-callout .callout-num.medium { color: var(--amber); }
+    .wall-callout .callout-label { font-size: .75rem; color: var(--text-muted); margin-top: 4px; }
 
     .vdot-bar-wrap { margin-bottom: 16px; }
-    .vdot-label-row { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 6px; }
+    .vdot-label-row { display: flex; justify-content: space-between; font-size: .72rem; color: var(--text-muted); margin-bottom: 8px; }
     .vdot-bars { display: flex; flex-direction: column; gap: 8px; }
     .vdot-row { display: flex; align-items: center; gap: 10px; }
-    .vdot-row-label { font-size: .75rem; color: var(--muted); width: 28px; text-align: right; }
-    .vdot-track { flex: 1; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
-    .vdot-fill { height: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: .68rem; font-weight: 700; color: #fff; transition: width .6s ease; }
-    .vdot-fill.hm { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-    .vdot-fill.fm { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .vdot-row-label { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--text-muted); width: 28px; text-align: right; }
+    .vdot-track { flex: 1; height: 18px; background: rgba(255,255,255,0.04); border-radius: 9px; overflow: hidden; border: 1px solid var(--border); }
+    .vdot-fill { height: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: .65rem; font-weight: 700; color: #fff; transition: width .6s ease; }
+    .vdot-fill.hm { background: linear-gradient(90deg, var(--blue), #60a5fa); }
+    .vdot-fill.fm { background: linear-gradient(90deg, var(--red), #f87171); }
 
     .fm-compare { display: flex; gap: 12px; margin-top: 12px; }
-    .fm-stat { flex: 1; background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; }
-    .fm-stat .fs-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-    .fm-stat .fs-val { font-size: 1.25rem; font-weight: 800; margin-top: 4px; }
-    .fm-stat .fs-val.green { color: var(--green-d); }
+    .fm-stat { flex: 1; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; text-align: center; }
+    .fm-stat .fs-label { font-family: 'Syne', sans-serif; font-size: .62rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+    .fm-stat .fs-val { font-family: 'DM Mono', monospace; font-size: 1.4rem; font-weight: 400; margin-top: 6px; color: var(--text-primary); }
+    .fm-stat .fs-val.green { color: var(--accent-green); }
     .fm-stat .fs-val.red   { color: var(--red); }
 
     /* ─── Pace strategy table ────────────────────────────────────── */
-    .pace-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .pace-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
     .pace-table th {
-      text-align: left; padding: 8px 12px; font-size: .68rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
-      border-bottom: 2px solid var(--border);
+      text-align: left; padding: 8px 12px;
+      font-family: 'Syne', sans-serif;
+      font-size: .62rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted);
+      border-bottom: 1px solid var(--border-bright);
     }
-    .pace-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+    .pace-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
     .pace-table tr:last-child td { border-bottom: none; }
-    .pace-table .seg-label { font-weight: 600; }
-    .pace-table .seg-pace  { font-family: monospace; font-size: .9rem; font-weight: 700; }
-    .pace-table tr.km32 { background: #fff7ed; }
-    .pace-table tr.km32 td { color: #92400e; }
-    .pace-table tr.km32 .seg-pace { color: #ef4444; font-weight: 800; }
-    .km32-warn { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: #92400e; margin-top: 12px; background: #fff7ed; padding: 10px 14px; border-radius: 8px; border: 1px solid #fde68a; }
+    .pace-table .seg-label { font-weight: 600; color: var(--text-primary); }
+    .pace-table .seg-pace  { font-family: 'DM Mono', monospace; font-size: .9rem; font-weight: 400; color: var(--text-primary); }
+    .pace-table tr.km32 { background: rgba(255,71,87,0.06); }
+    .pace-table tr.km32 td { color: var(--amber); }
+    .pace-table tr.km32 .seg-pace { color: var(--red); font-weight: 500; }
+    .km32-warn { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--amber); margin-top: 12px; background: var(--amber-dim); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(245,158,11,0.2); }
 
     /* ─── Fueling timeline ───────────────────────────────────────── */
     .fuel-timeline { position: relative; padding-left: 28px; }
@@ -205,195 +616,83 @@
       content: attr(data-icon); position: absolute; left: -22px; top: 0;
       width: 20px; text-align: center; font-size: .95rem; line-height: 1.4;
     }
-    .fuel-event .fe-time { font-size: .7rem; color: var(--muted); }
-    .fuel-event .fe-label { font-size: .83rem; font-weight: 600; margin: 1px 0; }
-    .fuel-event .fe-note  { font-size: .73rem; color: var(--muted); }
-    .fuel-rule { display: flex; gap: 10px; margin-top: 14px; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+    .fuel-event .fe-time { font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--text-muted); }
+    .fuel-event .fe-label { font-family: 'Syne', sans-serif; font-size: .8rem; font-weight: 600; margin: 1px 0; color: var(--text-primary); }
+    .fuel-event .fe-note  { font-family: 'Inter', sans-serif; font-size: .72rem; color: var(--text-muted); }
+    .fuel-rule { display: flex; gap: 10px; margin-top: 10px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); padding: 10px 12px; border: 1px solid var(--border); }
     .fuel-rule .fr-icon { font-size: 1.1rem; }
-    .fuel-rule .fr-text  { font-size: .78rem; color: #1d4ed8; }
-    .fuel-rule .fr-text strong { display: block; font-size: .8rem; }
+    .fuel-rule .fr-text  { font-family: 'Inter', sans-serif; font-size: .78rem; color: var(--text-secondary); }
+    .fuel-rule .fr-text strong { display: block; font-size: .8rem; color: var(--text-primary); }
 
-    /* ─── Load tiles ─────────────────────────────────────────────── */
-    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-    .load-tile { background: var(--bg); border-radius: 10px; padding: 14px 12px; text-align: center; }
-    .load-tile .lt-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-    .load-tile .lt-val   { font-size: 2rem; font-weight: 800; line-height: 1; margin: 6px 0 4px; }
-    .load-tile .lt-sub   { font-size: .72rem; color: var(--muted); }
-    .lt-green { color: var(--green-d); }
-    .lt-amber { color: #d97706; }
-    .lt-red   { color: var(--red); }
-    .lt-blue  { color: var(--blue); }
-
-    /* ─── Mini chart ─────────────────────────────────────────────── */
-    .mini-chart-wrap { margin-top: 16px; }
-    .mini-chart-title { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
-    .mini-chart { width: 100%; height: 80px; }
-    .mini-chart .path { fill: none; stroke: var(--green); stroke-width: 2.5; }
-    .mini-chart .area { fill: rgba(0,200,83,.1); stroke: none; }
-
-    /* ─── Tooltips ───────────────────────────────────────────────── */
-    .tooltip-wrap {
-      position: relative; display: inline-flex; align-items: center;
-      gap: 4px; cursor: help;
-    }
-    .tooltip-wrap .tooltip-icon {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: rgba(0,0,0,.08); color: #888;
-      font-size: 10px; display: inline-flex;
-      align-items: center; justify-content: center; line-height: 1;
-      flex-shrink: 0;
-    }
-    .tooltip-wrap .tooltip-text {
-      visibility: hidden; opacity: 0;
-      background: #1e2736; color: #e0e0e0;
-      text-align: left; border-radius: 6px;
-      padding: 8px 12px; position: absolute;
-      z-index: 200; bottom: 130%; left: 50%;
-      transform: translateX(-50%);
-      width: 220px; font-size: 12px; line-height: 1.5;
-      border: 1px solid rgba(255,255,255,.1);
-      box-shadow: 0 4px 12px rgba(0,0,0,.3);
-      transition: opacity .2s ease; pointer-events: none;
-      white-space: normal; font-weight: 400;
-    }
-    .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
-    .tooltip-wrap .tooltip-text::after {
-      content: ''; position: absolute; top: 100%; left: 50%;
-      transform: translateX(-50%);
-      border: 5px solid transparent; border-top-color: #1e2736;
-    }
-
-    /* ─── Coaching card ──────────────────────────────────────────── */
-    .coaching-text {
-      font-size: .92rem; line-height: 1.65; color: var(--text);
-      background: #f8fafc; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px;
-      border-left: 3px solid var(--green);
-    }
-    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
-    .coaching-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--muted); }
-
-    /* ─── Weekly plan ────────────────────────────────────────────── */
-    .plan-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .84rem;
-    }
-    .plan-row:last-child { border-bottom: none; }
-    .plan-main { flex: 1; }
-    .plan-distance { font-weight: 700; font-size: .9rem; }
-    .plan-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
-    .plan-status { font-size: .75rem; font-weight: 600; }
-    .done-row   .plan-distance { color: #16a34a; }
-    .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
-    .partial-row .plan-distance { color: #d97706; }
-    .status-green  { color: #16a34a; }
-    .status-orange { color: #d97706; }
-    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
-    .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
-
-    /* ─── Activity rows (unified grid) ──────────────────────────── */
+    /* ─── Activity rows ──────────────────────────────────────────── */
     .activity-row {
       display: grid;
-      grid-template-columns: 26px 58px 1fr 72px 50px;
+      grid-template-columns: 26px 60px 1fr 70px 50px;
       align-items: center;
       gap: 8px;
-      padding: 10px 0;
+      padding: 10px 8px;
       border-bottom: 1px solid var(--border);
       font-size: .82rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
     }
+    .activity-row:hover { background: rgba(255,255,255,0.03); }
     .activity-row:last-child { border-bottom: none; }
     .activity-icon   { text-align: center; font-size: 1rem; }
-    .activity-date   { color: var(--muted); font-size: .78rem; white-space: nowrap; }
-    .activity-main   { font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .activity-hr     { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
-    .activity-dur    { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
+    .activity-date   { font-family: 'DM Mono', monospace; color: var(--text-muted); font-size: .72rem; white-space: nowrap; }
+    .activity-main   { font-family: 'Inter', sans-serif; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+    .activity-hr     { font-family: 'DM Mono', monospace; color: var(--text-muted); font-size: .72rem; text-align: right; white-space: nowrap; }
+    .activity-dur    { font-family: 'DM Mono', monospace; color: var(--text-muted); font-size: .72rem; text-align: right; white-space: nowrap; }
 
     /* ─── Pills ──────────────────────────────────────────────────── */
-    .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
-    .pill-green  { background: #dcfce7; color: #16a34a; }
-    .pill-yellow { background: #fef9c3; color: #a16207; }
-    .pill-orange { background: #ffedd5; color: #c2410c; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .65rem; font-weight: 700; text-transform: uppercase; font-family: 'Syne', sans-serif; letter-spacing: .04em; }
+    .pill-green  { background: rgba(0,255,135,0.12); color: var(--accent-green); border: 1px solid rgba(0,255,135,0.2); }
+    .pill-yellow { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+    .pill-orange { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,71,87,0.2); }
 
-    /* ─── Ladder ─────────────────────────────────────────────────── */
-    .ladder { display: flex; gap: 8px; margin-bottom: 12px; }
-    .ladder-step {
-      flex: 1; text-align: center; background: var(--bg); border-radius: 8px;
-      padding: 10px 6px; font-size: .8rem; font-weight: 600; color: var(--muted);
-      border: 2px solid transparent;
-    }
-    .ladder-step.done   { background: #dcfce7; color: #16a34a; border-color: #86efac; }
-    .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
-    .ladder-step .km    { font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
-
-    /* ─── Feasibility strip ──────────────────────────────────────── */
-    .feasibility-strip {
-      display: flex; align-items: center; gap: 16px;
-      padding: 12px 20px; border-radius: 8px;
-      background: white; border-left: 4px solid;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-      margin-bottom: 16px; flex-wrap: wrap;
-    }
-    .strip-green  { border-color: #00C853; }
-    .strip-amber  { border-color: #f59e0b; }
-    .strip-orange { border-color: #f97316; }
-    .strip-red    { border-color: #ef4444; }
-    .strip-grey   { border-color: #9ca3af; }
-    .fs-out   { display: flex; flex-direction: column; gap: 2px; }
-    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; line-height: 1; }
-    .fs-label { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
-    .fs-score-explain { font-size: 11px; color: #888; white-space: nowrap; }
-    .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
-    .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
-
-    /* ─── Collapsible sections ───────────────────────────────────── */
-    .collapsible-header {
-      display: flex; align-items: center; justify-content: space-between;
-      cursor: pointer; user-select: none; padding: 4px 0; margin: 22px 0 10px;
-    }
-    .collapsible-header .section-label { margin: 0; }
-    .collapsible-toggle {
-      font-size: .75rem; color: var(--muted); background: none; border: none;
-      cursor: pointer; padding: 2px 6px; border-radius: 4px;
-      transition: background .15s;
-    }
-    .collapsible-toggle:hover { background: var(--border); }
-    .collapsible-body { transition: none; }
-    .collapsible-body.collapsed { display: none; }
+    /* ─── Grid helpers ───────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .col-span-2 { grid-column: span 2; }
 
     /* ─── Loading / error states ─────────────────────────────────── */
-    .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
+    .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
     @keyframes shimmer { to { background-position: -200% 0; } }
     .sk-line { height: 14px; margin-bottom: 8px; }
     .sk-big  { height: 36px; margin-bottom: 10px; }
-    .error-box { background: #fef2f2; border-radius: 8px; padding: 16px; color: #dc2626; font-size: .85rem; text-align: center; }
+    .error-box { background: var(--red-dim); border-radius: var(--radius-sm); border: 1px solid rgba(255,71,87,0.2); padding: 16px; color: var(--red); font-size: .85rem; text-align: center; }
 
     /* ─── Utility ────────────────────────────────────────────────── */
     .divider { height: 1px; background: var(--border); margin: 16px 0; }
-    .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .83rem; }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .82rem; }
     .metric-row:last-child { border-bottom: none; }
-    .metric-row span { color: var(--muted); }
-    .metric-row strong { font-weight: 600; }
-    .text-green { color: var(--green-d); }
+    .metric-row span { font-family: 'Inter', sans-serif; color: var(--text-muted); }
+    .metric-row strong { font-family: 'DM Mono', monospace; font-weight: 400; color: var(--text-primary); }
+    .text-green { color: var(--accent-green); }
     .text-red   { color: var(--red); }
-    .text-amber { color: #d97706; }
-    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 14px; }
+    .text-amber { color: var(--amber); }
 
     /* ─── Mobile ─────────────────────────────────────────────────── */
     @media (max-width: 768px) {
       .sidebar { display: none; }
-      .main    { margin-left: 0; padding: 16px; }
-      .dist-grid { grid-template-columns: repeat(2, 1fr); }
-      .grid-2  { grid-template-columns: 1fr; }
+      .main-content { margin-left: 0; }
+      .this-week-grid { grid-template-columns: 1fr; }
+      .pred-tiles { grid-template-columns: 1fr 1fr; }
+      .hero-bar { flex-wrap: wrap; padding: 16px; }
+      .hero-center { flex-wrap: wrap; gap: 16px; }
+      .grid-2 { grid-template-columns: 1fr; }
       .load-tiles { grid-template-columns: repeat(3, 1fr); }
       .fm-compare { flex-direction: column; }
+      .page-content { padding: 16px; }
     }
     @media (max-width: 480px) {
-      .dist-grid  { grid-template-columns: repeat(2, 1fr); }
-      .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
+      .pred-tiles  { grid-template-columns: repeat(2, 1fr); }
+      .load-tiles  { grid-template-columns: 1fr 1fr 1fr; }
     }
   </style>
 </head>
 <body>
-<div class="app">
+<div class="app-layout">
 
   <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
   <aside class="sidebar">
@@ -401,8 +700,8 @@
     <div class="sidebar-tagline">AI Marathon Coach</div>
     <nav>
       <a class="nav-link active" href="/"><span class="icon">🏃</span> Dashboard</a>
-      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span> Sync Strava</a>
       <a class="nav-link" href="/settings"><span class="icon">⚙️</span> Settings</a>
+      <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user">
@@ -410,181 +709,224 @@
         Signed in
       </div>
       {% if session.get('last_sync_at') %}
-        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px;line-height:1.4">
+        <div style="font-size:.65rem;color:var(--text-muted);padding:2px 4px 6px;line-height:1.5;font-family:'DM Mono',monospace">
           Last synced<br>
-          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:#64748b">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
+          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:var(--text-muted)">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
         </div>
       {% else %}
-        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px">Not yet synced</div>
+        <div style="font-size:.65rem;color:var(--text-muted);padding:2px 4px 6px;font-family:'DM Mono',monospace">Not yet synced</div>
       {% endif %}
       <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
     </div>
   </aside>
 
-  <!-- ═══ MAIN ═══════════════════════════════════════════════════════════ -->
-  <main class="main">
+  <!-- ═══ MAIN CONTENT ═══════════════════════════════════════════════════ -->
+  <div class="main-content">
 
-    <!-- ── Hero ─────────────────────────────────────────────────────────── -->
-    <div class="hero">
+    <!-- ── Hero Bar ──────────────────────────────────────────────────────── -->
+    <div class="hero-bar">
       <div class="hero-left">
-        <h1>{{ intel.goal.race_name }}</h1>
-        <div class="sub" style="margin-top:5px">
-          Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
-          &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
-          &nbsp;·&nbsp; {{ today_date }}
+        <div class="hero-race-name">{{ intel.goal.race_name }}</div>
+        <div class="hero-goal">Goal <strong>{{ intel.goal.goal_time }}</strong></div>
+      </div>
+      <div class="hero-center">
+        <div class="hero-stat">
+          <div class="hero-stat-val">{{ intel.goal.days_remaining }}</div>
+          <div class="hero-stat-lbl">Days to Race</div>
         </div>
-        <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
-          {{ canonical_phase_label }}
-          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
-          {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
-          <span class="tooltip-wrap">
-            {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
-            <span class="tooltip-icon">?</span>
-            <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
-          </span>
-          &nbsp;·&nbsp; {{ intel.goal.target_pace }} goal pace
+        <div class="hero-divider"></div>
+        <div class="hero-stat">
+          <div class="hero-stat-val">{{ intel.goal.target_pace }}</div>
+          <div class="hero-stat-lbl">Goal Pace</div>
+        </div>
+        <div class="hero-divider"></div>
+        <div class="hero-stat">
+          <div class="hero-stat-val" style="font-size:.85rem">
+            {% set _tsb = intel.current_tsb %}
+            {% set _ctl = intel.current_ctl %}
+            {% set _atl = intel.current_atl %}
+            <span class="tooltip-wrap">
+              {% if _tsb > 5 %}Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building 🟡{% else %}Need Rest 🔴{% endif %}
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
+            </span>
+          </div>
+          <div class="hero-stat-lbl">{{ canonical_phase_label }}{% if not tsb_quality_allowed %} · No quality{% elif tsb_volume_cap < 1.0 %} · Vol adjusted{% endif %}</div>
         </div>
       </div>
       <div class="hero-right">
-        <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
         <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
+        <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
         <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
       </div>
     </div>
 
-    <!-- ── Data quality banner ──────────────────────────────────────────── -->
-    {% if show_banner and banner and banner.message %}
-    <div class="data-quality-banner banner-{{ banner.type }}">
-      <span class="banner-icon">{{ banner.icon }}</span>
-      <span class="banner-message">{{ banner.message }}</span>
-      {% if banner.action %}
-      <a href="{{ banner.action_url }}" class="banner-action">{{ banner.action }}</a>
-      {% endif %}
-      <button class="banner-close" onclick="this.parentElement.style.display='none'">✕</button>
-    </div>
-    {% endif %}
+    <!-- ── Page content ──────────────────────────────────────────────────── -->
+    <div class="page-content">
 
-    <!-- ── Feasibility strip ────────────────────────────────────────────── -->
-    {% if canonical_feasibility_score %}
-    <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
-      <div class="fs-out">
-        <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
-        <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
-        {% if canonical_feasibility_factor_scores %}
-        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+      <!-- ── Data quality banner ──────────────────────────────────────── -->
+      {% if show_banner and banner and banner.message %}
+      <div class="data-quality-banner banner-{{ banner.type }}">
+        <span class="banner-icon">{{ banner.icon }}</span>
+        <span class="banner-message">{{ banner.message }}</span>
+        {% if banner.action %}
+        <a href="{{ banner.action_url }}" class="banner-action">{{ banner.action }}</a>
+        {% endif %}
+        <button class="banner-close" onclick="this.parentElement.style.display='none'">✕</button>
+      </div>
+      {% endif %}
+
+      <!-- ── Feasibility strip ─────────────────────────────────────────── -->
+      {% if canonical_feasibility_score %}
+      <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
+        <div class="fs-out">
+          <span class="fs-score">{{ canonical_feasibility_score|int }}<sup>/100</sup></span>
+          <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
+          {% if canonical_feasibility_factor_scores %}
+          <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+          {% endif %}
+        </div>
+        {% if canonical_honest_assessment %}
+        <span class="fs-text">{{ canonical_honest_assessment }}</span>
+        {% endif %}
+        {% if canonical_show_revised_goal and canonical_revised_goal %}
+        <span class="fs-revised">Realistic target: {{ canonical_revised_goal.revised_goal_time }}</span>
         {% endif %}
       </div>
-      {% if canonical_honest_assessment %}
-      <span class="fs-text">{{ canonical_honest_assessment }}</span>
       {% endif %}
-      {% if canonical_show_revised_goal and canonical_revised_goal %}
-      <span class="fs-revised">Realistic target: {{ canonical_revised_goal.revised_goal_time }}</span>
-      {% endif %}
-    </div>
-    {% endif %}
 
-    <!-- ── 3. Today + This Week ─────────────────────────────────────────── -->
-    <div class="section-label">This Week</div>
-    <div class="grid-2">
-      <div class="card">
-        <h2>Weekly Plan</h2>
-        <div>
-          {% for p in weekly_plan %}
-            <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
-              <div class="plan-main">
-                <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
-                <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
-                  {% if p.session_type == 'strength' %}
-                    💪 Gym
-                  {% elif p.status in ['completed', 'done'] %}
-                    ✓ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
-                  {% elif p.status == 'partial' %}
-                    ⚡ {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
-                  {% elif p.status == 'missed' %}
-                    ✗ missed ({{ p.planned_km|int }}km planned)
-                  {% elif p.session_type == 'active_recovery' %}
-                    {{ p.planned_km|int }}km — easy run or walk
-                  {% elif p.status == 'bonus' %}
-                    🎁 {{ p.actual_km }}km bonus
-                  {% elif p.planned_km > 0 %}
-                    {{ p.planned_km|int }}km planned
-                  {% endif %}
+      <!-- ── This Week: 60/40 grid ─────────────────────────────────────── -->
+      <div class="section-label">This Week</div>
+      <div class="this-week-grid" style="margin-bottom:20px">
+
+        <!-- Weekly Plan (left 60%) -->
+        <div class="card">
+          <h2>Weekly Plan</h2>
+          <div>
+            {% for p in weekly_plan %}
+              <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
+                <div class="plan-day-label">{{ p.day[:3] }}{% if p.is_today %}<br><span style="color:var(--accent-green);font-size:.6rem;letter-spacing:.04em">TODAY</span>{% endif %}</div>
+                <div class="plan-main">
+                  <div class="plan-meta">{{ p.session }}</div>
+                  <div class="plan-distance">
+                    {% if p.session_type == 'strength' %}
+                      💪 Gym
+                    {% elif p.status in ['completed', 'done'] %}
+                      ✓ {{ p.actual_km }}km / {{ p.planned_km|int }}km
+                    {% elif p.status == 'partial' %}
+                      ⚡ {{ p.actual_km }}km / {{ p.planned_km|int }}km
+                    {% elif p.status == 'missed' %}
+                      ✗ missed ({{ p.planned_km|int }}km)
+                    {% elif p.session_type == 'active_recovery' %}
+                      {{ p.planned_km|int }}km easy
+                    {% elif p.status == 'bonus' %}
+                      🎁 {{ p.actual_km }}km bonus
+                    {% elif p.planned_km > 0 %}
+                      {{ p.planned_km|int }}km
+                    {% endif %}
+                  </div>
+                </div>
+                <div style="width:1px;background:var(--border);align-self:stretch"></div>
+                <div class="plan-status">
+                  {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
+                  {% elif p.status == 'partial' %}<span class="status-orange">⚡ partial</span>
+                  {% elif p.status == 'missed' %}<span class="status-orange">✗ missed</span>
+                  {% elif p.is_today %}<span style="color:var(--blue);font-weight:600;font-family:'Syne',sans-serif;font-size:.72rem">▶ today</span>
+                  {% elif p.session_type == 'strength' %}<span style="color:var(--text-muted)">💪 gym</span>
+                  {% elif p.status == 'bonus' %}<span class="status-green">🎁 bonus</span>
+                  {% else %}<span style="color:var(--text-muted)">planned</span>{% endif %}
                 </div>
               </div>
-              <div class="plan-status">
-                {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
-                {% elif p.status == 'partial' %}<span class="status-orange">⚡ partial</span>
-                {% elif p.status == 'missed' %}<span class="status-orange">✗ missed</span>
-                {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">▶ today</span>
-                {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">💪 gym</span>
-                {% elif p.status == 'bonus' %}<span class="status-green">🎁 bonus</span>
-                {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
-              </div>
+            {% endfor %}
+          </div>
+          {% if week_closed %}
+            <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
+          {% endif %}
+          <div class="progress-bar" style="margin-top:16px">
+            <span class="week-progress-fill" style="--target-width: {{ progress_pct }}%"></span>
+          </div>
+          <div class="weekly-stats">
+            <div class="weekly-stat">
+              <div class="weekly-stat-val">{{ week_actual_km }}<span style="font-size:.75rem;color:var(--text-muted)">km</span></div>
+              <div class="weekly-stat-lbl">Completed</div>
             </div>
-          {% endfor %}
+            <div class="weekly-stat">
+              <div class="weekly-stat-val">{{ canonical_weekly_target_km|round|int }}<span style="font-size:.75rem;color:var(--text-muted)">km</span></div>
+              <div class="weekly-stat-lbl">Target</div>
+            </div>
+            <div class="weekly-stat">
+              <div class="weekly-stat-val">{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }}<span style="font-size:.75rem;color:var(--text-muted)">km</span></div>
+              <div class="weekly-stat-lbl">Remaining</div>
+            </div>
+          </div>
         </div>
-        {% if week_closed %}
-          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
-        {% endif %}
-        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
-        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
-        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
-        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
+
+        <!-- Right stack: Today's Session + Upcoming Long Runs -->
+        <div class="right-stack">
+          <!-- Today's Session -->
+          <div class="today-hero-card">
+            <div class="today-workout-label">Today's Session · {{ today_workout.date }}</div>
+            <div class="today-workout-name">{{ today_workout.workout }}</div>
+            <div>
+              <span class="status-badge {{ 'badge-completed' if today_workout.status == 'Completed' else ('badge-partial' if today_workout.status == 'Partial' else 'badge-planned') }}">
+                {{ today_workout.status }}
+              </span>
+            </div>
+            {% if today_workout.completed %}
+              <div style="margin-top:14px">
+                <div class="today-workout-label" style="margin-bottom:2px">Completed</div>
+                <span class="today-distance">{{ today_workout.distance_actual }}</span>
+              </div>
+              <div class="today-pace-hint">target {{ today_workout.distance_target }}</div>
+            {% else %}
+              <div style="margin-top:14px">
+                <div class="today-workout-label" style="margin-bottom:2px">Target</div>
+                <span class="today-distance">{{ today_workout.distance_target }}</span>
+              </div>
+            {% endif %}
+            <div class="today-tomorrow">
+              Tomorrow: <strong>{{ today_workout.tomorrow }}</strong>
+            </div>
+          </div>
+
+          <!-- Upcoming Long Runs -->
+          <div class="card upcoming-card" style="margin-bottom:0;flex:1">
+            <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
+            {% if upcoming_long_runs %}
+              <div class="ladder">
+                {% for lr in upcoming_long_runs %}
+                  <div class="ladder-step {{ 'next' if loop.first else '' }}">
+                    {% if loop.first %}<span class="tooltip-wrap" style="font-size:.58rem;display:block;margin-bottom:2px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.06em;color:var(--amber)">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
+                    <span class="km">{{ lr.target_km|int }} km</span>
+                    <span style="font-size:.58rem;display:block;margin-top:2px;color:var(--text-muted);font-family:'DM Mono',monospace">{{ lr.week_date_display or lr.week_date[5:] }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+              <div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;font-family:'Inter',sans-serif">
+                Longest recent: <span style="color:var(--text-secondary);font-family:'DM Mono',monospace">{{ long_run.longest_km }} km</span>{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
+                {% if upcoming_long_runs %}&nbsp;·&nbsp; Next: <span style="font-family:'DM Mono',monospace">{{ upcoming_long_runs[0].target_km|int }}km</span> on {{ upcoming_long_runs[0].week_date_display or upcoming_long_runs[0].week_date[5:] }}{% endif %}
+              </div>
+            {% else %}
+              <div class="ladder">
+                {% set lk = long_run.longest_km %}
+                {% set nxt = long_run.next_milestone_km %}
+                {% for milestone in [21, 24, 28, 32] %}
+                  <div class="ladder-step {{ 'done' if lk >= milestone else ('next' if nxt == milestone else '') }}">
+                    {% if lk >= milestone %}✓{% elif nxt == milestone %}<span class="tooltip-wrap">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing.</span></span>{% endif %}<span class="km">{{ milestone }} km</span>
+                  </div>
+                {% endfor %}
+              </div>
+              <div style="font-size:.72rem;color:var(--text-muted);font-family:'Inter',sans-serif">Longest recent run: <span style="font-family:'DM Mono',monospace">{{ long_run.longest_km }} km</span>{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+            {% endif %}
+          </div>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>Today's Session</h2>
-        <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
-        <div class="metric-row">
-          <span>Workout</span>
-          <strong>{{ today_workout.workout }}
-            <span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}" style="margin-left:6px">{{ today_workout.status }}</span>
-          </strong>
-        </div>
-        {% if today_workout.completed %}
-          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
-        {% else %}
-          <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
-        {% endif %}
-        <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
-
-        <div class="divider"></div>
-        <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
-        {% if upcoming_long_runs %}
-          <div class="ladder">
-            {% for lr in upcoming_long_runs %}
-              <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
-                {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
-                <span class="km">{{ lr.target_km|int }} km</span>
-                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
-              </div>
-            {% endfor %}
-          </div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Longest recent: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
-            {% if upcoming_long_runs %}&nbsp;·&nbsp; Next: {{ upcoming_long_runs[0].target_km|int }}km on {{ upcoming_long_runs[0].week_date_display or upcoming_long_runs[0].week_date[5:] }}{% endif %}
-          </div>
-        {% else %}
-          <div class="ladder">
-            {# Fallback to static ladder when no progression data yet #}
-            {% set lk = long_run.longest_km %}
-            {% set nxt = long_run.next_milestone_km %}
-            {% for milestone in [21, 24, 28, 32] %}
-              <div class="ladder-step {{ 'done' if lk >= milestone else ('next' if nxt == milestone else '') }}">
-                {% if lk >= milestone %}✓{% elif nxt == milestone %}<span class="tooltip-wrap">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing.</span></span>{% endif %}<span class="km">{{ milestone }} km</span>
-              </div>
-            {% endfor %}
-          </div>
-          <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- ── 4. AI Coaching Insight (server-rendered) ─────────────────────── -->
-    {% if canonical_coaching_message %}
-    <div class="card" id="card-coaching">
-      <div class="card-title">AI Coaching Insight</div>
-      <div class="coaching-text">{% set _msg = canonical_coaching_message %}
+      <!-- ── AI Coaching Insight ────────────────────────────────────────── -->
+      {% if canonical_coaching_message %}
+      <div class="card" id="card-coaching">
+        <div class="card-title">AI Coaching Insight</div>
+        <div class="coaching-text">{% set _msg = canonical_coaching_message %}
 {% set _target = canonical_weekly_target_km|int|string %}
 {% set _long = canonical_long_run_km|int|string %}
 {% set _msg = _msg|replace("25-28km", _target + "km") %}
@@ -599,74 +941,73 @@
 {% set _msg = _msg|replace("20km long run", _long + "km long run") %}
 {% set _msg = _msg|replace("21km long run", _long + "km long run") %}
 {{ _msg }}</div>
-      <div class="coaching-badge" style="margin-top:10px">
-        <span>🤖</span>
-        <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-text">This insight is generated by Claude AI, analyzing your last 16 weeks of Strava data, current fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
-        </span>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- ── 5-7. Intelligence grid (fetched from /api/dashboard) ─────────── -->
-    <div id="intel-container">
-      <!-- skeleton while loading -->
-      <div id="intel-loading">
-        <div class="card">
-          <div class="card-title">Race Predictions</div>
-          <div class="dist-grid">
-            {% for _ in range(4) %}
-              <div class="dist-tile"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:70%"></div></div>
-          <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:80%"></div></div>
+        <div class="coaching-badge" style="margin-top:10px">
+          <span>🤖</span>
+          <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">This insight is generated by Claude AI, analyzing your last 16 weeks of Strava data, current fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
+          </span>
         </div>
       </div>
-      <div id="intel-content" style="display:none"></div>
-      <div id="intel-error"   style="display:none"></div>
-    </div>
-
-    <!-- ── 8. Recent Activities ──────────────────────────────────────────── -->
-    <div class="section-label">Recent Activities</div>
-    <div class="card">
-      <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Last 7 activities</div>
-      {% if recent_activities %}
-        {% for act in recent_activities %}
-          <div class="activity-row">
-            <div class="activity-icon">{{ act.icon }}</div>
-            <div class="activity-date">{{ act.date }}</div>
-            <div class="activity-main">
-              {% if act.is_run %}
-                {{ act.distance_km }}km{% if act.pace %} · {{ act.pace }}/km{% endif %}{% if act.elevation %} · +{{ act.elevation }}m{% endif %}
-              {% elif act.is_cross %}
-                {{ act.distance_km }}km · {{ act.type|title }}
-              {% else %}
-                {{ act.type|title }}
-              {% endif %}
-            </div>
-            <div class="activity-hr">{% if act.hr %}HR {{ act.hr }}{% endif %}</div>
-            <div class="activity-dur">{{ act.duration or '' }}</div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p style="color:var(--muted);font-size:.85rem">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
       {% endif %}
-    </div>
 
-  </main>
-</div>
+      <!-- ── Intelligence container (async) ────────────────────────────── -->
+      <div id="intel-container">
+        <div id="intel-loading">
+          <div class="card">
+            <div class="card-title">Race Predictions</div>
+            <div class="pred-tiles">
+              {% for _ in range(4) %}
+                <div class="dist-tile"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:70%"></div></div>
+            <div class="card"><div class="skeleton sk-big"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line" style="width:80%"></div></div>
+          </div>
+        </div>
+        <div id="intel-content" style="display:none"></div>
+        <div id="intel-error"   style="display:none"></div>
+      </div>
+
+      <!-- ── Recent Activities ──────────────────────────────────────────── -->
+      <div class="section-label">Recent Activities</div>
+      <div class="card">
+        <div style="font-size:.68rem;color:var(--text-muted);margin-bottom:12px;font-family:'Syne',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.08em">Last 7 activities</div>
+        {% if recent_activities %}
+          {% for act in recent_activities %}
+            <div class="activity-row">
+              <div class="activity-icon">{{ act.icon }}</div>
+              <div class="activity-date">{{ act.date }}</div>
+              <div class="activity-main">
+                {% if act.is_run %}
+                  {{ act.distance_km }}km{% if act.pace %} · {{ act.pace }}/km{% endif %}{% if act.elevation %} · +{{ act.elevation }}m{% endif %}
+                {% elif act.is_cross %}
+                  {{ act.distance_km }}km · {{ act.type|title }}
+                {% else %}
+                  {{ act.type|title }}
+                {% endif %}
+              </div>
+              <div class="activity-hr">{% if act.hr %}HR {{ act.hr }}{% endif %}</div>
+              <div class="activity-dur">{{ act.duration or '' }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p style="color:var(--text-muted);font-size:.85rem">No activities yet. <a href="/?sync=1" style="color:var(--accent-green)">Sync from Strava</a></p>
+        {% endif %}
+      </div>
+
+    </div><!-- /page-content -->
+  </div><!-- /main-content -->
+</div><!-- /app-layout -->
 
 <!-- ═══ INTELLIGENCE SECTIONS TEMPLATE ═════════════════════════════════ -->
-<!-- Rendered client-side from /api/dashboard JSON -->
 <template id="intel-template">
-  <!-- 1. RACE PREDICTIONS -->
+  <!-- Race Predictions -->
   <div class="card" id="card-predictions">
     <div class="card-title">Race Predictions — All Distances</div>
-    <div class="dist-grid" id="dist-tiles"></div>
+    <div class="pred-tiles" id="dist-tiles"></div>
     <div class="prediction-legend">
       <span class="legend-title">Confidence:</span>
       <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
@@ -675,14 +1016,14 @@
     </div>
   </div>
 
-  <!-- 6. COLLAPSIBLE: Training Science (CTL + Wall) -->
+  <!-- Training Science (collapsible) -->
   <div class="collapsible-header" onclick="toggleSection('training-science')">
     <div class="section-label">Training Science</div>
     <button class="collapsible-toggle" id="btn-training-science">▲ Hide</button>
   </div>
   <div class="collapsible-body" id="training-science">
     <div class="grid-2">
-      <!-- TRAINING LOAD -->
+      <!-- Training Load -->
       <div class="card" id="card-load">
         <div class="card-title">Training Load — PMC</div>
         <div class="load-tiles">
@@ -697,7 +1038,7 @@
             <div class="lt-label">
               <span class="tooltip-wrap">FATIGUE (ATL)<span class="tooltip-icon">?</span><span class="tooltip-text">Acute Training Load — your 7-day fatigue average. Higher = more tired from recent training. Normal to be higher than CTL during hard weeks.</span></span>
             </div>
-            <div class="lt-val" id="lt-atl" style="color:var(--red)">—</div>
+            <div class="lt-val lt-red" id="lt-atl">—</div>
             <div class="lt-sub">7-day load</div>
           </div>
           <div class="load-tile">
@@ -720,7 +1061,7 @@
         </div>
       </div>
 
-      <!-- WALL ANALYSIS -->
+      <!-- Wall Analysis -->
       <div class="card" id="card-wall">
         <div class="card-title">Wall Risk Analysis</div>
         <div id="wall-content"></div>
@@ -728,13 +1069,13 @@
     </div>
   </div>
 
-  <!-- 7. COLLAPSIBLE: Race Day Prep (Pace + Fueling) -->
+  <!-- Race Day Prep (collapsible) -->
   <div class="collapsible-header" onclick="toggleSection('race-day-prep')">
     <div class="section-label">Race Day Prep</div>
     <button class="collapsible-toggle" id="btn-race-day-prep">▼ Show</button>
   </div>
   <div class="collapsible-body collapsed" id="race-day-prep">
-    <!-- PACE STRATEGY TABLE -->
+    <!-- Pace Strategy -->
     <div class="card" id="card-pace">
       <div class="card-title">Marathon Pace Strategy — <span class="tooltip-wrap">Wall Prevention<span class="tooltip-icon">?</span><span class="tooltip-text">The wall = severe energy crash at km 30–35 when glycogen stores run out. This pace strategy prevents it by starting conservatively and building pace through the race (negative split).</span></span></div>
       <table class="pace-table" id="pace-table">
@@ -754,22 +1095,22 @@
       </div>
     </div>
 
-    <!-- FUELING SCHEDULE -->
+    <!-- Fueling Schedule -->
     <div class="card" id="card-fuel">
       <div class="card-title">Race-Day Fueling Plan</div>
       <div class="grid-2">
         <div>
-          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Gel Schedule</div>
+          <div style="font-size:.78rem;font-weight:600;margin-bottom:12px;font-family:'Syne',sans-serif;color:var(--text-primary)">Gel Schedule</div>
           <div class="fuel-timeline" id="gel-timeline"></div>
         </div>
         <div>
-          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Hydration & Electrolytes</div>
+          <div style="font-size:.78rem;font-weight:600;margin-bottom:12px;font-family:'Syne',sans-serif;color:var(--text-primary)">Hydration &amp; Electrolytes</div>
           <div class="fuel-timeline" id="elec-timeline"></div>
           <div id="hydration-rules" style="margin-top:14px"></div>
         </div>
       </div>
       <div class="divider"></div>
-      <div style="font-size:.8rem;font-weight:600;margin-bottom:10px">Pre-Race Protocol</div>
+      <div style="font-size:.78rem;font-weight:600;margin-bottom:10px;font-family:'Syne',sans-serif;color:var(--text-primary)">Pre-Race Protocol</div>
       <div id="prerace-rules"></div>
       <div id="km32-fuel-note" style="display:none;margin-top:12px"></div>
     </div>
@@ -824,6 +1165,20 @@
     return m + ':' + (s < 10 ? '0' : '') + s + '/km';
   }
 
+  // ── Number animation ─────────────────────────────────────────────────────
+  function animateNumber(el, target, duration) {
+    duration = duration || 1000;
+    const start = performance.now();
+    const update = function(time) {
+      const progress = Math.min((time - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = (target * ease).toFixed(1);
+      if (progress < 1) requestAnimationFrame(update);
+      else el.textContent = target;
+    };
+    requestAnimationFrame(update);
+  }
+
   // ── Build the intelligence DOM ───────────────────────────────────────────
   function render(data) {
     const tmpl = document.getElementById('intel-template');
@@ -852,8 +1207,6 @@
         const wallAdjTime = fm && wall && wall.current_predicted_fm_display && wall.current_predicted_fm_display !== '--'
           ? wall.current_predicted_fm_display : null;
         const ptime = fm ? (wallAdjTime || pred.predicted_time || d.predicted_time || '--') : (d.predicted_time || '--');
-        // FM sub-pace: show wall-adjusted projected pace (matches the wall-adjusted display time).
-        // Other distances: show avg_pace from pace strategy (based on VDOT).
         const fmProjSec = fm && wall && wall.current_predicted_fm ? wall.current_predicted_fm : null;
         const subPace = fm
           ? (fmProjSec ? fmtPace(fmProjSec / 42.195) + ' projected avg' : (d.avg_pace ? d.avg_pace + ' avg' : ''))
@@ -868,7 +1221,7 @@
         `;
         if (fm && wall && wall.optimal_fm_potential_display) {
           const apPace = window._aerobicPaceDisplay || '';
-          inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span style="font-size:.68rem;color:var(--muted)">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
+          inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span style="font-size:.68rem;color:var(--text-muted)">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
         }
         div.innerHTML = inner;
         distTiles.appendChild(div);
@@ -876,8 +1229,6 @@
     }
 
     // ── 2. Wall Analysis — 2-column layout ───────────────────────────────
-    // Left:  risk badge + callout + VDOT bars
-    // Right: aerobic vs actual comparison + fueling teaser
     const wallEl = el('wall-content');
     if (wallEl) {
       if (wall) {
@@ -892,18 +1243,18 @@
         const cur     = wall.current_predicted_fm_display || '--';
         const fueling = wall.fueling_plan || null;
 
-        // ── Left column ─────────────────────────────────────────────────
+        // Left column
         let leftHTML = `
           <div class="wall-header">
             <span class="tooltip-wrap wall-risk-badge ${riskClass(risk)}">${risk.toUpperCase()} WALL RISK<span class="tooltip-icon">?</span><span class="tooltip-text">Wall risk = likelihood of hitting the wall (severe glycogen depletion) at km 30–35. Your HM fitness is much higher than your FM fitness — this gap indicates pacing or fueling issues in past marathons, not lack of fitness.</span></span>
-            ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
+            ${gap != null ? `<span style="font-size:.78rem;color:var(--text-muted);font-family:'DM Mono',monospace">VDOT gap: <strong>${gap}</strong></span>` : ''}
           </div>`;
 
         const _wm = window._wallMath || {};
         if (_wm.showEstimate && _wm.baseDisplay && _wm.adjustedDisplay) {
-          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px"><strong>${_wm.baseDisplay}</strong> base → <strong style="color:#ef4444">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
+          leftHTML += `<div style="font-size:.82rem;color:var(--text-secondary);margin:10px 0 6px;font-family:'Inter',sans-serif"><strong style="color:var(--text-primary)">${_wm.baseDisplay}</strong> base → <strong style="color:var(--red)">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
         } else if (costAbs) {
-          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px">~<strong style="color:#ef4444">${costAbs} min</strong> estimated time lost to the wall</div>`;
+          leftHTML += `<div style="font-size:.82rem;color:var(--text-secondary);margin:10px 0 6px">~<strong style="color:var(--red)">${costAbs} min</strong> estimated time lost to the wall</div>`;
         }
 
         if (hmv || fmv) {
@@ -923,7 +1274,7 @@
             </div>`;
         }
 
-        // ── Right column ────────────────────────────────────────────────
+        // Right column
         const wm = window._wallMath || {};
         let wallAdjHTML = '';
         if (wm.showEstimate && wm.baseDisplay && wm.adjustedDisplay) {
@@ -931,9 +1282,9 @@
           const sign = wm.costMinutes > 0 ? '+' : '';
           wallAdjHTML = `
             <div class="fs-val red">${wm.adjustedDisplay}</div>
-            <div style="font-size:.72rem;color:var(--muted);margin-top:3px">
+            <div style="font-size:.7rem;color:var(--text-muted);margin-top:3px;font-family:'DM Mono',monospace">
               Base ${wm.baseDisplay} × ${wm.factor.toFixed(2)} = ${wm.adjustedDisplay}
-              <span style="color:#ef4444;font-weight:600">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
+              <span style="color:var(--red);font-weight:600">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
             </div>`;
         } else {
           wallAdjHTML = `<div class="fs-val red">${cur}</div>`;
@@ -953,14 +1304,14 @@
 
         if (fueling) {
           rightHTML += `
-            <div style="margin-top:14px;background:#f0fdf4;border-radius:8px;padding:12px 14px;border:1px solid #bbf7d0">
-              <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#16a34a;margin-bottom:8px">Fueling Plan</div>
-              <div style="font-size:.82rem;color:var(--text)">
-                🍬 <strong>${fueling.gel_count}</strong> gels &nbsp;·&nbsp;
-                ~<strong>${fueling.approx_carbs_per_hour_actual_g}g</strong> carbs/hr
+            <div style="margin-top:14px;background:rgba(0,255,135,0.06);border-radius:var(--radius-sm);padding:12px 14px;border:1px solid rgba(0,255,135,0.15)">
+              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-green);margin-bottom:8px;font-family:'Syne',sans-serif">Fueling Plan</div>
+              <div style="font-size:.82rem;color:var(--text-secondary);font-family:'Inter',sans-serif">
+                🍬 <strong style="color:var(--text-primary)">${fueling.gel_count}</strong> gels &nbsp;·&nbsp;
+                ~<strong style="color:var(--text-primary)">${fueling.approx_carbs_per_hour_actual_g}g</strong> carbs/hr
               </div>
-              <div style="font-size:.75rem;color:var(--muted);margin-top:4px">First gel at km 10 · every 45 min</div>
-              <a href="#card-fuel" style="font-size:.75rem;color:#16a34a;text-decoration:none;display:block;margin-top:8px;font-weight:600">→ See full schedule below</a>
+              <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px;font-family:'Inter',sans-serif">First gel at km 10 · every 45 min</div>
+              <a href="#card-fuel" style="font-size:.72rem;color:var(--accent-green);text-decoration:none;display:block;margin-top:8px;font-weight:600;font-family:'Syne',sans-serif">→ See full schedule below</a>
             </div>`;
         }
 
@@ -970,7 +1321,7 @@
             <div>${rightHTML}</div>
           </div>`;
       } else {
-        wallEl.innerHTML = '<div style="color:var(--muted);font-size:.83rem">Wall analysis requires a marathon PB entered in settings.</div>';
+        wallEl.innerHTML = '<div style="color:var(--text-muted);font-size:.83rem;font-family:\'Inter\',sans-serif">Wall analysis requires a marathon PB entered in settings.</div>';
       }
     }
 
@@ -992,7 +1343,6 @@
     }
 
     if (tbody && wallSegs && wallSegs.length) {
-      // PRIMARY: wall prevention pacing segments from wall analysis
       wallSegs.forEach(seg => {
         const is32 = seg.start_km >= 32.0;
         const tr_el = document.createElement('tr');
@@ -1004,12 +1354,11 @@
           <td class="seg-pace">${seg.pace_display || ''}</td>
           <td>${seg.segment_time || '—'}</td>
           <td>${seg.elapsed_at_end || '—'}</td>
-          <td style="font-size:.75rem;color:var(--muted)">${seg.note || ''}</td>
+          <td style="font-size:.75rem;color:var(--text-muted)">${seg.note || ''}</td>
         `;
         tbody.appendChild(tr_el);
       });
     } else if (tbody) {
-      // FALLBACK: compute differentiated segments from predicted_seconds
       const predSec = fmPs.predicted_seconds || 0;
       const avgPaceSec = predSec > 0 ? predSec / 42.195 : 0;
       const segments = [
@@ -1034,7 +1383,7 @@
           <td class="seg-pace">${paceStr}</td>
           <td>${segStr}</td>
           <td>${elStr}</td>
-          <td style="font-size:.75rem;color:var(--muted)">${note}</td>
+          <td style="font-size:.75rem;color:var(--text-muted)">${note}</td>
         `;
         tbody.appendChild(tr_el);
       });
@@ -1065,7 +1414,6 @@
             <div class="fe-note">${g.note}</div>`;
           gelTL.appendChild(div);
         });
-        // Summary
         const sumDiv = document.createElement('div');
         sumDiv.className = 'fuel-rule';
         sumDiv.innerHTML = `<div class="fr-icon">📊</div><div class="fr-text"><strong>${fueling.gel_count} gels total · ~${fueling.approx_carbs_per_hour_actual_g}g carbs/hr</strong>${fueling.gel_note}</div>`;
@@ -1124,7 +1472,7 @@
     } else {
       const cardFuel = el('card-fuel');
       if (cardFuel) {
-        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div style="color:var(--muted);font-size:.83rem">Fueling plan available once a marathon PB is saved in settings.</div>';
+        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div style="color:var(--text-muted);font-size:.83rem;font-family:\'Inter\',sans-serif">Fueling plan available once a marathon PB is saved in settings.</div>';
       }
     }
 
@@ -1134,8 +1482,8 @@
     const ltTsb   = el('lt-tsb');
     const ltTrend = el('lt-trend');
 
-    if (ltCtl)  ltCtl.textContent = (load.ctl || tr.ctl || 0).toFixed(1);
-    if (ltAtl)  ltAtl.textContent = (load.atl || tr.atl || 0).toFixed(1);
+    if (ltCtl)  animateNumber(ltCtl,  (load.ctl || tr.ctl || 0));
+    if (ltAtl)  animateNumber(ltAtl,  (load.atl || tr.atl || 0));
     const tsbVal = load.tsb != null ? load.tsb : (tr.tsb || 0);
     if (ltTsb) {
       ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
@@ -1165,26 +1513,24 @@
       const areaEl = el('ctl-area');
       if (pathEl) pathEl.setAttribute('d', pathD);
       if (areaEl) areaEl.setAttribute('d', areaD);
-      // Dots with hover tooltips
       const dotsEl = el('ctl-dots');
       if (dotsEl) {
         dotsEl.innerHTML = pts.map((p, i) => {
           const isLast = i === pts.length - 1;
-          const fill = isLast ? 'var(--green)' : '#fff';
+          const fill = isLast ? 'var(--blue)' : '#fff';
           const r = isLast ? 4 : 3;
           const wk  = (weeks[i] || '').replace(/'/g, '&apos;');
           const ctlV = vals[i].toFixed(1);
-          let dot = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="var(--green)" stroke-width="1.5" style="cursor:pointer" data-week="${wk}" data-ctl="${ctlV}" onmouseover="showCTLTooltip(this)" onmouseout="hideCTLTooltip()"/>`;
-          if (isLast) dot += `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--green)" style="pointer-events:none">${ctlV}</text>`;
+          let dot = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="var(--blue)" stroke-width="1.5" style="cursor:pointer" data-week="${wk}" data-ctl="${ctlV}" onmouseover="showCTLTooltip(this)" onmouseout="hideCTLTooltip()"/>`;
+          if (isLast) dot += `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--blue)" style="pointer-events:none">${ctlV}</text>`;
           return dot;
         }).join('');
       }
-      // Week labels (show every other + last)
       const labelsEl = el('ctl-labels');
       if (labelsEl) {
         labelsEl.innerHTML = pts.map((p, i) => {
           if (i % 2 !== 0 && i !== pts.length - 1) return '';
-          return `<text x="${p[0]}" y="${LABEL_Y}" text-anchor="middle" font-size="8" fill="#9ca3af">${weeks[i]}</text>`;
+          return `<text x="${p[0]}" y="${LABEL_Y}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${weeks[i]}</text>`;
         }).join('');
       }
     }
@@ -1225,7 +1571,7 @@
 </script>
 
 <!-- CTL graph hover tooltip -->
-<div id="ctl-tooltip" style="display:none;position:fixed;background:#1e2736;color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;border:1px solid rgba(255,255,255,0.1);z-index:1000;line-height:1.5;"></div>
+<div id="ctl-tooltip" style="display:none;position:fixed;background:#0d1117;color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;border:1px solid rgba(255,255,255,0.1);z-index:1000;line-height:1.5;font-family:'DM Mono',monospace;"></div>
 <script>
 function showCTLTooltip(el) {
   const tt = document.getElementById('ctl-tooltip');
