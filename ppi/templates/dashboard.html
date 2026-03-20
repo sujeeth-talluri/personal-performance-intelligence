@@ -1315,14 +1315,25 @@ function toggleSection(id) {
     if (msgEl) msgEl.textContent = messages[i];
   }, 1200);
 
-  window.addEventListener('load', function () {
+  var loaderGone = false;
+  function hideLoader() {
+    if (loaderGone) return;
+    loaderGone = true;
     clearInterval(interval);
     const loader = document.getElementById('page-loader');
     if (loader) {
+      loader.style.transition = 'opacity 0.4s ease';
       loader.style.opacity = '0';
-      setTimeout(function () { loader.remove(); }, 400);
+      setTimeout(function () { if (loader.parentNode) loader.remove(); }, 400);
     }
-  });
+  }
+
+  // Primary: hide when all resources loaded
+  window.addEventListener('load', hideLoader);
+  // Fallback 1: hide after 2s (DOM ready + basic render done)
+  setTimeout(hideLoader, 2000);
+  // Fallback 2: hard cap — never block user beyond 4s
+  setTimeout(hideLoader, 4000);
 })();
 
 // ── Strava sync with loading state ────────────────────────────────────────

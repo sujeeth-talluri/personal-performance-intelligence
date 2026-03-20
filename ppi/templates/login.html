@@ -50,6 +50,12 @@
       const loading = btn.querySelector('.btn-loading');
       loading.style.display = 'flex';
       btn.disabled = true;
+      // Safety: re-enable after 10s in case redirect fails or returns with error
+      setTimeout(function () {
+        btn.disabled = false;
+        btn.querySelector('.btn-content').style.display = '';
+        loading.style.display = 'none';
+      }, 10000);
     }
   </script>
 </body>
