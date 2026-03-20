@@ -133,3 +133,584 @@ button, .btn {
   background: var(--green-dim);
   color: var(--green);
 }
+
+/* ═══════════════════════════════════════
+   ROUND 2: Hero + Sidebar + Card depth
+   ═══════════════════════════════════════ */
+
+/* ─── Sidebar enhancements ─── */
+.sidebar {
+  background: var(--bg-base) !important;
+  border-right: 1px solid var(--border) !important;
+  padding: 24px 16px !important;
+}
+
+/* Logo */
+.sidebar .logo-text,
+.sidebar .brand-name,
+.sidebar h1 {
+  font-family: var(--font-display) !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: var(--green) !important;
+  letter-spacing: -0.5px !important;
+  line-height: 1 !important;
+}
+
+/* AI Marathon Coach subtitle */
+.sidebar .brand-subtitle,
+.sidebar .tagline {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+  letter-spacing: 0.5px !important;
+  margin-top: 3px !important;
+}
+
+/* Nav items */
+.sidebar nav a,
+.sidebar .nav-link {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 12px !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  margin-bottom: 2px !important;
+  transition: var(--transition) !important;
+  border: 1px solid transparent !important;
+}
+.sidebar nav a:hover,
+.sidebar .nav-link:hover {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+.sidebar nav a.active,
+.sidebar .nav-link.active {
+  background: var(--green-dim) !important;
+  color: var(--green) !important;
+  border-color: var(--border-accent) !important;
+}
+
+/* User info at bottom */
+.sidebar .user-info {
+  padding: 12px !important;
+  border-top: 1px solid var(--border) !important;
+  margin-top: auto !important;
+}
+.sidebar .user-name {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+.sidebar .user-status,
+.sidebar .last-synced {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+}
+
+/* ─── Hero Bar ─── */
+.hero-bar,
+.top-header {
+  background: linear-gradient(135deg,
+    #0d1117 0%, #131929 60%, #1a2235 100%) !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 20px 32px !important;
+}
+
+/* Race name */
+.hero-bar .race-name,
+.hero-bar h2,
+.hero-title {
+  font-family: var(--font-display) !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: -0.3px !important;
+  line-height: 1.2 !important;
+}
+
+/* Goal time + days */
+.hero-bar .goal-line,
+.hero-meta {
+  font-size: 13px !important;
+  color: var(--text-secondary) !important;
+  margin-top: 4px !important;
+}
+
+/* Hero stats (days, pace, phase) */
+.hero-stats {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+}
+.hero-stat {
+  padding: 0 20px !important;
+  border-right: 1px solid var(--border) !important;
+  text-align: center !important;
+}
+.hero-stat:first-child { padding-left: 0 !important; }
+.hero-stat:last-child {
+  border-right: none !important;
+  padding-right: 0 !important;
+}
+.hero-stat-value {
+  font-family: var(--font-mono) !important;
+  font-size: 20px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  display: block !important;
+}
+.hero-stat-label {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  color: var(--text-muted) !important;
+  margin-top: 2px !important;
+  display: block !important;
+}
+
+/* Phase badge in hero */
+.phase-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 10px !important;
+  border-radius: 20px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  background: var(--amber-dim) !important;
+  color: var(--amber) !important;
+  border: 1px solid rgba(245,158,11,0.2) !important;
+}
+
+/* ─── Card depth improvements ─── */
+.card,
+.dashboard-card,
+.widget {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 24px !important;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.04) inset,
+    var(--shadow-sm) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.card:hover {
+  border-color: var(--border-bright) !important;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.04) inset,
+    var(--shadow-md) !important;
+}
+
+/* Card section titles */
+.card-header,
+.card-title,
+.section-label {
+  font-family: var(--font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.2px !important;
+  color: var(--text-muted) !important;
+  margin-bottom: 20px !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ─── Today's Session card highlight ─── */
+.today-session-card,
+.todays-session {
+  border-color: var(--border-accent) !important;
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(0,255,135,0.02) 100%) !important;
+}
+
+/* Today workout name — make it big */
+.today-workout-name,
+.workout-name {
+  font-family: var(--font-display) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+/* ─── Weekly Plan row improvements ─── */
+.plan-row {
+  padding: 14px 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.plan-row:last-of-type {
+  border-bottom: none !important;
+}
+.plan-day-name {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.plan-session-name {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+}
+.plan-distance-info {
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  margin-top: 2px !important;
+}
+.plan-pace-info {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  margin-top: 2px !important;
+}
+
+/* ─── Race Prediction tiles ─── */
+.pred-tile,
+.prediction-tile {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 20px 16px !important;
+  text-align: center !important;
+  transition: var(--transition) !important;
+}
+.pred-tile:hover {
+  border-color: var(--border-bright) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.pred-tile.fm-tile,
+.pred-tile:last-child {
+  border-color: var(--border-accent) !important;
+  background: rgba(0,255,135,0.03) !important;
+}
+.pred-distance-label {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  color: var(--text-muted) !important;
+  margin-bottom: 8px !important;
+}
+.pred-time-value {
+  font-family: var(--font-mono) !important;
+  font-size: 28px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: -0.5px !important;
+}
+.pred-pace-value {
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  margin-top: 4px !important;
+}
+
+/* ─── CTL/ATL/TSB metric tiles ─── */
+.metric-tile {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 20px !important;
+  text-align: center !important;
+}
+.metric-number {
+  font-family: var(--font-mono) !important;
+  font-size: 36px !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  letter-spacing: -1px !important;
+}
+.ctl-number { color: var(--blue) !important; }
+.atl-number { color: var(--amber) !important; }
+.tsb-positive { color: var(--green) !important; }
+.tsb-negative { color: var(--red) !important; }
+.tsb-neutral  { color: var(--amber) !important; }
+
+.metric-label {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  color: var(--text-muted) !important;
+  margin-top: 6px !important;
+}
+.metric-sublabel {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  margin-top: 2px !important;
+}
+
+/* ─── Feasibility strip ─── */
+.feasibility-strip {
+  margin: 16px 32px !important;
+  padding: 16px 20px !important;
+  border-radius: var(--radius-md) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  border: 1px solid !important;
+  flex-wrap: wrap !important;
+}
+.strip-green {
+  background: rgba(0,255,135,0.04) !important;
+  border-color: rgba(0,255,135,0.2) !important;
+}
+.strip-amber {
+  background: rgba(245,158,11,0.04) !important;
+  border-color: rgba(245,158,11,0.2) !important;
+}
+.strip-red {
+  background: rgba(255,71,87,0.04) !important;
+  border-color: rgba(255,71,87,0.2) !important;
+}
+.fs-score {
+  font-family: var(--font-mono) !important;
+  font-size: 36px !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  color: var(--green) !important;
+}
+.fs-out {
+  font-size: 14px !important;
+  color: var(--text-muted) !important;
+}
+.fs-label {
+  font-family: var(--font-display) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.fs-text {
+  font-size: 13px !important;
+  color: var(--text-secondary) !important;
+  flex: 1 !important;
+  line-height: 1.5 !important;
+  min-width: 200px !important;
+}
+.fs-score-explain {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+  margin-top: 4px !important;
+  display: block !important;
+}
+
+/* ─── AI Coaching card ─── */
+.coaching-card,
+.ai-insight-card {
+  border-left: 3px solid var(--green) !important;
+  background: var(--bg-card) !important;
+}
+.coaching-text {
+  font-size: 14px !important;
+  line-height: 1.8 !important;
+  color: var(--text-secondary) !important;
+}
+.coaching-attribution {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+  margin-top: 16px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+/* ─── Upcoming long runs tiles ─── */
+.long-run-tile {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 14px !important;
+  text-align: center !important;
+  transition: var(--transition) !important;
+  min-width: 110px !important;
+}
+.long-run-tile.next-tile {
+  border-color: rgba(245,158,11,0.3) !important;
+  background: var(--amber-dim) !important;
+}
+.long-run-km {
+  font-family: var(--font-mono) !important;
+  font-size: 20px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+}
+.long-run-date {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  margin-top: 4px !important;
+}
+.long-run-label {
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+  margin-top: 2px !important;
+}
+
+/* ─── Recent Activities ─── */
+.activity-row {
+  padding: 12px 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  transition: var(--transition) !important;
+}
+.activity-row:hover {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+  margin: 0 -8px !important;
+  background: var(--bg-elevated) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.activity-date {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+}
+.activity-name {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+}
+.activity-stats {
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-mono) !important;
+}
+
+/* ─── Collapsible section headers ─── */
+.collapsible-header {
+  padding: 14px 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  cursor: pointer !important;
+}
+.collapsible-header:hover {
+  opacity: 0.8 !important;
+}
+.collapsible-title {
+  font-family: var(--font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.2px !important;
+  color: var(--text-muted) !important;
+}
+.collapsible-toggle {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  padding: 3px 10px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 20px !important;
+  transition: var(--transition) !important;
+}
+.collapsible-header:hover .collapsible-toggle {
+  border-color: var(--green) !important;
+  color: var(--green) !important;
+}
+
+/* ─── Wall Risk card ─── */
+.wall-badge-high {
+  background: var(--red-dim) !important;
+  color: var(--red) !important;
+  border: 1px solid rgba(255,71,87,0.3) !important;
+  padding: 4px 12px !important;
+  border-radius: 20px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+}
+.wall-time-value {
+  font-family: var(--font-mono) !important;
+  font-size: 44px !important;
+  font-weight: 400 !important;
+  color: var(--red) !important;
+  line-height: 1 !important;
+  letter-spacing: -1px !important;
+}
+
+/* ─── Pace Strategy table ─── */
+.pace-table th {
+  font-size: 10px !important;
+  letter-spacing: 0.8px !important;
+  color: var(--text-muted) !important;
+}
+.pace-table td {
+  font-size: 13px !important;
+  padding: 12px !important;
+}
+.pace-value {
+  font-family: var(--font-mono) !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+}
+.critical-row {
+  background: rgba(255,71,87,0.04) !important;
+}
+.critical-row .pace-value {
+  color: var(--green) !important;
+}
+
+/* ─── Status badges ─── */
+.status-done { color: var(--green) !important; }
+.status-partial { color: var(--amber) !important; }
+.status-missed { color: var(--red) !important; }
+.status-today { color: var(--blue) !important; }
+.status-planned { color: var(--text-muted) !important; }
+
+.badge-planned {
+  background: var(--amber-dim) !important;
+  color: var(--amber) !important;
+  border: 1px solid rgba(245,158,11,0.25) !important;
+}
+.badge-completed {
+  background: var(--green-dim) !important;
+  color: var(--green) !important;
+  border: 1px solid rgba(0,255,135,0.25) !important;
+}
+
+/* ─── Progress bar ─── */
+.progress-track {
+  height: 4px !important;
+  background: var(--bg-elevated) !important;
+  border-radius: 2px !important;
+  overflow: hidden !important;
+  margin-top: 16px !important;
+}
+.progress-fill {
+  height: 100% !important;
+  background: linear-gradient(90deg,
+    var(--green) 0%, #00c853 100%) !important;
+  border-radius: 2px !important;
+  transition: width 0.8s var(--ease) !important;
+}
+
+/* ─── Week stats row ─── */
+.week-stats-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  margin-top: 16px !important;
+  padding-top: 16px !important;
+  border-top: 1px solid var(--border) !important;
+}
+.week-stat-item {
+  text-align: center !important;
+}
+.week-stat-value {
+  font-family: var(--font-mono) !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+}
+.week-stat-label {
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  margin-top: 2px !important;
+}
