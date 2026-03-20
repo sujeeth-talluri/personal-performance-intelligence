@@ -4,26 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StrideIQ — {{ user.name }}</title>
-  <link rel="stylesheet" href="/static/css/strideiq.css">
   <style>
     /* ─── Reset & Base ───────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      /* Dark-theme values — align with strideiq.css tokens */
-      --green:    #00ff87;
-      --green-d:  #00cc6a;
-      --dark:     #07090f;
-      --sidebar:  #0d1117;
-      --card:     #131929;
-      --bg:       #0d1117;
-      --text:     #eef2ff;
-      --muted:    #4a5568;
-      --border:   rgba(255,255,255,0.07);
-      --red:      #ff4757;
+      --green:    #00C853;
+      --green-d:  #009624;
+      --dark:     #0f1117;
+      --sidebar:  #161b27;
+      --card:     #ffffff;
+      --bg:       #f0f2f7;
+      --text:     #1a1d2e;
+      --muted:    #6b7280;
+      --border:   #e5e7eb;
+      --red:      #ef4444;
       --amber:    #f59e0b;
-      --blue:     #60a5fa;
+      --blue:     #3b82f6;
       --radius:   12px;
-      --shadow:   0 4px 16px rgba(0,0,0,0.4);
+      --shadow:   0 2px 12px rgba(0,0,0,.08);
     }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
@@ -59,7 +57,6 @@
     .card {
       background: var(--card); border-radius: var(--radius);
       box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 20px;
-      /* No global color — each component sets its own */
     }
     .card-title {
       font-size: .72rem; font-weight: 700; letter-spacing: .08em;
@@ -73,7 +70,9 @@
       padding: 12px 18px; border-radius: 8px;
       margin-bottom: 16px; font-size: .86rem; line-height: 1.5; flex-wrap: wrap;
     }
-    /* banner colors handled by strideiq.css */
+    .banner-warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
+    .banner-info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
+    .banner-success { background: #0d2a1a; border-left: 4px solid #00C853; color: #00C853; }
     .banner-icon    { font-size: 1.1rem; flex-shrink: 0; }
     .banner-message { flex: 1; }
     .banner-action {
@@ -89,58 +88,148 @@
 
     /* ─── Hero bar ───────────────────────────────────────────────── */
     .hero {
-      background: linear-gradient(135deg, #0d1117 0%, #131929 60%, #1a2235 100%);
+      background: linear-gradient(135deg, #161b27 0%, #1e2638 100%);
       border-radius: var(--radius); padding: 22px 26px; margin-bottom: 24px;
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
-      border: 1px solid rgba(255,255,255,0.07);
     }
-    .hero-left h1 { font-size: 1.4rem; font-weight: 800; color: var(--text); }
+    .hero-left h1 { font-size: 1.4rem; font-weight: 800; color: #fff; }
     .hero-left .sub { font-size: .83rem; color: #94a3b8; margin-top: 4px; }
     .hero-right { display: flex; gap: 10px; align-items: center; }
     .hero-badge {
-      background: rgba(0,255,135,0.12); color: var(--green);
+      background: rgba(0,200,83,.15); color: var(--green);
       padding: 6px 14px; border-radius: 20px; font-size: .8rem; font-weight: 700;
     }
     .icon-btn {
-      width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.06);
+      width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.07);
       color: #94a3b8; display: inline-flex; align-items: center; justify-content: center;
       text-decoration: none; font-size: 1.1rem; transition: background .15s;
     }
-    .icon-btn:hover { background: rgba(255,255,255,.12); color: var(--text); }
+    .icon-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
 
     /* ─── Grid ───────────────────────────────────────────────────── */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .col-span-2 { grid-column: span 2; }
 
-    /* ─── Distance tiles — handled by strideiq.css ───────────────── */
-    /* confidence badges and prediction-legend also in strideiq.css */
+    /* ─── Distance tiles ─────────────────────────────────────────── */
+    .dist-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dist-tile {
+      background: var(--bg); border-radius: 10px; padding: 16px 14px;
+      text-align: center; position: relative;
+    }
+    .dist-tile.fm { background: linear-gradient(135deg, #e8fff1 0%, #f0fdf4 100%); }
+    .dist-tile .label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+    .dist-tile .time { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+    .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
+    .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
+    /* Unified confidence badges — same style in tiles and legend */
+    .confidence-high, .confidence-moderate, .confidence-low {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      color: #fff; margin-top: 6px;
+    }
+    .confidence-high     { background: #00C853; }
+    .confidence-moderate { background: #f59e0b; }
+    .confidence-low      { background: #ef4444; }
+    .prediction-legend {
+      display: flex; align-items: center; gap: 16px;
+      padding: 8px 12px; background: rgba(0,0,0,.03);
+      border-radius: 6px; font-size: 12px; color: #888;
+      flex-wrap: wrap; margin-top: 10px;
+    }
+    .legend-title { color: #aaa; font-weight: 500; }
     .legend-item { display: flex; align-items: center; gap: 6px; }
 
-    /* ─── Wall analysis — handled by strideiq.css ───────────────── */
+    /* ─── Wall analysis ──────────────────────────────────────────── */
     .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .wall-risk-badge {
+      padding: 4px 14px; border-radius: 20px; font-size: .78rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .risk-high   { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+    .risk-medium { background: #fffbeb; color: #d97706; border: 1px solid #fed7aa; }
+    .risk-low    { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .risk-unknown{ background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
 
-    /* ─── VDOT bars ──────────────────────────────────────────────── */
+    .wall-callout {
+      background: #fff7ed; border-left: 3px solid #f59e0b;
+      border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 16px;
+    }
+    .wall-callout.high { background: #fef2f2; border-left-color: #ef4444; }
+    .wall-callout .callout-num { font-size: 1.8rem; font-weight: 800; color: #ef4444; }
+    .wall-callout .callout-num.medium { color: #d97706; }
+    .wall-callout .callout-label { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
     .vdot-bar-wrap { margin-bottom: 16px; }
     .vdot-label-row { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 6px; }
     .vdot-bars { display: flex; flex-direction: column; gap: 8px; }
     .vdot-row { display: flex; align-items: center; gap: 10px; }
     .vdot-row-label { font-size: .75rem; color: var(--muted); width: 28px; text-align: right; }
-    .vdot-track { flex: 1; height: 18px; background: rgba(255,255,255,0.05); border-radius: 9px; overflow: hidden; }
+    .vdot-track { flex: 1; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
     .vdot-fill { height: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: .68rem; font-weight: 700; color: #fff; transition: width .6s ease; }
     .vdot-fill.hm { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-    .vdot-fill.fm { background: linear-gradient(90deg, #ff4757, #ff8fa3); }
-    /* fm-stat and fm-compare handled by strideiq.css */
+    .vdot-fill.fm { background: linear-gradient(90deg, #ef4444, #f87171); }
+
     .fm-compare { display: flex; gap: 12px; margin-top: 12px; }
+    .fm-stat { flex: 1; background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; }
+    .fm-stat .fs-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .fm-stat .fs-val { font-size: 1.25rem; font-weight: 800; margin-top: 4px; }
+    .fm-stat .fs-val.green { color: var(--green-d); }
+    .fm-stat .fs-val.red   { color: var(--red); }
 
-    /* ─── Pace strategy table — handled by strideiq.css ─────────── */
+    /* ─── Pace strategy table ────────────────────────────────────── */
+    .pace-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .pace-table th {
+      text-align: left; padding: 8px 12px; font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+      border-bottom: 2px solid var(--border);
+    }
+    .pace-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+    .pace-table tr:last-child td { border-bottom: none; }
+    .pace-table .seg-label { font-weight: 600; }
+    .pace-table .seg-pace  { font-family: monospace; font-size: .9rem; font-weight: 700; }
+    .pace-table tr.km32 { background: #fff7ed; }
+    .pace-table tr.km32 td { color: #92400e; }
+    .pace-table tr.km32 .seg-pace { color: #ef4444; font-weight: 800; }
+    .km32-warn { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: #92400e; margin-top: 12px; background: #fff7ed; padding: 10px 14px; border-radius: 8px; border: 1px solid #fde68a; }
 
-    /* ─── Fueling timeline — handled by strideiq.css ────────────── */
+    /* ─── Fueling timeline ───────────────────────────────────────── */
+    .fuel-timeline { position: relative; padding-left: 28px; }
+    .fuel-timeline::before {
+      content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px;
+      width: 2px; background: var(--border);
+    }
+    .fuel-event { position: relative; margin-bottom: 14px; }
+    .fuel-event::before {
+      content: attr(data-icon); position: absolute; left: -22px; top: 0;
+      width: 20px; text-align: center; font-size: .95rem; line-height: 1.4;
+    }
+    .fuel-event .fe-time { font-size: .7rem; color: var(--muted); }
+    .fuel-event .fe-label { font-size: .83rem; font-weight: 600; margin: 1px 0; }
+    .fuel-event .fe-note  { font-size: .73rem; color: var(--muted); }
+    .fuel-rule { display: flex; gap: 10px; margin-top: 14px; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+    .fuel-rule .fr-icon { font-size: 1.1rem; }
+    .fuel-rule .fr-text  { font-size: .78rem; color: #1d4ed8; }
+    .fuel-rule .fr-text strong { display: block; font-size: .8rem; }
 
-    /* ─── Load tiles — handled by strideiq.css ───────────────────── */
+    /* ─── Load tiles ─────────────────────────────────────────────── */
+    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .load-tile { background: var(--bg); border-radius: 10px; padding: 14px 12px; text-align: center; }
+    .load-tile .lt-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .load-tile .lt-val   { font-size: 2rem; font-weight: 800; line-height: 1; margin: 6px 0 4px; }
+    .load-tile .lt-sub   { font-size: .72rem; color: var(--muted); }
+    .lt-green { color: var(--green-d); }
+    .lt-amber { color: #d97706; }
+    .lt-red   { color: var(--red); }
+    .lt-blue  { color: var(--blue); }
 
-    /* ─── Mini chart — handled by strideiq.css ───────────────────── */
+    /* ─── Mini chart ─────────────────────────────────────────────── */
+    .mini-chart-wrap { margin-top: 16px; }
+    .mini-chart-title { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
     .mini-chart { width: 100%; height: 80px; }
+    .mini-chart .path { fill: none; stroke: var(--green); stroke-width: 2.5; }
+    .mini-chart .area { fill: rgba(0,200,83,.1); stroke: none; }
 
     /* ─── Tooltips ───────────────────────────────────────────────── */
     .tooltip-wrap {
@@ -193,12 +282,12 @@
     .plan-distance { font-weight: 700; font-size: .9rem; }
     .plan-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
     .plan-status { font-size: .75rem; font-weight: 600; }
-    .done-row   .plan-distance { color: var(--green); }
+    .done-row   .plan-distance { color: #16a34a; }
     .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
-    .partial-row .plan-distance { color: var(--amber); }
+    .partial-row .plan-distance { color: #d97706; }
     .plan-pace { font-size: 11px; color: #888; margin-top: 2px; }
-    .status-green  { color: var(--green); }
-    .status-orange { color: var(--amber); }
+    .status-green  { color: #16a34a; }
+    .status-orange { color: #d97706; }
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
     .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
 
@@ -219,29 +308,75 @@
     .activity-hr     { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
     .activity-dur    { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
 
-    /* ─── Pills, ladder, feasibility, collapsible, load, error
-           — all handled by strideiq.css ─────────────────────────── */
-    /* Layout-only rules that strideiq.css doesn't cover */
-    .fs-out   { display: flex; flex-direction: column; gap: 2px; }
-    .feasibility-strip { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    /* ─── Pills ──────────────────────────────────────────────────── */
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-green  { background: #dcfce7; color: #16a34a; }
+    .pill-yellow { background: #fef9c3; color: #a16207; }
+    .pill-orange { background: #ffedd5; color: #c2410c; }
 
-    /* Utility text helpers */
-    .text-green { color: var(--green); }
-    .text-red   { color: var(--red); }
-    .text-amber { color: var(--amber); }
-    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 14px; }
-
-    /* metric-row layout */
-    .metric-row { display: flex; justify-content: space-between; align-items: center; font-size: .83rem; }
-
-    /* Activity row grid */
-    .activity-row {
-      display: grid;
-      grid-template-columns: 26px 58px 1fr 72px 50px;
-      align-items: center;
-      gap: 8px;
+    /* ─── Ladder ─────────────────────────────────────────────────── */
+    .ladder { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ladder-step {
+      flex: 1; text-align: center; background: var(--bg); border-radius: 8px;
+      padding: 10px 6px; font-size: .8rem; font-weight: 600; color: var(--muted);
+      border: 2px solid transparent;
     }
-    .activity-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ladder-step.done   { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+    .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
+    .ladder-step .km    { font-size: .7rem; font-weight: 400; display: block; margin-top: 2px; }
+
+    /* ─── Feasibility strip ──────────────────────────────────────── */
+    .feasibility-strip {
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 20px; border-radius: 8px;
+      background: white; border-left: 4px solid;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .strip-green  { border-color: #00C853; }
+    .strip-amber  { border-color: #f59e0b; }
+    .strip-orange { border-color: #f97316; }
+    .strip-red    { border-color: #ef4444; }
+    .strip-grey   { border-color: #9ca3af; }
+    .fs-out   { display: flex; flex-direction: column; gap: 2px; }
+    .fs-score { font-size: 24px; font-weight: 700; color: #1a1a2e; min-width: 40px; line-height: 1; }
+    .fs-label { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
+    .fs-score-explain { font-size: 11px; color: #888; white-space: nowrap; }
+    .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
+    .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
+
+    /* ─── Collapsible sections ───────────────────────────────────── */
+    .collapsible-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; padding: 4px 0; margin: 22px 0 10px;
+    }
+    .collapsible-header .section-label { margin: 0; }
+    .collapsible-toggle {
+      font-size: .75rem; color: var(--muted); background: none; border: none;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px;
+      transition: background .15s;
+    }
+    .collapsible-toggle:hover { background: var(--border); }
+    .collapsible-body { transition: none; }
+    .collapsible-body.collapsed { display: none; }
+
+    /* ─── Loading / error states ─────────────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .sk-line { height: 14px; margin-bottom: 8px; }
+    .sk-big  { height: 36px; margin-bottom: 10px; }
+    .error-box { background: #fef2f2; border-radius: 8px; padding: 16px; color: #dc2626; font-size: .85rem; text-align: center; }
+
+    /* ─── Utility ────────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .83rem; }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-row span { color: var(--muted); }
+    .metric-row strong { font-weight: 600; }
+    .text-green { color: var(--green-d); }
+    .text-red   { color: var(--red); }
+    .text-amber { color: #d97706; }
+    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 14px; }
 
     /* ─── Mobile ─────────────────────────────────────────────────── */
     @media (max-width: 768px) {
@@ -276,12 +411,12 @@
         Signed in
       </div>
       {% if session.get('last_sync_at') %}
-        <div class="sync-info" style="padding:6px 12px 2px;line-height:1.4">
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px;line-height:1.4">
           Last synced<br>
-          <span id="sync-age" class="sync-age" data-ts="{{ session['last_sync_at'] }}">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
+          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:#64748b">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
         </div>
       {% else %}
-        <div class="sync-info" style="padding:6px 12px 2px">Not yet synced</div>
+        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px">Not yet synced</div>
       {% endif %}
       <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
     </div>
@@ -295,11 +430,11 @@
       <div class="hero-left">
         <h1>{{ intel.goal.race_name }}</h1>
         <div class="sub" style="margin-top:5px">
-          Goal <strong>{{ intel.goal.goal_time }}</strong>
+          Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
           &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
           &nbsp;·&nbsp; {{ today_date }}
         </div>
-        <div class="sub" style="margin-top:3px;font-size:.78rem">
+        <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
           {{ canonical_phase_label }}
           &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
           {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
@@ -330,107 +465,14 @@
     </div>
     {% endif %}
 
-    <!-- ══ TODAY'S COMMAND CARD ══════════════════════════════════════════ -->
-    {# Resolve today's plan entry for pace guidance and session type #}
-    {% set _cmd = namespace(pace='', session_type='', planned_km=0) %}
-    {% for p in weekly_plan %}
-      {% if p.is_today %}
-        {% set _cmd.pace = p.pace_guidance or '' %}
-        {% set _cmd.session_type = p.session_type or '' %}
-        {% set _cmd.planned_km = p.planned_km %}
-      {% endif %}
-    {% endfor %}
-    {% set _tsb_cmd = intel.current_tsb %}
-    <div class="command-card">
-      <div class="command-header">
-        <span class="command-eyebrow">Today's Plan &nbsp;·&nbsp; {{ today_workout.date }}</span>
-        {% if _tsb_cmd > 10 %}
-          <span class="command-signal fresh">⚡ Feeling Fresh — push the pace</span>
-        {% elif _tsb_cmd > 0 %}
-          <span class="command-signal balanced">✓ Balanced Form — train as planned</span>
-        {% elif _tsb_cmd > -10 %}
-          <span class="command-signal tired">⚠ Slight Fatigue — keep effort easy</span>
-        {% else %}
-          <span class="command-signal fatigued">⛔ High Fatigue — prioritize recovery</span>
-        {% endif %}
-      </div>
-
-      <div class="command-workout">{{ today_workout.workout }}</div>
-      {% if _cmd.session_type not in ('strength', 'active_recovery', 'rest') %}
-      <div class="command-distance">
-        {{ today_workout.distance_target }}
-        {% if _cmd.pace %}
-          <span class="cmd-dist-sep">·</span>
-          {{ _cmd.pace }}
-        {% endif %}
-      </div>
-      {% endif %}
-
-      <div class="command-metrics">
-        <div class="command-metric">
-          <span class="command-metric-label">Form (TSB)</span>
-          <span class="command-metric-value">
-            {{ '+' if _tsb_cmd >= 0 else '' }}{{ '%.1f'|format(_tsb_cmd) }}
-            &nbsp;<span class="sync-info">{% if _tsb_cmd > 5 %}fresh{% elif _tsb_cmd > -5 %}neutral{% else %}tired{% endif %}</span>
-          </span>
-        </div>
-
-        <div class="command-metric">
-          <span class="command-metric-label">Status</span>
-          <span class="command-metric-value">
-            {% if today_workout.completed %}
-              <span class="command-metric-value done">✓ {{ today_workout.distance_actual }}</span>
-            {% else %}
-              {{ today_workout.status }}
-            {% endif %}
-          </span>
-        </div>
-
-        <div class="command-metric">
-          <span class="command-metric-label">Tomorrow</span>
-          <span class="command-metric-value">{{ today_workout.tomorrow }}</span>
-        </div>
-
-        <div class="command-metric">
-          <span class="command-metric-label">Week Progress</span>
-          <span class="command-metric-value">
-            {{ week_actual_km }} / {{ canonical_weekly_target_km|int }} km
-            &nbsp;<span class="sync-info">{{ progress_pct|int }}%</span>
-          </span>
-        </div>
-      </div>
-
-      <div class="command-motivator">
-        {% if today_workout.completed %}
-          ✓ Session complete. Rest up — you've done the work today.
-        {% elif progress_pct >= 100 %}
-          💪 You've already hit this week's target. Bonus session — keep it easy.
-        {% elif progress_pct >= 75 %}
-          🔥 On track this week. Every session compounds toward race day.
-        {% elif _tsb_cmd < -15 %}
-          Recovery is training. Easy effort today is the smartest move.
-        {% elif canonical_feasibility_score and canonical_feasibility_score >= 75 %}
-          You're dialing in — stay consistent and race day will take care of itself.
-        {% else %}
-          Each run is a deposit. Show up, execute the plan, trust the process.
-        {% endif %}
-      </div>
-    </div>
-
     <!-- ── Feasibility strip ────────────────────────────────────────────── -->
     {% if canonical_feasibility_score %}
     <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
       <div class="fs-out">
-        <span class="fs-score">{{ canonical_feasibility_score|int }}<span class="sync-info">/100</span></span>
+        <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
         <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
-        <div class="fs-interpretation">
-          {% set _fs = canonical_feasibility_score|int %}
-          {% if _fs >= 85 %}Strong trajectory — fitness and volume both on target{% elif _fs >= 70 %}On track — address consistency to close the gap{% elif _fs >= 55 %}Achievable with focused effort over next 4 weeks{% elif _fs >= 40 %}Stretch goal — meaningful improvement still possible{% else %}Current gap is significant — consider adjusting target{% endif %}
-        </div>
         {% if canonical_feasibility_factor_scores %}
-        <div class="feasibility-factors-detail">
-          <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
-        </div>
+        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
         {% endif %}
       </div>
       {% if canonical_honest_assessment %}
@@ -447,31 +489,12 @@
     <div class="grid-2">
       <div class="card">
         <h2>Weekly Plan</h2>
-        {% if weekly_signal %}
-        <div class="weekly-signal weekly-signal-{{ weekly_signal_color }}">{{ weekly_signal }}</div>
-        {% endif %}
         <div>
           {% for p in weekly_plan %}
             <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
               <div class="plan-main">
-                <div class="plan-meta">
-                  {{ p.day }} · {{ p.session }}
-                  {# Effort zone badge #}
-                  {% if p.session_type in ['easy', 'recovery'] %}
-                    <span class="effort-zone zone-easy">Z2</span>
-                  {% elif p.session_type == 'tempo' %}
-                    <span class="effort-zone zone-tempo">Z4</span>
-                  {% elif p.session_type in ['long', 'medium_long'] %}
-                    <span class="effort-zone zone-long">Long</span>
-                  {% elif p.session_type in ['interval', 'vo2max'] %}
-                    <span class="effort-zone zone-hard">Z5</span>
-                  {% elif p.session_type == 'active_recovery' %}
-                    <span class="effort-zone zone-recovery">Z1</span>
-                  {% elif p.session_type == 'strength' %}
-                    <span class="effort-zone zone-strength">Gym</span>
-                  {% endif %}
-                </div>
-                <div class="plan-distance" style="font-size:.78rem;margin-top:2px">
+                <div class="plan-meta">{{ p.day }} · {{ p.session }}</div>
+                <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
                   {% if p.session_type == 'strength' %}
                     💪 Gym
                   {% elif p.status in ['completed', 'done'] %}
@@ -496,84 +519,59 @@
                 {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
                 {% elif p.status == 'partial' %}<span class="status-orange">⚡ partial</span>
                 {% elif p.status == 'missed' %}<span class="status-orange">✗ missed</span>
-                {% elif p.is_today %}<span class="status-blue">▶ today</span>
-                {% elif p.session_type == 'strength' %}<span class="text-muted">💪 gym</span>
+                {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">▶ today</span>
+                {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">💪 gym</span>
                 {% elif p.status == 'bonus' %}<span class="status-green">🎁 bonus</span>
-                {% else %}<span class="text-muted">planned</span>{% endif %}
+                {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
               </div>
             </div>
           {% endfor %}
         </div>
-        <div class="weekly-plan-totals">
-          {% if week_closed %}
-            <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
-          {% endif %}
-          <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
-          <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
-          <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
-          <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
-          {% if progress_pct >= 100 %}
-            <span class="badge badge-success feedback-tag">💪 Strong Week</span>
-          {% elif progress_pct >= 70 %}
-            <span class="badge badge-success feedback-tag">🔥 On Track</span>
-          {% elif progress_pct >= 40 %}
-            <span class="badge badge-warning feedback-tag">Building</span>
-          {% elif week_closed %}
-            <span class="badge badge-neutral feedback-tag">Week Complete</span>
-          {% else %}
-            <span class="badge badge-neutral feedback-tag">In Progress</span>
-          {% endif %}
-        </div>
+        {% if week_closed %}
+          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
+        {% endif %}
+        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
+        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
+        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
+        <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
       </div>
 
       <div class="card">
-        <h2>Up Next</h2>
-        <div class="today-redundant-rows">
-          <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
-          <div class="metric-row">
-            <span>Workout</span>
-            <strong>{{ today_workout.workout }}
-              &nbsp;<span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}">{{ today_workout.status }}</span>
-            </strong>
-          </div>
-          {% if today_workout.completed %}
-            <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
-          {% else %}
-            <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
-          {% endif %}
+        <h2>Today's Session</h2>
+        <div class="metric-row"><span>Date</span><strong>{{ today_workout.date }}</strong></div>
+        <div class="metric-row">
+          <span>Workout</span>
+          <strong>{{ today_workout.workout }}
+            <span class="pill {{ 'pill-green' if today_workout.status == 'Completed' else ('pill-orange' if today_workout.status == 'Partial' else 'pill-yellow') }}" style="margin-left:6px">{{ today_workout.status }}</span>
+          </strong>
         </div>
+        {% if today_workout.completed %}
+          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
+        {% else %}
+          <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+        {% endif %}
         <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 
-        <div class="today-progress-bar">
-          <div class="today-progress-labels">
-            <span>Week progress</span>
-            <span>{{ week_actual_km }}km / {{ canonical_weekly_target_km|int }}km</span>
-          </div>
-          <div class="today-progress-track">
-            <div class="today-progress-fill" style="width:{{ [[progress_pct, 100]|min, 0]|max }}%"></div>
-          </div>
-        </div>
-
         <div class="divider"></div>
-        <h2>Upcoming Long Runs</h2>
+        <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
         {% if upcoming_long_runs %}
           <div class="ladder">
             {% for lr in upcoming_long_runs %}
-              <div class="ladder-step {{ 'next' if loop.first else '' }}">
-                {% if loop.first %}<span class="lr-next-label tooltip-wrap">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
+              <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
+                {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
                 <span class="km">{{ lr.target_km|int }} km</span>
-                <span class="lr-label-default">{{ lr.week_date_display or lr.week_date[5:] }}</span>
+                <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
                 {% if lr.is_recovery_week %}
-                  <span class="lr-label-recovery">Recovery</span>
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:#f59e0b;font-weight:600">Recovery</span>
                 {% elif lr.is_peak_run %}
-                  <span class="lr-label-peak">Peak Run 🏔️</span>
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:#00C853;font-weight:600">Peak Run 🏔️</span>
                 {% elif lr.label %}
-                  <span class="lr-label-default">{{ lr.label }}</span>
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.label }}</span>
                 {% endif %}
               </div>
             {% endfor %}
           </div>
-          <div class="lr-summary">
+          <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
             Longest recent: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
             {% if upcoming_long_runs %}&nbsp;·&nbsp; Next: {{ upcoming_long_runs[0].target_km|int }}km on {{ upcoming_long_runs[0].week_date_display or upcoming_long_runs[0].week_date[5:] }}{% endif %}
           </div>
@@ -588,78 +586,36 @@
               </div>
             {% endfor %}
           </div>
-          <div class="lr-summary">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+          <div style="font-size:.75rem;color:var(--muted)">Longest recent run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
         {% endif %}
       </div>
     </div>
 
-    <!-- ── 4. AI Coaching — Insight + Action split ──────────────────────── -->
+    <!-- ── 4. AI Coaching Insight (server-rendered) ─────────────────────── -->
     {% if canonical_coaching_message %}
-    {# Apply canonical number replacements to coaching message #}
-    {% set _msg = canonical_coaching_message %}
-    {% set _target = canonical_weekly_target_km|int|string %}
-    {% set _long = canonical_long_run_km|int|string %}
-    {% set _msg = _msg|replace("25-28km", _target + "km") %}
-    {% set _msg = _msg|replace("25km", _target + "km") %}
-    {% set _msg = _msg|replace("28km", _target + "km") %}
-    {% set _msg = _msg|replace("25 km", _target + "km") %}
-    {% set _msg = _msg|replace("26km", _target + "km") %}
-    {% set _msg = _msg|replace("27km", _target + "km") %}
-    {% set _msg = _msg|replace("29km", _target + "km") %}
-    {% set _msg = _msg|replace("30km", _target + "km") %}
-    {% set _msg = _msg|replace("18km long run", _long + "km long run") %}
-    {% set _msg = _msg|replace("20km long run", _long + "km long run") %}
-    {% set _msg = _msg|replace("21km long run", _long + "km long run") %}
     <div class="card" id="card-coaching">
-      <div class="card-title">Coach Insight</div>
-      <div class="coaching-split">
-
-        <!-- Left: AI insight text -->
-        <div>
-          <div class="coaching-section-label">What the data says</div>
-          <div class="coaching-text">{{ _msg }}</div>
-          <div class="coaching-badge" style="margin-top:12px">
-            <span>🤖</span>
-            <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
-              <span class="tooltip-icon">?</span>
-              <span class="tooltip-text">Generated by Claude AI using your last 16 weeks of Strava data, fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
-            </span>
-          </div>
-        </div>
-
-        <!-- Right: Computed action targets (hidden — duplicates weekly plan totals) -->
-        <div class="coaching-stats-panel">
-          <div class="coaching-action-box">
-            <div class="coaching-section-label action">This Week's Action</div>
-            <div class="coaching-action-item">
-              <span class="coaching-action-key">Weekly target</span>
-              <span class="coaching-action-val">{{ canonical_weekly_target_km|int }} km</span>
-            </div>
-            {% if canonical_long_run_km and canonical_long_run_km > 0 %}
-            <div class="coaching-action-item">
-              <span class="coaching-action-key">Long run</span>
-              <span class="coaching-action-val">{{ canonical_long_run_km|int }} km</span>
-            </div>
-            {% endif %}
-            <div class="coaching-action-item">
-              <span class="coaching-action-key">Completed</span>
-              <span class="coaching-action-val">{{ week_actual_km }} km</span>
-            </div>
-            <div class="coaching-action-item">
-              <span class="coaching-action-key">Remaining</span>
-              <span class="coaching-action-val {% if [canonical_weekly_target_km - week_actual_km, 0]|max == 0 %}on-track{% endif %}">
-                {{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km
-              </span>
-            </div>
-            <div class="coaching-action-item">
-              <span class="coaching-action-key">Progress</span>
-              <span class="coaching-action-val {% if progress_pct >= 100 %}on-track{% elif progress_pct < 30 %}behind{% endif %}">
-                {{ progress_pct|int }}%
-              </span>
-            </div>
-          </div>
-        </div>
-
+      <div class="card-title">AI Coaching Insight</div>
+      <div class="coaching-text">{% set _msg = canonical_coaching_message %}
+{% set _target = canonical_weekly_target_km|int|string %}
+{% set _long = canonical_long_run_km|int|string %}
+{% set _msg = _msg|replace("25-28km", _target + "km") %}
+{% set _msg = _msg|replace("25km", _target + "km") %}
+{% set _msg = _msg|replace("28km", _target + "km") %}
+{% set _msg = _msg|replace("25 km", _target + "km") %}
+{% set _msg = _msg|replace("26km", _target + "km") %}
+{% set _msg = _msg|replace("27km", _target + "km") %}
+{% set _msg = _msg|replace("29km", _target + "km") %}
+{% set _msg = _msg|replace("30km", _target + "km") %}
+{% set _msg = _msg|replace("18km long run", _long + "km long run") %}
+{% set _msg = _msg|replace("20km long run", _long + "km long run") %}
+{% set _msg = _msg|replace("21km long run", _long + "km long run") %}
+{{ _msg }}</div>
+      <div class="coaching-badge" style="margin-top:10px">
+        <span>🤖</span>
+        <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-text">This insight is generated by Claude AI, analyzing your last 16 weeks of Strava data, current fitness load, goal feasibility, and last week's compliance. Refreshes daily or after each Strava sync.</span>
+        </span>
       </div>
     </div>
     {% endif %}
@@ -688,7 +644,7 @@
     <!-- ── 8. Recent Activities ──────────────────────────────────────────── -->
     <div class="section-label">Recent Activities</div>
     <div class="card">
-      <div class="sync-info" style="margin-bottom:10px">Last 7 activities</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Last 7 activities</div>
       {% if recent_activities %}
         {% for act in recent_activities %}
           <div class="activity-row">
@@ -708,7 +664,7 @@
           </div>
         {% endfor %}
       {% else %}
-        <p class="sync-info">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
+        <p style="color:var(--muted);font-size:.85rem">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
       {% endif %}
     </div>
 
@@ -718,30 +674,24 @@
 <!-- ═══ INTELLIGENCE SECTIONS TEMPLATE ═════════════════════════════════ -->
 <!-- Rendered client-side from /api/dashboard JSON -->
 <template id="intel-template">
-  <!-- 1. RACE PREDICTIONS — collapsed by default -->
-  <div class="collapsible-header" onclick="toggleSection('race-predictions')">
-    <div class="section-label">Race Predictions</div>
-    <button class="collapsible-toggle" id="btn-race-predictions">▼ Show</button>
-  </div>
-  <div class="collapsible-body collapsed" id="race-predictions">
-    <div class="card" id="card-predictions">
-      <div class="card-title">Race Predictions — All Distances</div>
-      <div class="dist-grid" id="dist-tiles"></div>
-      <div class="prediction-legend">
-        <span class="legend-title">Confidence:</span>
-        <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
-        <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
-        <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
-      </div>
+  <!-- 1. RACE PREDICTIONS -->
+  <div class="card" id="card-predictions">
+    <div class="card-title">Race Predictions — All Distances</div>
+    <div class="dist-grid" id="dist-tiles"></div>
+    <div class="prediction-legend">
+      <span class="legend-title">Confidence:</span>
+      <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
+      <span class="legend-item"><span class="confidence-moderate">MODERATE</span> Older race or training estimate</span>
+      <span class="legend-item"><span class="confidence-low">LOW</span> Limited data — prediction is estimated</span>
     </div>
   </div>
 
   <!-- 6. COLLAPSIBLE: Training Science (CTL + Wall) -->
   <div class="collapsible-header" onclick="toggleSection('training-science')">
     <div class="section-label">Training Science</div>
-    <button class="collapsible-toggle" id="btn-training-science">▼ Show</button>
+    <button class="collapsible-toggle" id="btn-training-science">▲ Hide</button>
   </div>
-  <div class="collapsible-body collapsed" id="training-science">
+  <div class="collapsible-body" id="training-science">
     <div class="grid-2">
       <!-- TRAINING LOAD -->
       <div class="card" id="card-load">
@@ -752,14 +702,14 @@
               <span class="tooltip-wrap">FITNESS (CTL)<span class="tooltip-icon">?</span><span class="tooltip-text">Chronic Training Load — your 42-day fitness average. Higher = more fit. Builds slowly with consistent training. Target: 55–65 for sub-4 marathon.</span></span>
             </div>
             <div class="lt-val lt-blue" id="lt-ctl">—</div>
-            <div class="lt-sub" id="lt-ctl-sub">42-day load</div>
+            <div class="lt-sub">42-day load</div>
           </div>
           <div class="load-tile">
             <div class="lt-label">
               <span class="tooltip-wrap">FATIGUE (ATL)<span class="tooltip-icon">?</span><span class="tooltip-text">Acute Training Load — your 7-day fatigue average. Higher = more tired from recent training. Normal to be higher than CTL during hard weeks.</span></span>
             </div>
-            <div class="lt-val lt-red" id="lt-atl">—</div>
-            <div class="lt-sub" id="lt-atl-sub">7-day load</div>
+            <div class="lt-val" id="lt-atl" style="color:var(--red)">—</div>
+            <div class="lt-sub">7-day load</div>
           </div>
           <div class="load-tile">
             <div class="lt-label">
@@ -785,14 +735,6 @@
       <div class="card" id="card-wall">
         <div class="card-title">Wall Risk Analysis</div>
         <div id="wall-content"></div>
-        {% if wall_actions %}
-        <div class="wall-actions wall-actions-static">
-          <div class="wall-actions-title">To reduce risk:</div>
-          {% for action in wall_actions %}
-          <div class="wall-action-item">→ {{ action }}</div>
-          {% endfor %}
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -828,17 +770,17 @@
       <div class="card-title">Race-Day Fueling Plan</div>
       <div class="grid-2">
         <div>
-          <div class="fuel-section-title">Gel Schedule</div>
+          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Gel Schedule</div>
           <div class="fuel-timeline" id="gel-timeline"></div>
         </div>
         <div>
-          <div class="fuel-section-title">Hydration & Electrolytes</div>
+          <div style="font-size:.8rem;font-weight:600;margin-bottom:12px">Hydration & Electrolytes</div>
           <div class="fuel-timeline" id="elec-timeline"></div>
           <div id="hydration-rules" style="margin-top:14px"></div>
         </div>
       </div>
       <div class="divider"></div>
-      <div class="fuel-section-title">Pre-Race Protocol</div>
+      <div style="font-size:.8rem;font-weight:600;margin-bottom:10px">Pre-Race Protocol</div>
       <div id="prerace-rules"></div>
       <div id="km32-fuel-note" style="display:none;margin-top:12px"></div>
     </div>
@@ -929,18 +871,15 @@
           : (d.avg_pace ? d.avg_pace + ' avg' : '');
         const div = document.createElement('div');
         div.className = 'dist-tile' + (fm ? ' fm' : '');
-        const fmGapDisplay = {{ fm_gap_display | tojson }};
-        const fmGapColor   = {{ fm_gap_color | tojson }};
         let inner = `
           <div class="label">${label}</div>
           <div class="time">${ptime}</div>
-          ${fm && fmGapDisplay ? `<div class="fm-gap-display fm-gap-${fmGapColor}">${fmGapDisplay}</div>` : ''}
           <div class="sub-time">${subPace}</div>
           <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
         `;
         if (fm && wall && wall.optimal_fm_potential_display) {
           const apPace = window._aerobicPaceDisplay || '';
-          inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span class="sync-info">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
+          inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span style="font-size:.68rem;color:var(--muted)">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
         }
         div.innerHTML = inner;
         distTiles.appendChild(div);
@@ -968,14 +907,14 @@
         let leftHTML = `
           <div class="wall-header">
             <span class="tooltip-wrap wall-risk-badge ${riskClass(risk)}">${risk.toUpperCase()} WALL RISK<span class="tooltip-icon">?</span><span class="tooltip-text">Wall risk = likelihood of hitting the wall (severe glycogen depletion) at km 30–35. Your HM fitness is much higher than your FM fitness — this gap indicates pacing or fueling issues in past marathons, not lack of fitness.</span></span>
-            ${gap != null ? `<span class="sync-info">VDOT gap: <strong>${gap}</strong></span>` : ''}
+            ${gap != null ? `<span style="font-size:.8rem;color:var(--muted)">VDOT gap: <strong>${gap}</strong></span>` : ''}
           </div>`;
 
         const _wm = window._wallMath || {};
         if (_wm.showEstimate && _wm.baseDisplay && _wm.adjustedDisplay) {
-          leftHTML += `<div class="wall-time-row"><strong>${_wm.baseDisplay}</strong> base → <strong class="text-danger">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px"><strong>${_wm.baseDisplay}</strong> base → <strong style="color:#ef4444">${_wm.adjustedDisplay}</strong> race day (${risk} wall risk, +${Math.abs(_wm.costMinutes).toFixed(0)} min)</div>`;
         } else if (costAbs) {
-          leftHTML += `<div class="wall-time-row">~<strong class="text-danger">${costAbs} min</strong> estimated time lost to the wall</div>`;
+          leftHTML += `<div style="font-size:.83rem;color:var(--text);margin:10px 0 6px">~<strong style="color:#ef4444">${costAbs} min</strong> estimated time lost to the wall</div>`;
         }
 
         if (hmv || fmv) {
@@ -1003,16 +942,16 @@
           const sign = wm.costMinutes > 0 ? '+' : '';
           wallAdjHTML = `
             <div class="fs-val red">${wm.adjustedDisplay}</div>
-            <div class="wall-calc-sub">
+            <div style="font-size:.72rem;color:var(--muted);margin-top:3px">
               Base ${wm.baseDisplay} × ${wm.factor.toFixed(2)} = ${wm.adjustedDisplay}
-              <span class="text-danger">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
+              <span style="color:#ef4444;font-weight:600">(+${Math.abs(wm.costMinutes).toFixed(0)} min)</span>
             </div>`;
         } else {
           wallAdjHTML = `<div class="fs-val red">${cur}</div>`;
         }
 
         let rightHTML = `
-          <div class="fm-compare fm-compare-col">
+          <div class="fm-compare" style="flex-direction:column;gap:10px">
             <div class="fm-stat">
               <div class="fs-label">Aerobic Potential</div>
               <div class="fs-val green">${opt}</div>
@@ -1025,24 +964,24 @@
 
         if (fueling) {
           rightHTML += `
-            <div class="fueling-teaser">
-              <div class="fueling-teaser-label">Fueling Plan</div>
-              <div class="fueling-teaser-body">
+            <div style="margin-top:14px;background:#f0fdf4;border-radius:8px;padding:12px 14px;border:1px solid #bbf7d0">
+              <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#16a34a;margin-bottom:8px">Fueling Plan</div>
+              <div style="font-size:.82rem;color:var(--text)">
                 🍬 <strong>${fueling.gel_count}</strong> gels &nbsp;·&nbsp;
                 ~<strong>${fueling.approx_carbs_per_hour_actual_g}g</strong> carbs/hr
               </div>
-              <div class="fueling-teaser-sub">First gel at km 10 · every 45 min</div>
-              <a href="#card-fuel" class="fueling-teaser-link">→ See full schedule below</a>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:4px">First gel at km 10 · every 45 min</div>
+              <a href="#card-fuel" style="font-size:.75rem;color:#16a34a;text-decoration:none;display:block;margin-top:8px;font-weight:600">→ See full schedule below</a>
             </div>`;
         }
 
         wallEl.innerHTML = `
-          <div class="wall-grid">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
             <div>${leftHTML}</div>
             <div>${rightHTML}</div>
           </div>`;
       } else {
-        wallEl.innerHTML = '<div class="sync-info">Wall analysis requires a marathon PB entered in settings.</div>';
+        wallEl.innerHTML = '<div style="color:var(--muted);font-size:.83rem">Wall analysis requires a marathon PB entered in settings.</div>';
       }
     }
 
@@ -1076,7 +1015,7 @@
           <td class="seg-pace">${seg.pace_display || ''}</td>
           <td>${seg.segment_time || '—'}</td>
           <td>${seg.elapsed_at_end || '—'}</td>
-          <td class="sync-info">${seg.note || ''}</td>
+          <td style="font-size:.75rem;color:var(--muted)">${seg.note || ''}</td>
         `;
         tbody.appendChild(tr_el);
       });
@@ -1125,20 +1064,6 @@
     // ── 4. Fueling Schedule ──────────────────────────────────────────────
     const fueling = wall && wall.fueling_plan;
     if (fueling) {
-      // Personalized header tied to projected finish time
-      const cardFuel = el('card-fuel');
-      if (cardFuel) {
-        const _wm = window._wallMath || {};
-        const projTime = (_wm.adjustedDisplay && _wm.adjustedDisplay !== '--')
-          ? _wm.adjustedDisplay
-          : (wall.current_predicted_fm_display || '—');
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'fueling-personal-header';
-        headerDiv.innerHTML = `Based on your <strong>${projTime}</strong> projected marathon — you need <strong>~${fueling.approx_carbs_per_hour_actual_g}g carbs/hr</strong> → <strong>${fueling.gel_count} gels</strong> recommended`;
-        const titleEl = cardFuel.querySelector('.card-title');
-        if (titleEl) titleEl.after(headerDiv);
-      }
-
       const gelTL = el('gel-timeline');
       if (gelTL && fueling.gel_schedule) {
         fueling.gel_schedule.forEach((g, i) => {
@@ -1210,7 +1135,7 @@
     } else {
       const cardFuel = el('card-fuel');
       if (cardFuel) {
-        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div class="sync-info">Fueling plan available once a marathon PB is saved in settings.</div>';
+        cardFuel.innerHTML = '<div class="card-title">Race-Day Fueling Plan</div><div style="color:var(--muted);font-size:.83rem">Fueling plan available once a marathon PB is saved in settings.</div>';
       }
     }
 
@@ -1220,14 +1145,8 @@
     const ltTsb   = el('lt-tsb');
     const ltTrend = el('lt-trend');
 
-    const ctlVal = (load.ctl || tr.ctl || 0);
-    const atlVal = (load.atl || tr.atl || 0);
-    if (ltCtl)  ltCtl.textContent = ctlVal.toFixed(1);
-    if (ltAtl)  ltAtl.textContent = atlVal.toFixed(1);
-    const ctlSub = el('lt-ctl-sub');
-    if (ctlSub) ctlSub.textContent = ctlVal >= 55 ? 'High fitness' : ctlVal >= 40 ? 'Good base' : ctlVal >= 25 ? 'Building' : 'Low base';
-    const atlSub = el('lt-atl-sub');
-    if (atlSub) atlSub.textContent = atlVal >= 60 ? 'Very high stress' : atlVal >= 45 ? 'Heavy load' : atlVal >= 30 ? 'Moderate load' : 'Low load';
+    if (ltCtl)  ltCtl.textContent = (load.ctl || tr.ctl || 0).toFixed(1);
+    if (ltAtl)  ltAtl.textContent = (load.atl || tr.atl || 0).toFixed(1);
     const tsbVal = load.tsb != null ? load.tsb : (tr.tsb || 0);
     if (ltTsb) {
       ltTsb.textContent = (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
