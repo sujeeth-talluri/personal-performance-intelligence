@@ -1427,8 +1427,8 @@ def dashboard():
             and item["status"] in {"overdone", "partial"}
             for item in weekly_plan
         ),
-        "atl_spike": bool(intel.get("fitness_trend", {}).get("tsb", 0) < -10),
-        "allow_progression": bool(intel.get("fitness_trend", {}).get("tsb", 0) > 5),
+        "atl_spike": bool((intel.get("fatigue_flags") or {}).get("atl_spike")),
+        "allow_progression": bool((intel.get("fatigue_flags") or {}).get("allow_progression")),
     }
     weekly_plan = _apply_adaptive_plan(copy.deepcopy(weekly_plan), today_local, adaptive_weekly_goal)
     weekly_plan_completion_pct = (
