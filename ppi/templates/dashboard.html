@@ -442,7 +442,7 @@
             <span class="tooltip-icon">?</span>
             <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
           </span>
-          &nbsp;·&nbsp; {{ intel.goal.target_pace }}/km goal pace
+          &nbsp;·&nbsp; {{ intel.goal.target_pace }} goal pace
         </div>
       </div>
       <div class="hero-right">
