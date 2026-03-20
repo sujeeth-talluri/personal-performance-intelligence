@@ -614,8 +614,10 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     run_distance_acts = _run_training_activities(raw)
     load_acts = _load_activities(raw)
     runs = _prediction_runs(raw)
+    race_distance_km = goal_ctx["distance_km"] if goal_ctx["distance_km"] > 0 else 42.195
+    goal_pace_sec_per_km = goal_ctx["goal_seconds"] / race_distance_km
     for run in runs:
-        run["intensity"] = _classify_run_intensity(run, goal_ctx["goal_seconds"] / 42.195)
+        run["intensity"] = _classify_run_intensity(run, goal_pace_sec_per_km)
     runs_8w = [r for r in runs if r["date"] >= today - timedelta(days=56)]
 
     medium_runs = [
@@ -652,7 +654,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
     rebuild_mode = gap_days >= 21 or (gap_metrics["max_gap_days"] >= 21 and consistent_weeks < 3)
     phase, cycle_week = _effective_phase(goal_ctx["days_remaining"], rebuild_mode)
     week_type = _week_type_label(phase, base_phase, goal_ctx["days_remaining"])
-    load_model = _load_model(load_acts, today, goal_ctx["goal_seconds"] / 42.195, days=14)
+    load_model = _load_model(load_acts, today, goal_pace_sec_per_km, days=14)
     ctl_today = load_model["ctl_today"]
     ctl_series_14 = load_model["ctl_series"]
     atl_series_14 = load_model["atl_series"]
@@ -911,7 +913,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
         "pace_medium": pace_medium,
         "pace_long": pace_long,
         "marathon_specific_runs": marathon_specific_runs,
-        "goal_marathon_pace_sec_per_km": goal_ctx["goal_seconds"] / 42.195,
+        "goal_marathon_pace_sec_per_km": goal_pace_sec_per_km,
         "ctl_proxy": ctl_today,
         "atl_proxy": load_model["atl_today"],
         "tsb_proxy": load_model["tsb_today"],
@@ -961,7 +963,7 @@ def _metrics_layer(user_id, goal_ctx, user_timezone=None):
             "high_fatigue": fatigue_flags["high_fatigue"],
             "moderate_fatigue": fatigue_flags["moderate_fatigue"],
             "long_run_failed_recent": long_run_state.get("failed_recent", False),
-            "goal_marathon_pace_sec_per_km": goal_ctx["goal_seconds"] / 42.195,
+            "goal_marathon_pace_sec_per_km": goal_pace_sec_per_km,
         },
         "longest_run": longest_run,
         "latest_long_run": latest_long_run,

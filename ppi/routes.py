@@ -1,3 +1,4 @@
+import re
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -712,6 +713,16 @@ def dashboard():
     runs = recent_runs(user.id, limit=20, user_timezone=user_tz)
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
+
+    # Bug 3 fix: Freeze weekly target so it doesn't change mid-week when AI regenerates
+    _frozen_target_key = f"weekly_target_{user.id}_{week_start.isoformat()}"
+    if _frozen_target_key not in session:
+        session[_frozen_target_key] = float(weekly_goal.get("weekly_goal_km") or 0.0)
+    frozen_weekly_target_km = session[_frozen_target_key]
+    if frozen_weekly_target_km > 0:
+        weekly_goal = dict(weekly_goal)
+        weekly_goal["weekly_goal_km"] = frozen_weekly_target_km
+
     weekly_plan = _build_weekly_plan(user.id, today_local, user_tz, weekly_goal, intel["long_run"], week_start=week_start)
     next_week_plan = []
     next_week_start = week_start + timedelta(days=7)
@@ -719,6 +730,30 @@ def dashboard():
     next_upcoming_run = _next_upcoming_run_from_plan(today_local, weekly_plan, next_week_plan)
     today_workout = _build_today_workout(today_local, runs, weekly_plan, next_upcoming_run)
     ai_summary = _build_ai_summary(intel, weekly_plan)
+
+    # Bug 4 fix: Replace wrong km numbers in coaching message with actual plan values
+    _canonical_weekly_km = float(weekly_goal.get("weekly_goal_km") or 0.0)
+    _canonical_long_run_km = float((intel.get("long_run") or {}).get("latest_km") or 0.0)
+    if _canonical_weekly_km > 0:
+        ai_summary = re.sub(
+            r'\b\d+\.?\d*\s*(?:-\s*)?km(?:\s*/\s*week|\s+per\s+week|\s+weekly|\s+target)?\b',
+            lambda m: (
+                f'{_canonical_weekly_km:.0f}km'
+                if any(w in m.string[max(0, m.start() - 30):m.end() + 30].lower()
+                       for w in ['target', 'week', 'weekly', 'goal'])
+                else m.group()
+            ),
+            ai_summary,
+            flags=re.IGNORECASE,
+        )
+    if _canonical_long_run_km > 0:
+        ai_summary = re.sub(
+            r'(?:long run|long-run)\s+(?:of\s+)?(\d+\.?\d*)\s*km',
+            f'long run of {_canonical_long_run_km:.0f}km',
+            ai_summary,
+            flags=re.IGNORECASE,
+        )
+
     key_session = _pick_key_session(today_local, weekly_plan) if weekly_plan else None
     key_session_importance = key_session.get("importance", "Low") if key_session else "Low"
     planned_runs = [item for item in weekly_plan if item["workout_type"] == "RUN"]
