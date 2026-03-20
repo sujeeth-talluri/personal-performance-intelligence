@@ -1403,7 +1403,11 @@ def dashboard():
         "status":          _status_label.get(today_item["status"], "Planned") if today_item else "Rest",
         "completed":       today_item["done"]         if today_item else False,
         "distance_actual": _fmt_km(today_item["actual_km"])  if today_item else "—",
-        "distance_target": _fmt_km(today_item["planned_km"]) if today_item else "—",
+        "distance_target": (
+            "Gym — strength session"
+            if today_item and today_item.get("session_type") == "strength"
+            else _fmt_km(today_item["planned_km"]) if today_item else "—"
+        ),
         "tomorrow":        tomorrow_display,
         # Extra fields used elsewhere (show_today_plan, pace card)
         "session":         today_item["session"]      if today_item else "Rest Day",

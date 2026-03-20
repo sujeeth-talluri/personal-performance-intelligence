@@ -285,6 +285,7 @@
     .done-row   .plan-distance { color: #16a34a; }
     .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
     .partial-row .plan-distance { color: #d97706; }
+    .plan-pace { font-size: 11px; color: #888; margin-top: 2px; }
     .status-green  { color: #16a34a; }
     .status-orange { color: #d97706; }
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
@@ -510,6 +511,9 @@
                     {{ p.planned_km|int }}km planned
                   {% endif %}
                 </div>
+                {% if p.status == 'planned' and p.pace_guidance %}
+                  <div class="plan-pace">{{ p.pace_guidance }}</div>
+                {% endif %}
               </div>
               <div class="plan-status">
                 {% if p.status in ['completed', 'done'] %}<span class="status-green">✓ done</span>
@@ -557,6 +561,13 @@
                 {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
                 <span class="km">{{ lr.target_km|int }} km</span>
                 <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
+                {% if lr.is_recovery_week %}
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:#f59e0b;font-weight:600">Recovery</span>
+                {% elif lr.is_peak_run %}
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:#00C853;font-weight:600">Peak Run 🏔️</span>
+                {% elif lr.label %}
+                  <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.label }}</span>
+                {% endif %}
               </div>
             {% endfor %}
           </div>
