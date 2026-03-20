@@ -1027,16 +1027,17 @@ def dashboard():
     _profile_data                  = _coaching_plan.get("runner_profile", {})
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
 
-    # ISSUE 1: Compute weekly target directly from daily_plan (most accurate)
-    # Sum km for all non-strength, non-rest sessions — this matches what Claude planned
-    weekly_plan_run_km = round(sum(
-        float(s.get("km", 0) or 0)
-        for s in _daily_plan.values()
-        if s.get("type") not in ("strength", "rest") and float(s.get("km", 0) or 0) > 0
-    ), 1)
-    # Prefer daily_plan sum; fall back to AI's stated weekly_target_km if daily_plan is empty
-    _ai_weekly_target = float(_coaching_plan.get("this_week", {}).get("weekly_target_km", 0))
-    canonical_weekly_target_km = weekly_plan_run_km if weekly_plan_run_km > 0 else _ai_weekly_target
+    # Compute weekly target as EXACT sum of all planned km
+    # Must match what runner sees in daily plan rows
+    _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    weekly_target_from_plan = sum(
+        float(_daily_plan.get(day, {}).get('km', 0))
+        for day in _WEEK_DAYS
+        if _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
+        and float(_daily_plan.get(day, {}).get('km', 0)) > 0
+    )
+    canonical_weekly_target_km = round(weekly_target_from_plan, 1)
+    current_app.logger.debug(f"[weekly_target] daily plan km: { {d: _daily_plan.get(d,{}).get('km',0) for d in _WEEK_DAYS} }, sum={canonical_weekly_target_km}")
 
     # Post-process coaching message — replace stale km targets + fix AI grammar
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")

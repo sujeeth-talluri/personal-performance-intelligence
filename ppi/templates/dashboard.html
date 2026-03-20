@@ -584,7 +584,21 @@
     {% if canonical_coaching_message %}
     <div class="card" id="card-coaching">
       <div class="card-title">AI Coaching Insight</div>
-      <div class="coaching-text">{{ canonical_coaching_message }}</div>
+      <div class="coaching-text">{% set _msg = canonical_coaching_message %}
+{% set _target = canonical_weekly_target_km|int|string %}
+{% set _long = canonical_long_run_km|int|string %}
+{% set _msg = _msg|replace("25-28km", _target + "km") %}
+{% set _msg = _msg|replace("25km", _target + "km") %}
+{% set _msg = _msg|replace("28km", _target + "km") %}
+{% set _msg = _msg|replace("25 km", _target + "km") %}
+{% set _msg = _msg|replace("26km", _target + "km") %}
+{% set _msg = _msg|replace("27km", _target + "km") %}
+{% set _msg = _msg|replace("29km", _target + "km") %}
+{% set _msg = _msg|replace("30km", _target + "km") %}
+{% set _msg = _msg|replace("18km long run", _long + "km long run") %}
+{% set _msg = _msg|replace("20km long run", _long + "km long run") %}
+{% set _msg = _msg|replace("21km long run", _long + "km long run") %}
+{{ _msg }}</div>
       <div class="coaching-badge" style="margin-top:10px">
         <span>🤖</span>
         <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
