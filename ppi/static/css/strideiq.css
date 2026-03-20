@@ -822,4 +822,35 @@ button, .btn {
 .hero-left h1 {
   font-family: var(--font-display) !important;
   font-weight: 800 !important;
+  color: #ffffff !important;
 }
+.hero-left .sub { color: #94a3b8 !important; }
+
+/* ─── R2d: Light-background boxes inside dark cards ─────────────────────── */
+
+/* wall-callout has #fef2f2 bg — convert to dark theme */
+.wall-callout {
+  background: rgba(255,71,87,0.06) !important;
+  border-left-color: var(--red) !important;
+}
+.wall-callout.high { background: rgba(255,71,87,0.08) !important; }
+.wall-callout .callout-num {
+  color: var(--red) !important;
+  font-family: var(--font-mono) !important;
+}
+.wall-callout .callout-num.medium { color: var(--amber) !important; }
+.wall-callout .callout-label { color: var(--text-muted) !important; }
+
+/* fm-stat boxes have var(--bg)=#f0f2f7 — convert to dark elevated */
+.fm-stat { background: var(--bg-elevated) !important; }
+.fm-stat .fs-label { color: var(--text-muted) !important; }
+.fm-stat .fs-val { color: var(--text-primary) !important; }
+.fm-stat .fs-val.green { color: var(--green) !important; }
+.fm-stat .fs-val.red   { color: var(--red) !important; }
+
+/* dist-tile (JS-injected race predictions) — reinforce all child text */
+.dist-tile .label    { color: var(--text-muted) !important; }
+.dist-tile .time     { color: var(--text-primary) !important; font-family: var(--font-mono) !important; }
+.dist-tile .sub-time { color: #6b7a99 !important; font-family: var(--font-mono) !important; }
+.dist-tile .potential { color: var(--green) !important; }
+.dist-tile .potential span { color: var(--text-muted) !important; }
