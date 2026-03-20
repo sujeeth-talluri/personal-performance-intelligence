@@ -107,12 +107,12 @@ class AICoachEngine:
             .first()
         )
         key_str = (
-            f"v8"  # bump to invalidate all existing caches
+            f"v9"  # bumped: use activity id (not date) so re-syncing same activity doesn't bust cache
             f":{user_id}"
             f":{goal.id if goal else 'none'}"
             f":{goal.goal_time if goal else ''}"
             f":{goal.race_date if goal else ''}"
-            f":{last_activity.date if last_activity else 'none'}"
+            f":{last_activity.id if last_activity else 'none'}"
         )
         return hashlib.md5(key_str.encode()).hexdigest()[:16]
 
@@ -733,7 +733,7 @@ Generate for ALL weeks until race day inclusive."""
                 "max_tokens": max_tokens,
                 "messages":   [{"role": "user", "content": prompt}],
             },
-            timeout=30,
+            timeout=(5, 20),  # (connect, read) — 2 calls max ~50s, within gunicorn 120s
         )
 
         if response.status_code != 200:

@@ -4,8 +4,9 @@
     env: python
     plan: free
     autoDeploy: true
+    healthCheckPath: /healthz
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --graceful-timeout 30
     envVars:
       - key: SECRET_KEY
         generateValue: true
