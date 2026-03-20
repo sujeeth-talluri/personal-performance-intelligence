@@ -1,19 +1,33 @@
 /* ═══════════════════════════════════════════
-   STRIDEIQ DESIGN SYSTEM v1.0
-   Shared across all pages
+   STRIDEIQ DESIGN SYSTEM v2.0
+   Semantic token architecture — no global color inheritance
    ═══════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500;600&display=swap');
 
+/* ─── Design tokens ─── */
 :root {
+  /* Raw palette */
   --bg-deep:     #07090f;
   --bg-base:     #0d1117;
   --bg-card:     #131929;
   --bg-elevated: #1a2235;
   --bg-input:    #1e2a42;
+
+  /* Semantic surface tokens */
+  --surface-primary:      #131929;   /* = --bg-card */
+  --surface-secondary:    #0d1117;   /* = --bg-base */
+  --surface-elevated:     #1a2235;   /* = --bg-elevated */
+  --surface-danger-soft:  rgba(255,71,87,0.08);
+  --surface-success-soft: rgba(0,255,135,0.05);
+  --surface-warning-soft: rgba(245,158,11,0.08);
+
+  /* Borders */
   --border:        rgba(255,255,255,0.07);
   --border-bright: rgba(255,255,255,0.14);
   --border-accent: rgba(0,255,135,0.25);
+
+  /* Accent colours */
   --green:      #00ff87;
   --green-dim:  rgba(0,255,135,0.12);
   --green-glow: 0 0 24px rgba(0,255,135,0.2);
@@ -23,26 +37,42 @@
   --red-dim:    rgba(255,71,87,0.12);
   --blue:       #60a5fa;
   --blue-dim:   rgba(96,165,250,0.12);
-  --text-primary:   #eef2ff;
-  --text-secondary: #8892a4;
-  --text-muted:     #4a5568;
+
+  /* Semantic text tokens — always paired with their surface */
+  --text-primary:   #eef2ff;   /* on --surface-primary / --surface-elevated */
+  --text-secondary: #8892a4;   /* secondary on dark surfaces */
+  --text-muted:     #4a5568;   /* muted on dark surfaces */
+  --text-on-surface: #eef2ff;  /* alias: text on any dark surface */
+  --text-on-danger:  #ff8fa3;  /* text on --surface-danger-soft */
+  --text-on-success: #00ff87;  /* text on --surface-success-soft */
+  --text-on-warning: #fbbf24;  /* text on --surface-warning-soft */
+
+  /* Typography */
   --font-display: 'Syne', sans-serif;
   --font-mono:    'DM Mono', monospace;
   --font-body:    'Inter', sans-serif;
+
+  /* Shape */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
+
+  /* Shadows */
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 16px rgba(0,0,0,0.4);
   --shadow-lg:   0 8px 32px rgba(0,0,0,0.5);
   --shadow-glow: 0 0 32px rgba(0,255,135,0.15);
+
+  /* Motion */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --transition: all 0.2s var(--ease);
 }
 
+/* ─── Reset ─── */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* ─── Base ─── */
 body {
   font-family: var(--font-body);
   background: var(--bg-deep);
@@ -115,8 +145,13 @@ button, .btn {
   border-color: var(--border-bright);
 }
 
+/* ─── Card base ───────────────────────────────────────────────────────────
+   CONTRACT: sets its own surface + text. Children must declare their own
+   text color — do NOT rely on inheritance from .card for contrast safety.
+   ─────────────────────────────────────────────────────────────────────── */
 .card {
-  background: var(--bg-card);
+  background: var(--surface-primary);
+  color: var(--text-on-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
@@ -135,17 +170,14 @@ button, .btn {
 }
 
 /* ═══════════════════════════════════════
-   ROUND 2: Hero + Sidebar + Card depth
+   SIDEBAR
    ═══════════════════════════════════════ */
-
-/* ─── Sidebar enhancements ─── */
 .sidebar {
   background: var(--bg-base) !important;
   border-right: 1px solid var(--border) !important;
   padding: 24px 16px !important;
 }
 
-/* Logo */
 .sidebar .logo-text,
 .sidebar .brand-name,
 .sidebar h1 {
@@ -157,7 +189,6 @@ button, .btn {
   line-height: 1 !important;
 }
 
-/* AI Marathon Coach subtitle */
 .sidebar .brand-subtitle,
 .sidebar .tagline {
   font-family: var(--font-mono) !important;
@@ -167,7 +198,6 @@ button, .btn {
   margin-top: 3px !important;
 }
 
-/* Nav items */
 .sidebar nav a,
 .sidebar .nav-link {
   display: flex !important;
@@ -195,7 +225,6 @@ button, .btn {
   border-color: var(--border-accent) !important;
 }
 
-/* User info at bottom */
 .sidebar .user-info {
   padding: 12px !important;
   border-top: 1px solid var(--border) !important;
@@ -213,7 +242,12 @@ button, .btn {
   font-family: var(--font-mono) !important;
 }
 
-/* ─── Hero Bar ─── */
+.sidebar-user { color: var(--text-secondary) !important; }
+.sidebar-logo { color: var(--green) !important; }
+
+/* ═══════════════════════════════════════
+   HERO BAR
+   ═══════════════════════════════════════ */
 .hero-bar,
 .top-header {
   background: linear-gradient(135deg,
@@ -222,7 +256,6 @@ button, .btn {
   padding: 20px 32px !important;
 }
 
-/* Race name */
 .hero-bar .race-name,
 .hero-bar h2,
 .hero-title {
@@ -234,7 +267,6 @@ button, .btn {
   line-height: 1.2 !important;
 }
 
-/* Goal time + days */
 .hero-bar .goal-line,
 .hero-meta {
   font-size: 13px !important;
@@ -242,7 +274,13 @@ button, .btn {
   margin-top: 4px !important;
 }
 
-/* Hero stats (days, pace, phase) */
+.hero-left h1 {
+  font-family: var(--font-display) !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+}
+.hero-left .sub { color: #94a3b8 !important; }
+
 .hero-stats {
   display: flex !important;
   align-items: center !important;
@@ -274,7 +312,6 @@ button, .btn {
   display: block !important;
 }
 
-/* Phase badge in hero */
 .phase-badge {
   display: inline-flex !important;
   align-items: center !important;
@@ -288,15 +325,17 @@ button, .btn {
   border: 1px solid rgba(245,158,11,0.2) !important;
 }
 
-/* ─── Card depth improvements ─── */
+/* ═══════════════════════════════════════
+   CARD ENHANCEMENTS
+   ═══════════════════════════════════════ */
 .card,
 .dashboard-card,
 .widget {
-  background: var(--bg-card) !important;
+  background: var(--surface-primary) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
   padding: 24px !important;
-  color: var(--text-primary) !important;
+  /* NO global color here — each component sets its own text color */
   box-shadow:
     0 1px 0 rgba(255,255,255,0.04) inset,
     var(--shadow-sm) !important;
@@ -309,7 +348,12 @@ button, .btn {
     var(--shadow-md) !important;
 }
 
-/* Card section titles */
+/* Headings and paragraphs inside cards — explicit, not inherited */
+.card h2 { color: var(--text-primary) !important; }
+.card p  { color: var(--text-secondary) !important; }
+.card li { color: var(--text-secondary) !important; }
+
+/* ─── Card section titles ─── */
 .card-header,
 .card-title,
 .section-label {
@@ -318,22 +362,21 @@ button, .btn {
   font-weight: 600 !important;
   text-transform: uppercase !important;
   letter-spacing: 1.2px !important;
-  color: var(--text-muted) !important;
+  color: #6b7a99 !important;
   margin-bottom: 20px !important;
   padding-bottom: 12px !important;
   border-bottom: 1px solid var(--border) !important;
 }
 
-/* ─── Today's Session card highlight ─── */
+/* ─── Today's Session card ─── */
 .today-session-card,
 .todays-session {
   border-color: var(--border-accent) !important;
   background: linear-gradient(135deg,
-    var(--bg-card) 0%,
+    var(--surface-primary) 0%,
     rgba(0,255,135,0.02) 100%) !important;
 }
 
-/* Today workout name — make it big */
 .today-workout-name,
 .workout-name {
   font-family: var(--font-display) !important;
@@ -342,14 +385,15 @@ button, .btn {
   color: var(--text-primary) !important;
 }
 
-/* ─── Weekly Plan row improvements ─── */
+/* ═══════════════════════════════════════
+   WEEKLY PLAN ROWS
+   ═══════════════════════════════════════ */
 .plan-row {
   padding: 14px 0 !important;
   border-bottom: 1px solid var(--border) !important;
 }
-.plan-row:last-of-type {
-  border-bottom: none !important;
-}
+.plan-row:last-of-type { border-bottom: none !important; }
+
 .plan-day-name {
   font-size: 12px !important;
   color: var(--text-muted) !important;
@@ -374,10 +418,36 @@ button, .btn {
   margin-top: 2px !important;
 }
 
-/* ─── Race Prediction tiles ─── */
+/* Plan row text — explicit colors, no inheritance reliance */
+.plan-meta     { color: var(--text-secondary) !important; }
+.plan-distance { color: var(--text-secondary) !important; }
+.plan-pace     { color: #6b7a99 !important; }
+
+/* Status row overrides */
+.done-row    .plan-distance { color: #16a34a !important; }
+.skip-row    .plan-distance { color: var(--text-muted) !important; }
+.partial-row .plan-distance { color: #d97706 !important; }
+.status-green  { color: #16a34a !important; }
+.status-orange { color: #d97706 !important; }
+
+/* ═══════════════════════════════════════
+   METRIC ROWS (Today's Session / Weekly Totals)
+   ═══════════════════════════════════════ */
+/* CONTRACT: .metric-row is always inside a dark card — explicit colors */
+.metric-row span   { color: var(--text-secondary) !important; }
+.metric-row strong {
+  color: var(--text-primary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* ═══════════════════════════════════════
+   RACE PREDICTION TILES  (.dist-tile — JS-injected)
+   ═══════════════════════════════════════ */
 .pred-tile,
 .prediction-tile {
-  background: var(--bg-elevated) !important;
+  background: var(--surface-elevated) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   padding: 20px 16px !important;
@@ -415,9 +485,34 @@ button, .btn {
   margin-top: 4px !important;
 }
 
-/* ─── CTL/ATL/TSB metric tiles ─── */
+/* .dist-tile — actual template class for JS-injected prediction tiles */
+/* CONTRACT: dark surface, all child text explicitly colored */
+.dist-tile {
+  background: var(--surface-elevated) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: var(--radius-md) !important;
+}
+.dist-tile:hover {
+  background: #243050 !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.dist-tile.fm {
+  border-color: var(--border-accent) !important;
+  background: rgba(0,255,135,0.04) !important;
+}
+.dist-tile .label    { color: var(--text-muted) !important; }
+.dist-tile .time     { color: var(--text-primary) !important; font-family: var(--font-mono) !important; }
+.dist-tile .sub-time { color: #6b7a99 !important; font-family: var(--font-mono) !important; }
+.dist-tile .potential { color: var(--green) !important; }
+.dist-tile .potential span { color: var(--text-muted) !important; }
+
+/* ═══════════════════════════════════════
+   CTL / ATL / TSB METRIC TILES
+   ═══════════════════════════════════════ */
 .metric-tile {
-  background: var(--bg-elevated) !important;
+  background: var(--surface-elevated) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   padding: 20px !important;
@@ -430,12 +525,11 @@ button, .btn {
   line-height: 1 !important;
   letter-spacing: -1px !important;
 }
-.ctl-number { color: var(--blue) !important; }
-.atl-number { color: var(--amber) !important; }
+.ctl-number  { color: var(--blue) !important; }
+.atl-number  { color: var(--amber) !important; }
 .tsb-positive { color: var(--green) !important; }
 .tsb-negative { color: var(--red) !important; }
 .tsb-neutral  { color: var(--amber) !important; }
-
 .metric-label {
   font-size: 10px !important;
   text-transform: uppercase !important;
@@ -449,7 +543,9 @@ button, .btn {
   margin-top: 2px !important;
 }
 
-/* ─── Feasibility strip ─── */
+/* ═══════════════════════════════════════
+   FEASIBILITY STRIP
+   ═══════════════════════════════════════ */
 .feasibility-strip {
   margin: 16px 32px !important;
   padding: 16px 20px !important;
@@ -472,6 +568,8 @@ button, .btn {
   background: rgba(255,71,87,0.04) !important;
   border-color: rgba(255,71,87,0.2) !important;
 }
+
+/* CONTRACT: all fs-* children declare their own color */
 .fs-score {
   font-family: var(--font-mono) !important;
   font-size: 36px !important;
@@ -489,27 +587,30 @@ button, .btn {
   font-weight: 600 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
+  color: var(--text-primary) !important;
 }
 .fs-text {
   font-size: 13px !important;
-  color: var(--text-secondary) !important;
+  color: #a0b0c8 !important;
   flex: 1 !important;
   line-height: 1.5 !important;
   min-width: 200px !important;
 }
 .fs-score-explain {
   font-size: 11px !important;
-  color: var(--text-muted) !important;
+  color: #6b7a99 !important;
   font-family: var(--font-mono) !important;
   margin-top: 4px !important;
   display: block !important;
 }
 
-/* ─── AI Coaching card ─── */
+/* ═══════════════════════════════════════
+   AI COACHING CARD
+   ═══════════════════════════════════════ */
 .coaching-card,
 .ai-insight-card {
   border-left: 3px solid var(--green) !important;
-  background: var(--bg-card) !important;
+  background: var(--surface-primary) !important;
 }
 .coaching-text {
   font-size: 14px !important;
@@ -525,9 +626,11 @@ button, .btn {
   border-top: 1px solid var(--border) !important;
 }
 
-/* ─── Upcoming long runs tiles ─── */
+/* ═══════════════════════════════════════
+   UPCOMING LONG RUNS
+   ═══════════════════════════════════════ */
 .long-run-tile {
-  background: var(--bg-elevated) !important;
+  background: var(--surface-elevated) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   padding: 14px !important;
@@ -556,7 +659,9 @@ button, .btn {
   margin-top: 2px !important;
 }
 
-/* ─── Recent Activities ─── */
+/* ═══════════════════════════════════════
+   RECENT ACTIVITIES
+   ═══════════════════════════════════════ */
 .activity-row {
   padding: 12px 0 !important;
   border-bottom: 1px solid var(--border) !important;
@@ -566,13 +671,13 @@ button, .btn {
   padding-left: 8px !important;
   padding-right: 8px !important;
   margin: 0 -8px !important;
-  background: var(--bg-elevated) !important;
+  background: var(--surface-elevated) !important;
   border-radius: var(--radius-sm) !important;
 }
 .activity-date {
-  font-size: 12px !important;
-  color: var(--text-muted) !important;
+  color: #6b7a99 !important;
   font-family: var(--font-mono) !important;
+  font-size: 12px !important;
 }
 .activity-name {
   font-size: 13px !important;
@@ -585,15 +690,15 @@ button, .btn {
   font-family: var(--font-mono) !important;
 }
 
-/* ─── Collapsible section headers ─── */
+/* ═══════════════════════════════════════
+   COLLAPSIBLE SECTION HEADERS
+   ═══════════════════════════════════════ */
 .collapsible-header {
   padding: 14px 0 !important;
   border-bottom: 1px solid var(--border) !important;
   cursor: pointer !important;
 }
-.collapsible-header:hover {
-  opacity: 0.8 !important;
-}
+.collapsible-header:hover { opacity: 0.8 !important; }
 .collapsible-title {
   font-family: var(--font-display) !important;
   font-size: 11px !important;
@@ -615,7 +720,25 @@ button, .btn {
   color: var(--green) !important;
 }
 
-/* ─── Wall Risk card ─── */
+/* ═══════════════════════════════════════
+   WALL RISK CARD
+   CONTRACT: --surface-danger-soft + --text-on-danger
+   ═══════════════════════════════════════ */
+/* Wall callout box — dark danger surface, explicit text colors */
+.wall-callout {
+  background: var(--surface-danger-soft) !important;
+  border-left-color: var(--red) !important;
+}
+.wall-callout.high {
+  background: rgba(255,71,87,0.10) !important;
+}
+.wall-callout .callout-num {
+  color: var(--red) !important;
+  font-family: var(--font-mono) !important;
+}
+.wall-callout .callout-num.medium { color: var(--amber) !important; }
+.wall-callout .callout-label { color: var(--text-muted) !important; }
+
 .wall-badge-high {
   background: var(--red-dim) !important;
   color: var(--red) !important;
@@ -635,7 +758,22 @@ button, .btn {
   letter-spacing: -1px !important;
 }
 
-/* ─── Pace Strategy table ─── */
+/* ═══════════════════════════════════════
+   FM STAT BOXES
+   CONTRACT: --surface-elevated + explicit text
+   ═══════════════════════════════════════ */
+.fm-stat {
+  background: var(--surface-elevated) !important;
+  /* text colors set on children, not inherited */
+}
+.fm-stat .fs-label { color: var(--text-muted) !important; }
+.fm-stat .fs-val   { color: var(--text-primary) !important; }
+.fm-stat .fs-val.green { color: var(--green) !important; }
+.fm-stat .fs-val.red   { color: var(--red) !important; }
+
+/* ═══════════════════════════════════════
+   PACE STRATEGY TABLE
+   ═══════════════════════════════════════ */
 .pace-table th {
   font-size: 10px !important;
   letter-spacing: 0.8px !important;
@@ -644,24 +782,23 @@ button, .btn {
 .pace-table td {
   font-size: 13px !important;
   padding: 12px !important;
+  color: var(--text-secondary) !important;
 }
 .pace-value {
   font-family: var(--font-mono) !important;
   font-weight: 500 !important;
   color: var(--text-primary) !important;
 }
-.critical-row {
-  background: rgba(255,71,87,0.04) !important;
-}
-.critical-row .pace-value {
-  color: var(--green) !important;
-}
+.critical-row { background: rgba(255,71,87,0.04) !important; }
+.critical-row .pace-value { color: var(--green) !important; }
 
-/* ─── Status badges ─── */
-.status-done { color: var(--green) !important; }
+/* ═══════════════════════════════════════
+   STATUS BADGES
+   ═══════════════════════════════════════ */
+.status-done    { color: var(--green) !important; }
 .status-partial { color: var(--amber) !important; }
-.status-missed { color: var(--red) !important; }
-.status-today { color: var(--blue) !important; }
+.status-missed  { color: var(--red) !important; }
+.status-today   { color: var(--blue) !important; }
 .status-planned { color: var(--text-muted) !important; }
 
 .badge-planned {
@@ -675,23 +812,26 @@ button, .btn {
   border: 1px solid rgba(0,255,135,0.25) !important;
 }
 
-/* ─── Progress bar ─── */
+/* ═══════════════════════════════════════
+   PROGRESS BAR
+   ═══════════════════════════════════════ */
 .progress-track {
   height: 4px !important;
-  background: var(--bg-elevated) !important;
+  background: var(--surface-elevated) !important;
   border-radius: 2px !important;
   overflow: hidden !important;
   margin-top: 16px !important;
 }
 .progress-fill {
   height: 100% !important;
-  background: linear-gradient(90deg,
-    var(--green) 0%, #00c853 100%) !important;
+  background: linear-gradient(90deg, var(--green) 0%, #00c853 100%) !important;
   border-radius: 2px !important;
   transition: width 0.8s var(--ease) !important;
 }
 
-/* ─── Week stats row ─── */
+/* ═══════════════════════════════════════
+   WEEK STATS ROW
+   ═══════════════════════════════════════ */
 .week-stats-row {
   display: flex !important;
   justify-content: space-between !important;
@@ -699,9 +839,7 @@ button, .btn {
   padding-top: 16px !important;
   border-top: 1px solid var(--border) !important;
 }
-.week-stat-item {
-  text-align: center !important;
-}
+.week-stat-item { text-align: center !important; }
 .week-stat-value {
   font-family: var(--font-mono) !important;
   font-size: 16px !important;
@@ -715,142 +853,3 @@ button, .btn {
   letter-spacing: 0.5px !important;
   margin-top: 2px !important;
 }
-
-/* ─── VISIBILITY SAFETY NET ───────────────────────────────────────────────
-   Cards have dark bg (#131929). Dashboard body text is dark (#1a1d2e).
-   These rules ensure all text inside cards is readable on dark backgrounds.
-   ─────────────────────────────────────────────────────────────────────── */
-
-/* metric-row: label spans stay muted-grey, values (strong) stay primary */
-.metric-row span { color: var(--text-secondary) !important; }
-.metric-row strong { color: var(--text-primary) !important; }
-
-/* Weekly plan rows */
-.plan-meta { color: var(--text-secondary) !important; }
-.plan-distance { color: var(--text-secondary) !important; }
-.plan-pace { color: var(--text-muted) !important; }
-/* Keep status colours intact */
-.done-row .plan-distance { color: #16a34a !important; }
-.skip-row .plan-distance { color: var(--text-muted) !important; }
-.partial-row .plan-distance { color: #d97706 !important; }
-.status-green { color: #16a34a !important; }
-.status-orange { color: #d97706 !important; }
-
-/* Card h2 headings */
-.card h2 { color: var(--text-primary) !important; }
-
-/* General text inside cards — catch-all for p / li */
-.card p { color: var(--text-secondary) !important; }
-.card li { color: var(--text-secondary) !important; }
-
-/* Sidebar footer text (was inheriting dark body colour) */
-.sidebar-user { color: var(--text-secondary) !important; }
-.sidebar-logo { color: var(--green) !important; }
-
-/* ─── R2b: Targeted contrast fixes ──────────────────────────────────────── */
-
-/* FIX 1 — Pace guidance (Saturday/Sunday planned rows) */
-.plan-pace { color: #6b7a99 !important; }
-
-/* FIX 2 — Activity date column */
-.activity-date {
-  color: #6b7a99 !important;
-  font-family: var(--font-mono) !important;
-  font-size: 12px !important;
-}
-
-/* FIX 3 — Today's session + weekly totals use .metric-row
-   span = label, strong = value (already in safety net above,
-   boosting strong to ensure DM Mono + slightly larger) */
-.metric-row strong {
-  color: var(--text-primary) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-}
-
-/* FIX 4 — Prediction tiles (template uses .dist-tile, not .pred-tile) */
-.dist-tile {
-  background: #1e2a42 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  border-radius: var(--radius-md) !important;
-}
-.dist-tile:hover {
-  background: #243050 !important;
-  border-color: rgba(255,255,255,0.15) !important;
-  transform: translateY(-2px) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-.dist-tile.fm {
-  border-color: var(--border-accent) !important;
-  background: rgba(0,255,135,0.04) !important;
-}
-/* Labels and values inside dist-tile */
-.dist-tile .label { color: var(--text-muted) !important; }
-.dist-tile .time  { color: var(--text-primary) !important; }
-.dist-tile .sub-time { color: var(--text-secondary) !important; }
-.dist-tile .potential { color: var(--green) !important; }
-.dist-tile .potential span { color: var(--text-muted) !important; }
-
-/* FIX 5 — Feasibility strip text (template uses .fs-text, .fs-score, .fs-score-explain) */
-.fs-score { color: var(--green) !important; }
-.fs-text  { color: #a0b0c8 !important; }
-.fs-score-explain { color: #6b7a99 !important; }
-.fs-label { color: var(--text-primary) !important; }  /* was #1a1a2e — dark on dark */
-
-/* ─── R2c: Final contrast fixes ─────────────────────────────────────────── */
-
-/* FIX — card h2 headings use var(--text)=#1a1d2e — force light */
-.card h2 { color: var(--text-primary) !important; }
-
-/* FIX — dist-tile (Race Predictions): .time uses var(--text) dark */
-.dist-tile .time { color: var(--text-primary) !important; font-family: var(--font-mono) !important; }
-.dist-tile .sub-time { color: var(--text-secondary) !important; }
-.dist-tile .label { color: var(--text-muted) !important; }
-
-/* FIX — section-label uses var(--muted) which is ok but reinforce */
-.section-label { color: #6b7a99 !important; }
-
-/* FIX — card-title is ok (#6b7280 on dark), ensure font */
-.card-title {
-  font-family: var(--font-display) !important;
-  letter-spacing: 1.2px !important;
-  color: #6b7a99 !important;
-}
-
-/* Hero h1 already #fff in inline CSS — Syne via font-display var */
-.hero-left h1 {
-  font-family: var(--font-display) !important;
-  font-weight: 800 !important;
-  color: #ffffff !important;
-}
-.hero-left .sub { color: #94a3b8 !important; }
-
-/* ─── R2d: Light-background boxes inside dark cards ─────────────────────── */
-
-/* wall-callout has #fef2f2 bg — convert to dark theme */
-.wall-callout {
-  background: rgba(255,71,87,0.06) !important;
-  border-left-color: var(--red) !important;
-}
-.wall-callout.high { background: rgba(255,71,87,0.08) !important; }
-.wall-callout .callout-num {
-  color: var(--red) !important;
-  font-family: var(--font-mono) !important;
-}
-.wall-callout .callout-num.medium { color: var(--amber) !important; }
-.wall-callout .callout-label { color: var(--text-muted) !important; }
-
-/* fm-stat boxes have var(--bg)=#f0f2f7 — convert to dark elevated */
-.fm-stat { background: var(--bg-elevated) !important; }
-.fm-stat .fs-label { color: var(--text-muted) !important; }
-.fm-stat .fs-val { color: var(--text-primary) !important; }
-.fm-stat .fs-val.green { color: var(--green) !important; }
-.fm-stat .fs-val.red   { color: var(--red) !important; }
-
-/* dist-tile (JS-injected race predictions) — reinforce all child text */
-.dist-tile .label    { color: var(--text-muted) !important; }
-.dist-tile .time     { color: var(--text-primary) !important; font-family: var(--font-mono) !important; }
-.dist-tile .sub-time { color: #6b7a99 !important; font-family: var(--font-mono) !important; }
-.dist-tile .potential { color: var(--green) !important; }
-.dist-tile .potential span { color: var(--text-muted) !important; }
