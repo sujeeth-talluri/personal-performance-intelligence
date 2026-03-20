@@ -55,7 +55,7 @@ from .services.prediction_engine import vdot_from_race, vdot_to_race_time_second
 from .services.strava_service import sync_strava_data
 from .services.data_quality import DataQualityReport
 from .services.ai_coach_engine import AICoachEngine
-from .models import Activity, Goal, Metric, RunnerProfile
+from .models import Activity, CoachingPlan, Goal, Metric, RunnerProfile, WorkoutLog
 from .extensions import db
 
 web = Blueprint("web", __name__)
@@ -83,7 +83,35 @@ def _today_date_label(user_timezone):
             "etc/utc": timezone.utc,
         }
         tz = fallback.get((user_timezone or "").lower(), timezone.utc)
-    return datetime.now(timezone.utc).astimezone(tz).strftime("%b %d, %Y")
+        return datetime.now(timezone.utc).astimezone(tz).strftime("%b %d, %Y")
+
+
+def _get_coaching_plan_row(user_id):
+    return CoachingPlan.query.filter_by(user_id=user_id).order_by(CoachingPlan.id.desc()).first()
+
+
+def _load_coaching_freeze_state(plan_row):
+    if not plan_row or not plan_row.context_json:
+        return {}
+    try:
+        context = json.loads(plan_row.context_json)
+    except Exception:
+        return {}
+    freeze_state = context.get("freeze_state")
+    return freeze_state if isinstance(freeze_state, dict) else {}
+
+
+def _save_coaching_freeze_state(plan_row, freeze_state):
+    if not plan_row:
+        return
+    try:
+        context = json.loads(plan_row.context_json) if plan_row.context_json else {}
+    except Exception:
+        context = {}
+    context["freeze_state"] = freeze_state
+    plan_row.context_json = json.dumps(context, default=str)
+    db.session.add(plan_row)
+    db.session.commit()
 
 def _parse_iso_datetime(value):
     if not value:
@@ -1026,6 +1054,8 @@ def dashboard():
     _daily_plan                    = _coaching_plan.get("this_week", {}).get("daily_plan", {})
     _profile_data                  = _coaching_plan.get("runner_profile", {})
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
+    today_local = _today_local_date(user_tz)
+    week_start, week_end = _week_bounds(today_local)
 
     # Compute weekly target accounting for overruns on completed days
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -1037,8 +1067,17 @@ def dashboard():
         if _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
         and float(_daily_plan.get(day, {}).get('km', 0)) > 0
     )
-    canonical_weekly_target_km = round(planned_total, 1)  # interim; finalised after week_actual_km
-    current_app.logger.debug(f"[weekly_target] planned_total={planned_total:.1f} (interim)")
+    _plan_row = _get_coaching_plan_row(user.id)
+    _freeze_state = _load_coaching_freeze_state(_plan_row)
+    _weekly_targets = _freeze_state.setdefault("weekly_targets", {})
+    _freeze_key = week_start.isoformat()
+    if _freeze_key in _weekly_targets:
+        canonical_weekly_target_km = round(float(_weekly_targets[_freeze_key] or planned_total or 0.0), 1)
+    else:
+        canonical_weekly_target_km = round(planned_total, 1)
+        _weekly_targets[_freeze_key] = canonical_weekly_target_km
+        _save_coaching_freeze_state(_plan_row, _freeze_state)
+    current_app.logger.debug(f"[weekly_target] planned_total={planned_total:.1f} frozen={canonical_weekly_target_km:.1f}")
 
     # Post-process coaching message — replace stale km targets + fix AI grammar
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
@@ -1142,8 +1181,6 @@ def dashboard():
         wall_actions = []
 
     # ── Fetch this week's activities ──────────────────────────────────────────
-    today_local = _today_local_date(user_tz)
-    week_start, week_end = _week_bounds(today_local)
 
     # ── 8-week CTL series — replay load_engine formula so chart matches fitness card ──
     import math as _math
@@ -1261,24 +1298,11 @@ def dashboard():
 
     # Finalise weekly target: max(planned_total, actual_so_far + remaining_planned)
     # This handles overruns — if runner did more than planned on past days, target rises
-    _today_weekday = today_local.weekday()  # 0=Mon … 6=Sun
-    _remaining_planned_km = sum(
-        float(_daily_plan.get(day, {}).get('km', 0))
-        for i, day in enumerate(_WEEK_DAYS)
-        if i > _today_weekday
-        and _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
-    )
-    _true_weekly_target = round(week_actual_km + _remaining_planned_km, 0)
-    canonical_weekly_target_km = round(max(planned_total, _true_weekly_target), 1)
-
-    # Over-performance safety: if runner somehow exceeded target, push target up
-    if week_actual_km > canonical_weekly_target_km:
-        canonical_weekly_target_km = round(week_actual_km + _remaining_planned_km, 1)
+    _remaining_planned_km = max(0.0, round(canonical_weekly_target_km - week_actual_km, 1))
 
     current_app.logger.debug(
         f"[weekly_target] actual={week_actual_km} remaining={_remaining_planned_km:.1f} "
-        f"true_target={_true_weekly_target} planned_total={planned_total:.1f} "
-        f"final={canonical_weekly_target_km}"
+        f"planned_total={planned_total:.1f} final={canonical_weekly_target_km}"
     )
 
     # ── Build weekly plan from AI daily_plan ──────────────────────────────────
@@ -1307,14 +1331,23 @@ def dashboard():
         crosses       = _cross_acts(acts)
 
         if session_type == "strength":
-            workout_type = "STRENGTH"
-            session_name = "Strength & Conditioning"
+            ai_workout_type = "STRENGTH"
+            ai_session_name = "Strength & Conditioning"
         elif session_type == "rest":
-            workout_type = "REST"
-            session_name = "Rest Day"
+            ai_workout_type = "REST"
+            ai_session_name = "Rest Day"
         else:
-            workout_type = "RUN"
-            session_name = _SESSION_NAMES.get(session_type, session_type.replace("_", " ").title())
+            ai_workout_type = "RUN"
+            ai_session_name = _SESSION_NAMES.get(session_type, session_type.replace("_", " ").title())
+
+        frozen_log = WorkoutLog.query.filter_by(user_id=user.id, workout_date=day_date).first()
+        if is_past and frozen_log:
+            workout_type = frozen_log.workout_type
+            session_name = frozen_log.session_name
+            planned_km = float(frozen_log.target_distance_km or 0.0)
+        else:
+            workout_type = ai_workout_type
+            session_name = ai_session_name
 
         # Status + actual_km logic per workout type
         if workout_type == "RUN":
@@ -1361,6 +1394,19 @@ def dashboard():
             "pace_guidance": day_info.get("pace_guidance", ""),
             "notes":         day_info.get("notes", ""),
         })
+        upsert_workout_log(
+            user_id=user.id,
+            workout_date=day_date,
+            workout_type=workout_type,
+            session_name=session_name,
+            target_distance_km=planned_km if planned_km > 0 else None,
+            status=status if status not in {"today", "planned", "rest", "bonus"} else "planned",
+            actual_distance_km=actual_km if actual_km > 0 else None,
+            notes=day_info.get("notes", ""),
+            source="engine",
+            auto_commit=False,
+        )
+    commit_all()
 
     # ── Derived weekly stats ──────────────────────────────────────────────────
     mileage_plan_runs        = [w for w in weekly_plan if w["workout_type"] == "RUN"]
@@ -1528,10 +1574,11 @@ def dashboard():
             "type":        _a.activity_type or "unknown",
             "icon":        _TYPE_ICONS.get(_typ, "⚡"),
             "distance_km": round(_a.distance_km or 0, 1),
+            "show_distance": bool((_a.distance_km or 0) > 0),
             "pace":        _fmt_pace(_a.moving_time, _a.distance_km),
             "duration":    _fmt_dur(_a.moving_time),
             "hr":          int(float(_a.avg_hr)) if _a.avg_hr else None,
-            "elevation":   int(round(float(_a.elevation_gain))) if _a.elevation_gain and float(_a.elevation_gain) > 0 else None,
+            "elevation":   int(round(float(_a.elevation_gain))) if _a.elevation_gain and float(_a.elevation_gain) > 10 else None,
             "is_run":      _typ in _RUN_TYPES,
             "is_strength": _typ in _STRENGTH_TYPES,
             "is_cross":    _typ in _CROSS_TRAINING_TYPES,

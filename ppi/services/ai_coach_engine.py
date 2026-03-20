@@ -153,6 +153,14 @@ class AICoachEngine:
         existing = CoachingPlan.query.filter_by(user_id=user_id).first()
         cache_key = self._build_cache_key(user_id)
         plan_json = json.dumps(plan, default=str)
+        if existing and existing.context_json:
+            try:
+                existing_context = json.loads(existing.context_json)
+            except Exception:
+                existing_context = {}
+            freeze_state = existing_context.get("freeze_state")
+            if freeze_state is not None:
+                context = {**context, "freeze_state": freeze_state}
         context_json = json.dumps(context, default=str)
 
         feas_score = plan.get("feasibility", {}).get("feasibility_score", 0)

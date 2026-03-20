@@ -472,7 +472,7 @@
         <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
         <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
         {% if canonical_feasibility_factor_scores %}
-        <div class="fs-score-explain">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+        <div class="fs-score-explain" style="display:none">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
         {% endif %}
       </div>
       {% if canonical_honest_assessment %}
@@ -651,10 +651,11 @@
             <div class="activity-icon">{{ act.icon }}</div>
             <div class="activity-date">{{ act.date }}</div>
             <div class="activity-main">
-              {% if act.is_run %}
-                {{ act.distance_km }}km{% if act.pace %} · {{ act.pace }}/km{% endif %}{% if act.elevation %} · +{{ act.elevation }}m{% endif %}
-              {% elif act.is_cross %}
-                {{ act.distance_km }}km · {{ act.type|title }}
+              {% if act.show_distance %}
+                {{ act.distance_km }}km
+                {% if act.is_run and act.pace %} · {{ act.pace }}/km{% endif %}
+                · {{ act.type|title }}
+                {% if act.elevation %} · +{{ act.elevation }}m{% endif %}
               {% else %}
                 {{ act.type|title }}
               {% endif %}
