@@ -443,6 +443,9 @@
     <div class="grid-2">
       <div class="card">
         <h2>Weekly Plan</h2>
+        {% if weekly_signal %}
+        <div class="weekly-signal weekly-signal-{{ weekly_signal_color }}">{{ weekly_signal }}</div>
+        {% endif %}
         <div>
           {% for p in weekly_plan %}
             <div class="plan-row {{ 'done-row' if p.status in ['completed','done'] else '' }} {{ 'skip-row' if p.status == 'missed' else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
@@ -532,6 +535,16 @@
           <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
         {% endif %}
         <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
+
+        <div class="today-progress-bar">
+          <div class="today-progress-labels">
+            <span>Week progress</span>
+            <span>{{ week_actual_km }}km / {{ canonical_weekly_target_km|int }}km</span>
+          </div>
+          <div class="today-progress-track">
+            <div class="today-progress-fill" style="width:{{ [[progress_pct, 100]|min, 0]|max }}%"></div>
+          </div>
+        </div>
 
         <div class="divider"></div>
         <h2>Upcoming Long Runs</h2>
@@ -762,6 +775,14 @@
       <div class="card" id="card-wall">
         <div class="card-title">Wall Risk Analysis</div>
         <div id="wall-content"></div>
+        {% if wall_actions %}
+        <div class="wall-actions wall-actions-static">
+          <div class="wall-actions-title">To reduce risk:</div>
+          {% for action in wall_actions %}
+          <div class="wall-action-item">→ {{ action }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -898,9 +919,12 @@
           : (d.avg_pace ? d.avg_pace + ' avg' : '');
         const div = document.createElement('div');
         div.className = 'dist-tile' + (fm ? ' fm' : '');
+        const fmGapDisplay = {{ fm_gap_display | tojson }};
+        const fmGapColor   = {{ fm_gap_color | tojson }};
         let inner = `
           <div class="label">${label}</div>
           <div class="time">${ptime}</div>
+          ${fm && fmGapDisplay ? `<div class="fm-gap-display fm-gap-${fmGapColor}">${fmGapDisplay}</div>` : ''}
           <div class="sub-time">${subPace}</div>
           <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
         `;

@@ -1092,6 +1092,55 @@ def dashboard():
     canonical_wall_base_display     = _fmt_hms(_base_pred_seconds) if _base_pred_seconds else ''
     canonical_wall_adjusted_display = _fmt_hms(canonical_wall_adjusted_seconds) if canonical_wall_adjusted_seconds else ''
 
+    # ── FM goal gap ───────────────────────────────────────────────────────────
+    _fm_pred_sec = canonical_wall_adjusted_seconds or _base_pred_seconds
+    if _fm_pred_sec and _goal_secs:
+        _gap_sec = _fm_pred_sec - _goal_secs
+        _gap_min = abs(int(_gap_sec // 60))
+        if _gap_sec > 30:
+            fm_gap_display = f"+{_gap_min} min from goal"
+            fm_gap_color   = "amber"
+        elif _gap_sec < -30:
+            fm_gap_display = f"{_gap_min} min under goal"
+            fm_gap_color   = "green"
+        else:
+            fm_gap_display = "On goal pace"
+            fm_gap_color   = "green"
+    else:
+        fm_gap_display = ""
+        fm_gap_color   = "green"
+
+    # ── Feasibility label with emoji ──────────────────────────────────────────
+    _feasibility_emoji_map = {
+        'on_track':       '🔥',
+        'achievable':     '⚡',
+        'at_risk':        '⚠️',
+        'needs_revision': '🔴',
+    }
+    _raw_label    = canonical_feasibility.get("assessment_label", "")
+    _assessment   = canonical_feasibility.get("assessment", "")
+    _label_emoji  = _feasibility_emoji_map.get(_assessment, '')
+    canonical_feasibility_label_emoji = f"{_raw_label} {_label_emoji}".strip() if _raw_label else ""
+
+    # ── Wall risk actions ─────────────────────────────────────────────────────
+    _readiness = canonical_feasibility.get("readiness", {})
+    _curr_vol  = float(_readiness.get("current_weekly_avg_km", 0) or 0)
+    if _wall_risk == 'high':
+        wall_actions = [
+            f"Complete {canonical_long_run_km:.0f} km long run this weekend",
+            f"Build weekly volume to {min(_curr_vol * 1.1, 50):.0f} km/week" if _curr_vol else "Build weekly volume gradually",
+            "Run all easy segments at conversational pace",
+            "Practice race-day fueling on long runs",
+        ]
+    elif _wall_risk == 'medium':
+        wall_actions = [
+            "Maintain consistent long runs as scheduled",
+            "Practice race-day fueling on long runs",
+            "Run first 5 km of race conservatively",
+        ]
+    else:
+        wall_actions = []
+
     # ── Fetch this week's activities ──────────────────────────────────────────
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
@@ -1334,6 +1383,23 @@ def dashboard():
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
     progress_pct    = min(100, round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100, 1))
 
+    # ── Weekly signal ─────────────────────────────────────────────────────────
+    if progress_pct >= 100:
+        weekly_signal       = "Strong consistency 💪"
+        weekly_signal_color = "green"
+    elif progress_pct >= 70:
+        weekly_signal       = "On track ⚡"
+        weekly_signal_color = "green"
+    elif week_closed and progress_pct < 50:
+        weekly_signal       = "Tough week — fresh start 🔄"
+        weekly_signal_color = "muted"
+    elif progress_pct >= 40:
+        weekly_signal       = "Building ↗"
+        weekly_signal_color = "green"
+    else:
+        weekly_signal       = "Consistency slipping ⚠️"
+        weekly_signal_color = "amber"
+
     # ── Upcoming long runs — with formatted display dates ────────────────────
     _today_str = today_local.strftime("%Y-%m-%d")
     upcoming_long_runs = [
@@ -1525,7 +1591,7 @@ def dashboard():
         canonical_feasibility=canonical_feasibility,
         canonical_feasibility_score=canonical_feasibility.get("feasibility_score", 0),
         canonical_feasibility_color=canonical_feasibility.get("assessment_color", "grey"),
-        canonical_feasibility_label=canonical_feasibility.get("assessment_label", ""),
+        canonical_feasibility_label=canonical_feasibility_label_emoji,
         canonical_honest_assessment=canonical_feasibility.get("honest_assessment", ""),
         canonical_show_revised_goal=canonical_feasibility.get("show_revised_goal", False),
         canonical_revised_goal=canonical_feasibility.get("revised_goal") or {},
@@ -1543,6 +1609,11 @@ def dashboard():
         canonical_wall_adjusted_display=canonical_wall_adjusted_display,
         canonical_wall_factor=_wall_factor,
         canonical_wall_risk=_wall_risk,
+        fm_gap_display=fm_gap_display,
+        fm_gap_color=fm_gap_color,
+        wall_actions=wall_actions,
+        weekly_signal=weekly_signal,
+        weekly_signal_color=weekly_signal_color,
     )
 
 

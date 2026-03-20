@@ -1341,6 +1341,114 @@ button, .btn {
 .plan-priority.medium { color: var(--state-warning); }
 .plan-priority.low    { color: var(--text-muted); }
 
+/* ── TODAY'S SESSION CARD — dominant ───────────────────────────────────── */
+.card:has(h2) h2:first-child,
+.card > h2:first-child { /* scope only if needed */ }
+
+/* Today's Session card — green-tinted border + glow */
+.card:has(> h2) {
+  /* plain card — no change */
+}
+
+/* Today's progress bar inside Today's Session card */
+.today-progress-bar {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.today-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+}
+.today-progress-track {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.today-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), #00c853);
+  border-radius: 2px;
+  transition: width 0.8s ease;
+}
+
+/* ── WEEKLY SIGNAL ──────────────────────────────────────────────────────── */
+.weekly-signal {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+.weekly-signal-green { color: var(--state-success); }
+.weekly-signal-amber { color: var(--state-warning); }
+.weekly-signal-muted { color: var(--text-muted); }
+
+/* ── WEEKLY PLAN — compact rows ─────────────────────────────────────────── */
+.plan-row {
+  padding: 10px 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+}
+.plan-row.today-row {
+  background: rgba(0,255,135,0.04) !important;
+  margin: 0 -12px !important;
+  padding: 10px 12px !important;
+  border-radius: 6px !important;
+  border-bottom: none !important;
+}
+.plan-pace,
+.plan-pace-info {
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+  margin-top: 1px !important;
+}
+
+/* ── FEASIBILITY STRIP — bigger label ───────────────────────────────────── */
+.fs-label {
+  font-family: var(--font-display) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+/* Override the fs-label rule inside .fm-stat context to keep it small there */
+.fm-stat .fs-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* ── FM GOAL GAP ─────────────────────────────────────────────────────────── */
+.fm-gap-display {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+.fm-gap-green { color: var(--state-success); }
+.fm-gap-amber { color: var(--state-warning); }
+
+/* ── WALL ACTIONS — static Jinja block ──────────────────────────────────── */
+.wall-actions-static {
+  margin-top: 14px;
+}
+.wall-action-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0 3px 14px;
+  position: relative;
+}
+.wall-action-item::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--state-warning);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .sidebar { display: none; }
