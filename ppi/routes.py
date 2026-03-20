@@ -1027,17 +1027,18 @@ def dashboard():
     _profile_data                  = _coaching_plan.get("runner_profile", {})
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
 
-    # Compute weekly target as EXACT sum of all planned km
-    # Must match what runner sees in daily plan rows
+    # Compute weekly target accounting for overruns on completed days
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    weekly_target_from_plan = sum(
+
+    # Sum of all planned running km (AI plan total) — interim value, finalised after week_actual_km
+    planned_total = sum(
         float(_daily_plan.get(day, {}).get('km', 0))
         for day in _WEEK_DAYS
         if _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
         and float(_daily_plan.get(day, {}).get('km', 0)) > 0
     )
-    canonical_weekly_target_km = round(weekly_target_from_plan, 1)
-    current_app.logger.debug(f"[weekly_target] daily plan km: { {d: _daily_plan.get(d,{}).get('km',0) for d in _WEEK_DAYS} }, sum={canonical_weekly_target_km}")
+    canonical_weekly_target_km = round(planned_total, 1)  # interim; finalised after week_actual_km
+    current_app.logger.debug(f"[weekly_target] planned_total={planned_total:.1f} (interim)")
 
     # Post-process coaching message — replace stale km targets + fix AI grammar
     _raw_coaching_message = _coaching_plan.get("coaching_message", "")
@@ -1207,6 +1208,23 @@ def dashboard():
     week_actual_km = round(
         sum(a.distance_km or 0 for a in week_activities if (a.activity_type or "").lower() in _RUN_TYPES),
         1,
+    )
+
+    # Finalise weekly target: max(planned_total, actual_so_far + remaining_planned)
+    # This handles overruns — if runner did more than planned on past days, target rises
+    _today_weekday = today_local.weekday()  # 0=Mon … 6=Sun
+    _remaining_planned_km = sum(
+        float(_daily_plan.get(day, {}).get('km', 0))
+        for i, day in enumerate(_WEEK_DAYS)
+        if i > _today_weekday
+        and _daily_plan.get(day, {}).get('type') not in ('strength', 'rest')
+    )
+    _true_weekly_target = round(week_actual_km + _remaining_planned_km, 0)
+    canonical_weekly_target_km = round(max(planned_total, _true_weekly_target), 1)
+    current_app.logger.debug(
+        f"[weekly_target] actual={week_actual_km} remaining={_remaining_planned_km:.1f} "
+        f"true_target={_true_weekly_target} planned_total={planned_total:.1f} "
+        f"final={canonical_weekly_target_km}"
     )
 
     # ── Build weekly plan from AI daily_plan ──────────────────────────────────
