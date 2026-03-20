@@ -1362,6 +1362,16 @@ def dashboard():
         PLANNED: "planned",
         TODAY: "today",
     }
+    _persisted_status_map = {
+        "completed": "completed",
+        "overdone": "overdone",
+        "partial": "partial",
+        "missed": "missed",
+        "skipped": "skipped",
+        "different_activity": "skipped",
+        "planned": "planned",
+        "today": "planned",
+    }
     weekly_plan = []
     for item in week_plan_state:
         day_date = date.fromisoformat(item["date"])
@@ -1384,7 +1394,8 @@ def dashboard():
             "actual_walk_km": item["actual_walk_km"],
             "actual_cross_train_km": item["actual_cross_train_km"],
         })
-        persisted_status = "planned" if item["state"] in {PLANNED, TODAY} else _state_to_status[item["state"]]
+        ui_status = _state_to_status[item["state"]]
+        persisted_status = _persisted_status_map[ui_status]
         upsert_workout_log(
             user_id=user.id,
             workout_date=day_date,
