@@ -794,5 +794,32 @@ button, .btn {
 
 /* FIX 5 — Feasibility strip text (template uses .fs-text, .fs-score, .fs-score-explain) */
 .fs-score { color: var(--green) !important; }
-.fs-text  { color: #a0aec0 !important; }
+.fs-text  { color: #a0b0c8 !important; }
 .fs-score-explain { color: #6b7a99 !important; }
+.fs-label { color: var(--text-primary) !important; }  /* was #1a1a2e — dark on dark */
+
+/* ─── R2c: Final contrast fixes ─────────────────────────────────────────── */
+
+/* FIX — card h2 headings use var(--text)=#1a1d2e — force light */
+.card h2 { color: var(--text-primary) !important; }
+
+/* FIX — dist-tile (Race Predictions): .time uses var(--text) dark */
+.dist-tile .time { color: var(--text-primary) !important; font-family: var(--font-mono) !important; }
+.dist-tile .sub-time { color: var(--text-secondary) !important; }
+.dist-tile .label { color: var(--text-muted) !important; }
+
+/* FIX — section-label uses var(--muted) which is ok but reinforce */
+.section-label { color: #6b7a99 !important; }
+
+/* FIX — card-title is ok (#6b7280 on dark), ensure font */
+.card-title {
+  font-family: var(--font-display) !important;
+  letter-spacing: 1.2px !important;
+  color: #6b7a99 !important;
+}
+
+/* Hero h1 already #fff in inline CSS — Syne via font-display var */
+.hero-left h1 {
+  font-family: var(--font-display) !important;
+  font-weight: 800 !important;
+}
