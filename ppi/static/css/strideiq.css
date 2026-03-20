@@ -401,20 +401,7 @@ button, .btn {
 /* ═══════════════════════════════════════
    WEEKLY PLAN
    ═══════════════════════════════════════ */
-.plan-row {
-  padding: 12px 0 !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-.plan-row:last-child { border-bottom: none !important; }
-.plan-meta     { color: var(--text-secondary) !important; }
-.plan-distance { color: var(--text-secondary) !important; }
-.plan-pace     { color: var(--text-muted) !important; font-size: 11px !important; }
-.plan-status   { color: var(--text-muted) !important; }
-
-.done-row    .plan-distance { color: var(--state-success) !important; text-decoration: none !important; }
-.skip-row    .plan-distance { color: var(--text-muted) !important; }
-.partial-row .plan-distance { color: var(--state-warning) !important; }
-
+/* (rules consolidated into coach-mode section below) */
 .status-green  { color: var(--state-success) !important; }
 .status-orange { color: var(--state-warning) !important; }
 .status-blue   { color: var(--state-info) !important; }
@@ -1414,19 +1401,29 @@ button, .btn {
   padding: 10px 0 !important;
   border-bottom: 1px solid rgba(255,255,255,0.04) !important;
 }
+.plan-row:last-child { border-bottom: none !important; }
 .plan-row.today-row {
-  background: rgba(0,255,135,0.04) !important;
-  margin: 0 -12px !important;
-  padding: 10px 12px !important;
+  background: rgba(0,255,135,0.05) !important;
   border-radius: 6px !important;
+  padding: 10px 8px !important;
+  border-left: 2px solid var(--green) !important;
   border-bottom: none !important;
 }
+/* Plan row text visibility */
+.plan-meta   { color: var(--text-secondary) !important; }
+.plan-distance { color: var(--text-primary) !important; }
+.plan-status { color: var(--text-muted) !important; }
 .plan-pace,
 .plan-pace-info {
   font-size: 10px !important;
   color: var(--text-muted) !important;
   margin-top: 1px !important;
 }
+.done-row    .plan-distance { color: var(--state-success) !important; }
+.skip-row    .plan-distance { color: var(--text-muted) !important; }
+.partial-row .plan-distance { color: var(--state-warning) !important; }
+.today-row   .plan-distance { color: var(--text-primary) !important; font-weight: 600 !important; }
+.today-row   .plan-meta     { color: var(--state-success) !important; }
 
 /* ── FEASIBILITY STRIP — bigger label ───────────────────────────────────── */
 .fs-label {
