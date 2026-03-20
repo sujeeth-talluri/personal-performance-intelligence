@@ -1,24 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
   <title>StrideIQ Login</title>
   <link rel='stylesheet' href='/static/app.css'>
-  <style>
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner-small {
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    .btn-loading { display: none; align-items: center; gap: 6px; justify-content: center; }
-  </style>
 </head>
 <body>
   <main class='wrap' style='max-width:560px;'>
@@ -35,29 +21,11 @@
           <label>Password</label>
           <input name='password' type='password' required>
         </div>
-        <button type='submit' onclick='showAuthLoading(this)'>
-          <span class='btn-content'>Login</span>
-          <span class='btn-loading'><span class='spinner-small'></span>Signing in...</span>
-        </button>
+        <button type='submit'>Login</button>
       </form>
       <p class='sub' style='margin-top:10px;'><a href='/forgot-password'>Forgot password?</a></p>
       <p class='sub'>No account? <a href='/register'>Create one</a></p>
     </section>
   </main>
-  <script>
-    function showAuthLoading(btn) {
-      btn.querySelector('.btn-content').style.display = 'none';
-      const loading = btn.querySelector('.btn-loading');
-      loading.style.display = 'flex';
-      btn.disabled = true;
-      // Safety: re-enable after 10s in case redirect fails or returns with error
-      setTimeout(function () {
-        btn.disabled = false;
-        btn.querySelector('.btn-content').style.display = '';
-        loading.style.display = 'none';
-      }, 10000);
-    }
-  </script>
 </body>
 </html>
-

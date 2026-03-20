@@ -390,57 +390,9 @@
       .dist-grid  { grid-template-columns: repeat(2, 1fr); }
       .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
     }
-  /* ─── Spinners & Loaders ─────────────────────────────────────────── */
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .spinner-small {
-    width: 14px; height: 14px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    display: inline-block;
-    vertical-align: middle;
-  }
-  .spinner-large {
-    width: 40px; height: 40px;
-    border: 3px solid rgba(0,200,83,0.15);
-    border-top-color: #00C853;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  #page-loader {
-    position: fixed; inset: 0;
-    background: #07090f;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    gap: 16px;
-    transition: opacity 0.4s ease;
-  }
-  #page-loader-title {
-    font-family: system-ui, sans-serif;
-    font-size: 24px;
-    font-weight: 700;
-    color: #00C853;
-    letter-spacing: -0.5px;
-  }
-  #loader-message {
-    font-size: 13px;
-    color: #4a5568;
-    font-family: monospace;
-  }
   </style>
 </head>
 <body>
-<!-- ── Page loader ───────────────────────────────────────────────────────── -->
-<div id="page-loader">
-  <div id="page-loader-title">StrideIQ</div>
-  <div class="spinner-large"></div>
-  <div id="loader-message">Loading your coaching plan...</div>
-</div>
-
 <div class="app">
 
   <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
@@ -449,7 +401,7 @@
     <div class="sidebar-tagline">AI Marathon Coach</div>
     <nav>
       <a class="nav-link active" href="/"><span class="icon">🏃</span> Dashboard</a>
-      <a class="nav-link" href="#" id="sync-nav-btn" onclick="syncStrava(this);return false;"><span class="icon">🔄</span> <span class="sync-label">Sync Strava</span></a>
+      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span> Sync Strava</a>
       <a class="nav-link" href="/settings"><span class="icon">⚙️</span> Settings</a>
     </nav>
     <div class="sidebar-footer">
@@ -495,7 +447,7 @@
       </div>
       <div class="hero-right">
         <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
-        <a class="icon-btn" href="#" id="sync-btn" onclick="syncStrava(this);return false;" title="Sync Strava">🔄</a>
+        <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
         <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
       </div>
     </div>
@@ -1300,58 +1252,7 @@ function toggleSection(id) {
 </script>
 
 <script>
-// ── Page loader ────────────────────────────────────────────────────────────
-(function () {
-  const messages = [
-    'Loading your coaching plan...',
-    'Analyzing training data...',
-    'Computing fitness scores...',
-    'Almost ready...'
-  ];
-  let i = 0;
-  const msgEl = document.getElementById('loader-message');
-  const interval = setInterval(function () {
-    i = (i + 1) % messages.length;
-    if (msgEl) msgEl.textContent = messages[i];
-  }, 1200);
-
-  var loaderGone = false;
-  function hideLoader() {
-    if (loaderGone) return;
-    loaderGone = true;
-    clearInterval(interval);
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-      loader.style.transition = 'opacity 0.4s ease';
-      loader.style.opacity = '0';
-      setTimeout(function () { if (loader.parentNode) loader.remove(); }, 400);
-    }
-  }
-
-  // Primary: hide when all resources loaded
-  window.addEventListener('load', hideLoader);
-  // Fallback 1: hide after 2s (DOM ready + basic render done)
-  setTimeout(hideLoader, 2000);
-  // Fallback 2: hard cap — never block user beyond 4s
-  setTimeout(hideLoader, 4000);
-})();
-
-// ── Strava sync with loading state ────────────────────────────────────────
-function syncStrava(el) {
-  // Update sidebar nav link
-  const navBtn = document.getElementById('sync-nav-btn');
-  if (navBtn) {
-    const label = navBtn.querySelector('.sync-label');
-    if (label) label.textContent = 'Syncing...';
-    navBtn.style.pointerEvents = 'none';
-    navBtn.style.opacity = '0.6';
-  }
-  // Update hero icon button
-  const iconBtn = document.getElementById('sync-btn');
-  if (iconBtn) {
-    iconBtn.innerHTML = '<span class="spinner-small"></span>';
-    iconBtn.style.pointerEvents = 'none';
-  }
+function syncStrava() {
   window.location.href = '/?sync=1';
 }
 </script>
