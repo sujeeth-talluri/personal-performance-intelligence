@@ -746,3 +746,53 @@ button, .btn {
 /* Sidebar footer text (was inheriting dark body colour) */
 .sidebar-user { color: var(--text-secondary) !important; }
 .sidebar-logo { color: var(--green) !important; }
+
+/* ─── R2b: Targeted contrast fixes ──────────────────────────────────────── */
+
+/* FIX 1 — Pace guidance (Saturday/Sunday planned rows) */
+.plan-pace { color: #6b7a99 !important; }
+
+/* FIX 2 — Activity date column */
+.activity-date {
+  color: #6b7a99 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+}
+
+/* FIX 3 — Today's session + weekly totals use .metric-row
+   span = label, strong = value (already in safety net above,
+   boosting strong to ensure DM Mono + slightly larger) */
+.metric-row strong {
+  color: var(--text-primary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* FIX 4 — Prediction tiles (template uses .dist-tile, not .pred-tile) */
+.dist-tile {
+  background: #1e2a42 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: var(--radius-md) !important;
+}
+.dist-tile:hover {
+  background: #243050 !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.dist-tile.fm {
+  border-color: var(--border-accent) !important;
+  background: rgba(0,255,135,0.04) !important;
+}
+/* Labels and values inside dist-tile */
+.dist-tile .label { color: var(--text-muted) !important; }
+.dist-tile .time  { color: var(--text-primary) !important; }
+.dist-tile .sub-time { color: var(--text-secondary) !important; }
+.dist-tile .potential { color: var(--green) !important; }
+.dist-tile .potential span { color: var(--text-muted) !important; }
+
+/* FIX 5 — Feasibility strip text (template uses .fs-text, .fs-score, .fs-score-explain) */
+.fs-score { color: var(--green) !important; }
+.fs-text  { color: #a0aec0 !important; }
+.fs-score-explain { color: #6b7a99 !important; }
