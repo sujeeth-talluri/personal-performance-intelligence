@@ -296,6 +296,7 @@ button, .btn {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
   padding: 24px !important;
+  color: var(--text-primary) !important;
   box-shadow:
     0 1px 0 rgba(255,255,255,0.04) inset,
     var(--shadow-sm) !important;
@@ -714,3 +715,34 @@ button, .btn {
   letter-spacing: 0.5px !important;
   margin-top: 2px !important;
 }
+
+/* ─── VISIBILITY SAFETY NET ───────────────────────────────────────────────
+   Cards have dark bg (#131929). Dashboard body text is dark (#1a1d2e).
+   These rules ensure all text inside cards is readable on dark backgrounds.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* metric-row: label spans stay muted-grey, values (strong) stay primary */
+.metric-row span { color: var(--text-secondary) !important; }
+.metric-row strong { color: var(--text-primary) !important; }
+
+/* Weekly plan rows */
+.plan-meta { color: var(--text-secondary) !important; }
+.plan-distance { color: var(--text-secondary) !important; }
+.plan-pace { color: var(--text-muted) !important; }
+/* Keep status colours intact */
+.done-row .plan-distance { color: #16a34a !important; }
+.skip-row .plan-distance { color: var(--text-muted) !important; }
+.partial-row .plan-distance { color: #d97706 !important; }
+.status-green { color: #16a34a !important; }
+.status-orange { color: #d97706 !important; }
+
+/* Card h2 headings */
+.card h2 { color: var(--text-primary) !important; }
+
+/* General text inside cards — catch-all for p / li */
+.card p { color: var(--text-secondary) !important; }
+.card li { color: var(--text-secondary) !important; }
+
+/* Sidebar footer text (was inheriting dark body colour) */
+.sidebar-user { color: var(--text-secondary) !important; }
+.sidebar-logo { color: var(--green) !important; }
