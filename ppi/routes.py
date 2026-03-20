@@ -1221,6 +1221,11 @@ def dashboard():
     )
     _true_weekly_target = round(week_actual_km + _remaining_planned_km, 0)
     canonical_weekly_target_km = round(max(planned_total, _true_weekly_target), 1)
+
+    # Over-performance safety: if runner somehow exceeded target, push target up
+    if week_actual_km > canonical_weekly_target_km:
+        canonical_weekly_target_km = round(week_actual_km + _remaining_planned_km, 1)
+
     current_app.logger.debug(
         f"[weekly_target] actual={week_actual_km} remaining={_remaining_planned_km:.1f} "
         f"true_target={_true_weekly_target} planned_total={planned_total:.1f} "
@@ -1327,7 +1332,7 @@ def dashboard():
         else "In progress"
     )
     weekly_extra_km = round(max(0.0, week_actual_km - weekly_plan_completed_km), 1)
-    progress_pct    = min(100, int(round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100)))
+    progress_pct    = min(100, round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100, 1))
 
     # ── Upcoming long runs — with formatted display dates ────────────────────
     _today_str = today_local.strftime("%Y-%m-%d")
