@@ -606,7 +606,7 @@
             {% endfor %}
           </div>
           <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Longest recent training run: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
+            Recent training long run: {{ footer_long_run_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
           </div>
         {% else %}
           <div class="ladder">
@@ -618,7 +618,7 @@
               </div>
             {% endfor %}
           </div>
-          <div style="font-size:.75rem;color:var(--muted)">Longest recent training run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+          <div style="font-size:.75rem;color:var(--muted)">Recent training long run: {{ footer_long_run_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}</div>
         {% endif %}
       </div>
     </div>

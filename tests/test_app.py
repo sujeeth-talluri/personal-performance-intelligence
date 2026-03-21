@@ -1,6 +1,8 @@
 from datetime import date, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
+from werkzeug.security import generate_password_hash
 
 from ppi import create_app
 from ppi.extensions import db
@@ -471,5 +473,7 @@ def test_deterministic_long_run_progression_stops_before_race_day():
 
     assert progression
     assert progression[-1]["week_date"] < "2026-08-30"
+
+
 
 

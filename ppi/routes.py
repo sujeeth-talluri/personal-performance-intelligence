@@ -1911,7 +1911,9 @@ def dashboard():
         except Exception:
             _w["week_date_display"] = _w.get("week_date", "")
 
-    _lr_date_raw = intel.get("long_run", {}).get("longest_date")
+    _long_run_footer = intel.get("long_run", {}) or {}
+    footer_long_run_km = round(float(_long_run_footer.get("latest_km") or _long_run_footer.get("longest_km") or 0.0), 1)
+    _lr_date_raw = _long_run_footer.get("latest_date") or _long_run_footer.get("longest_date")
     if _lr_date_raw:
         try:
             _lrd = datetime.strptime(_lr_date_raw[:10], "%Y-%m-%d")
@@ -2128,6 +2130,7 @@ def dashboard():
         aerobic_pace_display=aerobic_pace_display,
         weekly_ctl_json=json.dumps(weekly_ctl_series),
         longest_date_display=longest_date_display,
+        footer_long_run_km=footer_long_run_km,
         show_wall_estimate=show_wall_estimate,
         canonical_wall_adjusted_seconds=canonical_wall_adjusted_seconds,
         canonical_wall_cost_minutes=canonical_wall_cost_minutes,
