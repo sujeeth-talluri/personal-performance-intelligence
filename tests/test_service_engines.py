@@ -76,23 +76,23 @@ def test_plan_engine_caps_completion_and_tracks_extra_distance():
 
 
 def test_plan_engine_advances_long_run_to_next_ladder_step():
-    # With longest=18.3km completed, ladder should target 21km next step.
-    # The CTL-based template does not cap the long run by weekly volume.
+    # Build 3 holds the runner at the current successful long-run base when the
+    # weekly target cannot yet safely support the next ladder step.
     weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
     long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
     long_target = float(plan[6]["target_km"])
-    assert long_target >= 18.3  # never regresses below current longest
-    assert long_target >= 21.0  # advances to next step in ladder
+    assert long_target == 18.3
 
 
 def test_base_plan_targets_next_milestone_regardless_of_weekly_volume():
-    # Long run advances to next milestone (21km) even if weekly target < long/0.35.
+    # Base phase should avoid forcing the next ladder step if weekly volume does
+    # not yet support it under the long-run share rule.
     weekly_goal = {"weekly_goal_km": 40.0, "phase": "base", "rebuild_mode": False, "weeks_to_race": 23.0, "race_distance_km": 42.195}
     long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
     long_target = float(plan[6]["target_km"])
-    assert long_target >= 21.0
+    assert long_target == 18.3
 
 
 def test_base_plan_does_not_regress_long_run_for_established_runner():
@@ -100,6 +100,44 @@ def test_base_plan_does_not_regress_long_run_for_established_runner():
     long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
     assert float(plan[6]["target_km"]) >= 18.3
+
+
+def test_plan_template_raises_weekly_target_to_support_long_run_and_keeps_row_sum_coherent():
+    weekly_goal = {
+        "weekly_goal_km": 26.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 23.0,
+        "training_consistency_ratio": 0.55,
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    run_total = round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
+    long_target = float(plan[6]["target_km"])
+    assert 15.0 <= long_target <= 15.5
+    assert run_total == 44.0
+    assert run_total == round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
+
+
+def test_plan_template_preserves_long_run_base_for_stable_sub4_runner():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "training_consistency_ratio": 0.8,
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    run_total = round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
+    assert float(plan[6]["target_km"]) == 18.3
+    assert run_total == 52.3
 
 
 def test_training_consistency_score_uses_last_planned_runs():
@@ -382,8 +420,7 @@ def test_taper_plan_reduces_long_run_and_keeps_specificity():
     weekly_goal = {"weekly_goal_km": 40.0, "phase": "taper", "rebuild_mode": False}
     long_run = {"longest_km": 30.0, "next_milestone_km": 32.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    # Fixed template: TUE is always Tempo Run regardless of phase
-    assert plan[1]["session"] == "Tempo Run"
+    assert plan[1]["session"] == "Marathon Pace Run"
     # Taper phase still cuts the long run down
     assert plan[6]["target_km"] <= 20.0
 
@@ -410,13 +447,12 @@ def test_peak_plan_can_progress_to_32k_when_runner_is_ready():
 
 
 def test_recovery_week_long_run_uses_ladder_progression():
-    # build_weekly_plan_template calls _next_long_run_target with apply_capacity_cap=False,
-    # so recovery phase falls through to normal ladder progression (next step after 28 = 32).
-    # The 78% cutback only applies when apply_capacity_cap=True (adaptive plan runtime).
+    # Build 3 recovery planning deliberately cuts the long run down instead of
+    # forcing the next ladder milestone inside a lower-stress week.
     weekly_goal = {"weekly_goal_km": 56.0, "phase": "recovery", "rebuild_mode": False, "weeks_to_race": 8.0, "race_distance_km": 42.195}
     long_run = {"longest_km": 28.0, "next_milestone_km": 30.0}
     plan = build_weekly_plan_template(weekly_goal, long_run)
-    assert float(plan[6]["target_km"]) == 32.0
+    assert float(plan[6]["target_km"]) < 28.0
 
 
 def test_race_week_marks_race_day_on_actual_race_date():

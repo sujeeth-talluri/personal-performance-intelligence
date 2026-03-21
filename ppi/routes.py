@@ -104,7 +104,7 @@ def _today_date_label(user_timezone):
             "etc/utc": timezone.utc,
         }
         tz = fallback.get((user_timezone or "").lower(), timezone.utc)
-        return datetime.now(timezone.utc).astimezone(tz).strftime("%b %d, %Y")
+    return datetime.now(timezone.utc).astimezone(tz).strftime("%b %d, %Y")
 
 
 def _get_coaching_plan_row(user_id):
@@ -145,6 +145,74 @@ def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
         snapshots[key] = snapshot
         _save_coaching_freeze_state(plan_row, freeze_state)
     return snapshot
+
+
+def _session_type_from_template_session(session_name):
+    mapping = {
+        "Race Day": "race",
+        "Long Run": "long",
+        "Medium Long Run": "steady",
+        "Tempo Run": "tempo",
+        "Speed Session": "intervals",
+        "Marathon Pace Run": "marathon_pace",
+        "Aerobic Run": "aerobic",
+        "Steady Run": "steady",
+        "Easy Run": "easy",
+        "Recovery Run": "recovery",
+        "Strength": "strength",
+        "Rest": "rest",
+    }
+    return mapping.get(session_name, "easy")
+
+
+def _pace_guidance_for_session(session_name):
+    guidance = {
+        "Long Run": "Easy conversational pace",
+        "Recovery Run": "Very easy recovery effort",
+        "Easy Run": "Relaxed conversational pace",
+        "Aerobic Run": "Comfortable aerobic effort",
+        "Steady Run": "Controlled steady effort",
+        "Tempo Run": "Comfortably hard tempo effort",
+        "Speed Session": "Fast, controlled quality work",
+        "Marathon Pace Run": "Settle into goal marathon pace",
+        "Race Day": "Race execution pace",
+    }
+    return guidance.get(session_name, "")
+
+
+def _deterministic_current_week_daily_plan(intel, week_start):
+    weekly = intel.get("weekly") or {}
+    goal = intel.get("goal") or {}
+    long_run = intel.get("long_run") or {}
+    weekly_goal = {
+        "weekly_goal_km": float(weekly.get("weekly_goal_km") or 0.0),
+        "phase": weekly.get("phase") or weekly.get("display_phase") or "base",
+        "rebuild_mode": bool(weekly.get("rebuild_mode")),
+        "ctl_proxy": float(weekly.get("ctl_proxy") or intel.get("current_ctl") or 0.0),
+        "prior_avg_km": float(weekly.get("prior_avg_km") or 0.0),
+        "training_consistency_ratio": float(weekly.get("training_consistency_ratio") or 0.0),
+        "weeks_to_race": float(weekly.get("weeks_to_race") or max(0.0, float(goal.get("days_remaining") or 0.0) / 7.0)),
+        "race_distance_km": float(weekly.get("race_distance_km") or goal.get("distance_km") or 42.195),
+        "race_date": weekly.get("race_date") or goal.get("race_date"),
+        "week_start": week_start.isoformat(),
+        "goal_marathon_pace_sec_per_km": float(weekly.get("goal_marathon_pace_sec_per_km") or 0.0),
+        "high_fatigue": bool(weekly.get("high_fatigue")),
+        "moderate_fatigue": bool(weekly.get("moderate_fatigue")),
+        "atl_spike": bool(weekly.get("atl_spike")),
+    }
+    template = _weekly_plan_template(weekly_goal, long_run)
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    daily_plan = {}
+    for idx, day_name in enumerate(day_names):
+        item = template[idx]
+        session_name = item["session"]
+        daily_plan[day_name] = {
+            "type": _session_type_from_template_session(session_name),
+            "km": round(float(item.get("target_km") or 0.0), 1),
+            "pace_guidance": _pace_guidance_for_session(session_name),
+            "notes": item.get("purpose", ""),
+        }
+    return daily_plan
 
 
 def _infer_session_type_from_log(session_name, workout_type, fallback_type):
@@ -209,6 +277,115 @@ def _build_current_week_coaching_message(
             today_text = " Today ended heavier than planned, so the next run should stay conservative."
 
     return f"{progress_text} {long_run_text} {quality_text}{today_text}".strip()
+
+
+def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
+    actual_km = round(
+        sum(
+            float(item.get("actual_km") or 0.0)
+            for item in weekly_plan
+            if item.get("workout_type") == "RUN"
+        ),
+        1,
+    )
+    longest_run_km = round(
+        max(
+            [
+                float(item.get("actual_km") or 0.0)
+                for item in weekly_plan
+                if item.get("workout_type") == "RUN"
+            ]
+            or [0.0]
+        ),
+        1,
+    )
+    planned_long_run_km = round(
+        max(
+            [
+                float(item.get("planned_km") or 0.0)
+                for item in weekly_plan
+                if item.get("workout_type") == "RUN" and item.get("session") == "Long Run"
+            ]
+            or [0.0]
+        ),
+        1,
+    )
+    long_run_goal_met = (
+        longest_run_km >= max(12.0, round(planned_long_run_km * 0.8, 1))
+        if planned_long_run_km > 0
+        else False
+    )
+    quality_goal_met = any(
+        item.get("workout_type") == "RUN"
+        and item.get("session") in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}
+        and item.get("status") in {"completed", "overdone"}
+        for item in weekly_plan
+    )
+    strength_goal_met = any(
+        item.get("workout_type") == "STRENGTH"
+        and item.get("status") == "completed"
+        for item in weekly_plan
+    )
+    remaining_km = round(max(0.0, float(frozen_weekly_target_km or 0.0) - actual_km), 1)
+    progress_pct = min(100, round(actual_km / max(1.0, float(frozen_weekly_target_km or 0.0)) * 100, 1))
+    return {
+        "weekly_target_km": round(float(frozen_weekly_target_km or 0.0), 1),
+        "actual_km": actual_km,
+        "remaining_km": remaining_km,
+        "longest_run_km": longest_run_km,
+        "planned_long_run_km": planned_long_run_km,
+        "long_run_goal_met": long_run_goal_met,
+        "quality_goal_met": quality_goal_met,
+        "strength_goal_met": strength_goal_met,
+        "progress_pct": progress_pct,
+    }
+
+
+def _deterministic_phase_label(intel):
+    weekly = intel.get("weekly") or {}
+    base_phase = str(weekly.get("display_phase") or weekly.get("base_phase") or weekly.get("phase") or "training").title()
+    week_type = str(weekly.get("week_type") or "").strip()
+    if week_type and week_type.lower() not in {base_phase.lower(), "race week"}:
+        return f"{base_phase} · {week_type}"
+    return base_phase
+
+
+def _deterministic_feasibility_fields(intel, current_week_model):
+    score = int(round(float(intel.get("marathon_readiness_pct") or 0.0)))
+    score = max(0, min(100, score))
+    status = str(intel.get("marathon_readiness_status") or "").strip().lower()
+    next_step = str(intel.get("marathon_readiness_next_step") or "").strip()
+    weekly = intel.get("weekly") or {}
+    goal = intel.get("goal") or {}
+    actual_km = float(current_week_model.get("actual_km") or 0.0)
+    weekly_target = float(current_week_model.get("weekly_target_km") or 0.0)
+    long_run_target = float(current_week_model.get("planned_long_run_km") or 0.0)
+    days_remaining = int(goal.get("days_remaining") or 0)
+
+    if score >= 80:
+        color = "green"
+        label = "On Track"
+    elif score >= 60:
+        color = "amber"
+        label = "Building"
+    else:
+        color = "grey"
+        label = "Needs Support"
+
+    if actual_km > 0 and weekly_target > 0:
+        summary = (
+            f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week. "
+            f"Keep building toward a {long_run_target:.0f} km long run and stay consistent over the next {max(1, days_remaining // 7)} weeks."
+        )
+    else:
+        summary = next_step or "Readiness will improve as weekly mileage, long runs, and consistency build together."
+
+    return {
+        "score": score,
+        "color": color,
+        "label": label,
+        "text": summary,
+    }
 
 
 def _persist_snapshot_workout_logs(user_id, snapshot):
@@ -1257,14 +1434,14 @@ def dashboard():
     _coach = AICoachEngine()
     _coaching_plan = _coach.get_plan(user.id)
 
-    canonical_phase_label          = _coaching_plan.get("phase_label", "Training")
-    canonical_long_run_km          = float(_coaching_plan.get("this_week", {}).get("long_run", {}).get("km", 0))
+    canonical_phase_label          = _deterministic_phase_label(intel)
+    canonical_long_run_km          = 0.0
     canonical_alerts               = _coaching_plan.get("alerts", [])
     canonical_week_theme           = _coaching_plan.get("week_theme", "")
     canonical_focus_point          = _coaching_plan.get("this_week", {}).get("focus_point", "")
     canonical_long_run_progression = _coaching_plan.get("long_run_progression", [])
-    canonical_feasibility          = _coaching_plan.get("feasibility", {})
-    _daily_plan                    = _coaching_plan.get("this_week", {}).get("daily_plan", {})
+    canonical_feasibility          = {}
+    _daily_plan                    = _deterministic_current_week_daily_plan(intel, _week_bounds(_today_local_date(user_tz))[0])
     _profile_data                  = _coaching_plan.get("runner_profile", {})
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
     today_local = _today_local_date(user_tz)
@@ -1276,6 +1453,17 @@ def dashboard():
     weekly_snapshot = _load_or_create_weekly_snapshot(_plan_row, week_start, _daily_plan)
     _persist_snapshot_workout_logs(user.id, weekly_snapshot)
     canonical_weekly_target_km = round(float(weekly_snapshot.get("weekly_target_km") or 0.0), 1)
+    canonical_long_run_km = round(
+        max(
+            [
+                float(day.get("planned_km") or 0.0)
+                for day in (weekly_snapshot.get("days") or {}).values()
+                if (day.get("session_name") or "") == "Long Run"
+            ]
+            or [0.0]
+        ),
+        1,
+    )
     current_app.logger.debug(
         f"[weekly_target] frozen_snapshot week={week_start.isoformat()} target={canonical_weekly_target_km:.1f}"
     )
@@ -1592,21 +1780,17 @@ def dashboard():
     except Exception:
         current_app.logger.exception("adaptive weekly plan fallback")
 
-    adapted_long_run_target_km = round(
-        max(
-            [
-                float(item.get("planned_km") or 0.0)
-                for item in weekly_plan
-                if item.get("workout_type") == "RUN" and item.get("session") == "Long Run"
-            ]
-            or [0.0]
-        ),
-        1,
-    )
-    if adapted_long_run_target_km > 0:
-        weekly_planned_long_run_km = adapted_long_run_target_km
-        weekly_long_run_goal_met = weekly_longest_run_km >= max(12.0, round(adapted_long_run_target_km * 0.8, 1))
-
+    current_week_model = _derive_current_week_display_metrics(weekly_plan, canonical_weekly_target_km)
+    weekly_plan_goal_km = current_week_model["weekly_target_km"]
+    weekly_plan_completed_km = current_week_model["actual_km"]
+    weekly_plan_remaining_km = current_week_model["remaining_km"]
+    weekly_longest_run_km = current_week_model["longest_run_km"]
+    weekly_planned_long_run_km = current_week_model["planned_long_run_km"]
+    weekly_long_run_goal_met = current_week_model["long_run_goal_met"]
+    weekly_quality_goal_met = current_week_model["quality_goal_met"]
+    weekly_strength_goal_met = current_week_model["strength_goal_met"]
+    week_actual_km = current_week_model["actual_km"]
+    progress_pct = current_week_model["progress_pct"]
     weekly_plan_completion_pct = (
         min(100, int(round(weekly_plan_completed_km / max(1.0, weekly_plan_goal_km) * 100)))
         if weekly_plan_goal_km > 0 else 0
@@ -1621,7 +1805,6 @@ def dashboard():
         else "In progress"
     )
     weekly_extra_km = 0.0
-    progress_pct = min(100, round(week_actual_km / max(1.0, canonical_weekly_target_km) * 100, 1))
 
     # ?? Weekly signal ?????????????????????????????????????????????????????????
     if progress_pct >= 100:
@@ -1723,6 +1906,9 @@ def dashboard():
         weekly_quality_goal_met,
         today_item,
     )
+    canonical_phase_label = _deterministic_phase_label(intel)
+    canonical_feasibility = _deterministic_feasibility_fields(intel, current_week_model)
+    canonical_feasibility_label_emoji = canonical_feasibility.get("label", "")
 
     consistency_score = _training_consistency_score(user.id, today_local)
 
@@ -1836,13 +2022,13 @@ def dashboard():
         upcoming_long_runs=upcoming_long_runs,
         week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
         canonical_feasibility=canonical_feasibility,
-        canonical_feasibility_score=canonical_feasibility.get("feasibility_score", 0),
-        canonical_feasibility_color=canonical_feasibility.get("assessment_color", "grey"),
+        canonical_feasibility_score=canonical_feasibility.get("score", 0),
+        canonical_feasibility_color=canonical_feasibility.get("color", "grey"),
         canonical_feasibility_label=canonical_feasibility_label_emoji,
-        canonical_honest_assessment=canonical_feasibility.get("honest_assessment", ""),
-        canonical_show_revised_goal=canonical_feasibility.get("show_revised_goal", False),
+        canonical_honest_assessment=canonical_feasibility.get("text", ""),
+        canonical_show_revised_goal=False,
         canonical_revised_goal=canonical_feasibility.get("revised_goal") or {},
-        canonical_feasibility_factor_scores=canonical_feasibility.get("factor_scores") or {},
+        canonical_feasibility_factor_scores={},
         tsb_volume_cap=_coaching_plan.get("validation", {}).get("tsb_volume_cap", 1.0),
         tsb_quality_allowed=not _coaching_plan.get("validation", {}).get("quality_replaced", False),
         canonical_long_run_day=canonical_long_run_day,

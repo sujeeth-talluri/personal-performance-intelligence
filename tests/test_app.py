@@ -5,7 +5,14 @@ import pytest
 from ppi import create_app
 from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
-from ppi.routes import _weekly_plan_template
+from ppi.routes import (
+    _derive_current_week_display_metrics,
+    _deterministic_current_week_daily_plan,
+    _deterministic_feasibility_fields,
+    _deterministic_phase_label,
+    _today_date_label,
+    _weekly_plan_template,
+)
 from ppi.services.analytics_service import _long_run_progress_state, _training_phase
 
 
@@ -174,13 +181,121 @@ def test_long_run_ladder_requires_true_milestone_completion():
 
 
 def test_weekly_plan_advances_long_run_to_next_ladder_step():
-    # CTL-based template does not cap long run by weekly volume —
-    # it always advances to the next ladder milestone.
+    # Build 3 keeps the current long-run base when the week cannot yet
+    # safely support the next ladder step.
     weekly_goal = {"weekly_goal_km": 28.0, "phase": "peak", "rebuild_mode": False}
     long_run = {"longest_km": 18.3, "next_milestone_km": 12.0}
     plan = _weekly_plan_template(weekly_goal, long_run)
     long_target = float(plan[6]["target_km"])
-    assert long_target >= 21.0  # next step after 18km in ladder
+    assert long_target == 18.3
+
+
+def test_current_week_display_metrics_follow_adapted_weekly_plan():
+    weekly_plan = [
+        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 6.0, "actual_km": 6.3, "status": "completed"},
+        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 6.0, "actual_km": 6.1, "status": "completed"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 8.0, "actual_km": 8.0, "status": "completed"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Recovery Run", "planned_km": 4.0, "actual_km": 0.0, "status": "today"},
+        {"workout_type": "RUN", "session": "Long Run", "planned_km": 14.0, "actual_km": 0.0, "status": "planned"},
+    ]
+    metrics = _derive_current_week_display_metrics(weekly_plan, 26.0)
+    assert metrics["weekly_target_km"] == 26.0
+    assert metrics["actual_km"] == 20.4
+    assert metrics["remaining_km"] == 5.6
+    assert metrics["longest_run_km"] == 8.0
+    assert metrics["planned_long_run_km"] == 14.0
+    assert metrics["long_run_goal_met"] is False
+
+
+def test_today_date_label_returns_string_for_valid_timezone():
+    label = _today_date_label("Asia/Calcutta")
+    assert isinstance(label, str)
+    assert len(label) >= 8
+
+
+def test_deterministic_phase_label_uses_analytics_week_fields():
+    intel = {"weekly": {"display_phase": "base", "week_type": "Endurance Build"}}
+    assert _deterministic_phase_label(intel) == "Base · Endurance Build"
+
+
+def test_deterministic_feasibility_fields_use_current_week_metrics():
+    intel = {
+        "marathon_readiness_pct": 75,
+        "marathon_readiness_status": "building",
+        "marathon_readiness_next_step": "Complete one more long run.",
+        "goal": {"days_remaining": 162},
+        "weekly": {},
+    }
+    current_week_model = {
+        "actual_km": 20.4,
+        "weekly_target_km": 44.0,
+        "planned_long_run_km": 15.4,
+    }
+    fields = _deterministic_feasibility_fields(intel, current_week_model)
+    assert fields["score"] == 75
+    assert fields["color"] == "amber"
+    assert fields["label"] == "Building"
+    assert "20.4 km" in fields["text"]
+
+
+def test_deterministic_current_week_daily_plan_uses_analytics_inputs():
+    intel = {
+        "current_ctl": 27.2,
+        "goal": {"days_remaining": 162, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "weekly": {
+            "weekly_goal_km": 26.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.1,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "prior_avg_km": 23.0,
+            "training_consistency_ratio": 0.55,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "high_fatigue": False,
+            "moderate_fatigue": False,
+            "atl_spike": False,
+        },
+        "long_run": {
+            "longest_km": 18.3,
+            "next_milestone_km": 21.0,
+        },
+    }
+    daily_plan = _deterministic_current_week_daily_plan(intel, date(2026, 3, 16))
+    assert daily_plan["monday"]["type"] == "easy"
+    assert daily_plan["wednesday"]["type"] == "strength"
+    assert daily_plan["sunday"]["type"] == "long"
+    assert 15.0 <= daily_plan["sunday"]["km"] <= 15.5
+    run_total = round(sum(float(day.get("km") or 0.0) for day in daily_plan.values()), 1)
+    assert run_total == 44.0
+
+
+def test_deterministic_current_week_daily_plan_preserves_long_run_for_stable_sub4_runner():
+    intel = {
+        "current_ctl": 35.0,
+        "goal": {"days_remaining": 162, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "weekly": {
+            "weekly_goal_km": 42.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.1,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "prior_avg_km": 38.0,
+            "training_consistency_ratio": 0.8,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "high_fatigue": False,
+            "moderate_fatigue": False,
+            "atl_spike": False,
+        },
+        "long_run": {"longest_km": 18.3, "next_milestone_km": 21.0},
+    }
+    daily_plan = _deterministic_current_week_daily_plan(intel, date(2026, 3, 16))
+    run_total = round(sum(float(day.get("km") or 0.0) for day in daily_plan.values()), 1)
+    assert daily_plan["sunday"]["km"] == 18.3
+    assert run_total == 52.3
 
 
 def test_admin_reset_training_data_clears_training_tables_only(client, app):

@@ -66,6 +66,151 @@ def _next_long_run_target(phase, longest_km, next_milestone, weekly_target, week
     return max(min(progression_target, capacity_cap), min(capacity_cap, max(16.0, completed)))
 
 
+def _goal_seconds(weekly_goal):
+    pace_sec_per_km = float(weekly_goal.get("goal_marathon_pace_sec_per_km") or 0.0)
+    race_distance_km = float(weekly_goal.get("race_distance_km") or 42.195)
+    if pace_sec_per_km > 0 and race_distance_km > 0:
+        return pace_sec_per_km * race_distance_km
+    return 4 * 3600.0
+
+
+def _goal_band(weekly_goal):
+    goal_seconds = _goal_seconds(weekly_goal)
+    if goal_seconds < 3 * 3600 + 15 * 60:
+        return "advanced"
+    if goal_seconds < 3 * 3600 + 45 * 60:
+        return "performance"
+    if goal_seconds < 4 * 3600 + 15 * 60:
+        return "sub4"
+    if goal_seconds <= 5 * 3600:
+        return "completion_plus"
+    return "finish"
+
+
+def _goal_band_phase_floor(goal_band, phase):
+    floors = {
+        "advanced": {"base": 60.0, "build": 72.0, "peak": 84.0, "recovery": 52.0, "taper": 38.0, "rebuild": 26.0},
+        "performance": {"base": 48.0, "build": 58.0, "peak": 68.0, "recovery": 42.0, "taper": 32.0, "rebuild": 24.0},
+        "sub4": {"base": 38.0, "build": 46.0, "peak": 54.0, "recovery": 34.0, "taper": 26.0, "rebuild": 22.0},
+        "completion_plus": {"base": 32.0, "build": 38.0, "peak": 44.0, "recovery": 28.0, "taper": 22.0, "rebuild": 20.0},
+        "finish": {"base": 26.0, "build": 32.0, "peak": 38.0, "recovery": 24.0, "taper": 20.0, "rebuild": 18.0},
+    }
+    return floors.get(goal_band, floors["sub4"]).get(phase, 38.0)
+
+
+def _recent_weekly_anchor(weekly_goal, baseline_weekly_target):
+    prior_avg = float(weekly_goal.get("prior_avg_km") or 0.0)
+    recent_avg = float(weekly_goal.get("recent_avg_km") or 0.0)
+    if prior_avg > 0 and recent_avg > 0:
+        return round((prior_avg * 0.7) + (recent_avg * 0.3), 1)
+    if prior_avg > 0:
+        return round(prior_avg, 1)
+    if recent_avg > 0:
+        return round(recent_avg, 1)
+    return round(max(20.0, baseline_weekly_target * 0.75), 1)
+
+
+def _safe_weekly_cap(recent_anchor, weekly_goal):
+    phase = weekly_goal.get("phase", "build")
+    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
+    high_fatigue = bool(weekly_goal.get("high_fatigue"))
+    moderate_fatigue = bool(weekly_goal.get("moderate_fatigue"))
+    atl_spike = bool(weekly_goal.get("atl_spike"))
+    consistency = float(weekly_goal.get("training_consistency_ratio") or 0.0)
+
+    if rebuild_mode:
+        ramp_pct = 0.03
+    elif high_fatigue or atl_spike:
+        ramp_pct = 0.00
+    elif moderate_fatigue:
+        ramp_pct = 0.05
+    elif consistency >= 0.75 and phase in {"build", "peak"}:
+        ramp_pct = 0.12
+    else:
+        ramp_pct = 0.10
+    return round(recent_anchor * (1.0 + ramp_pct), 1)
+
+
+def _controlled_progression_cap(recent_anchor, weekly_goal):
+    phase = weekly_goal.get("phase", "build")
+    consistency = float(weekly_goal.get("training_consistency_ratio") or 0.0)
+    longest_km = float(weekly_goal.get("current_longest_km") or 0.0)
+    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
+    high_fatigue = bool(weekly_goal.get("high_fatigue"))
+    atl_spike = bool(weekly_goal.get("atl_spike"))
+
+    if rebuild_mode or high_fatigue or atl_spike:
+        step_km = 2.0
+    elif phase == "base":
+        step_km = 4.0
+    elif phase == "build":
+        step_km = 5.0
+    elif phase == "peak":
+        step_km = 6.0
+    else:
+        step_km = 3.0
+
+    if longest_km >= 18.0:
+        step_km += 2.0
+    elif longest_km >= 14.0:
+        step_km += 1.0
+
+    if consistency >= 0.75:
+        step_km += 1.0
+    return round(recent_anchor + step_km, 1)
+
+
+def _calibrated_weekly_target(weekly_goal, baseline_weekly_target, long_target):
+    phase = weekly_goal.get("phase", "build")
+    goal_band = _goal_band(weekly_goal)
+    recent_anchor = _recent_weekly_anchor(weekly_goal, baseline_weekly_target)
+    goal_floor = _goal_band_phase_floor(goal_band, phase)
+    safe_cap = _safe_weekly_cap(recent_anchor, weekly_goal)
+    controlled_cap = _controlled_progression_cap(recent_anchor, weekly_goal)
+    allowed_growth_cap = max(safe_cap, controlled_cap)
+    baseline_soft_target = min(max(baseline_weekly_target, recent_anchor), allowed_growth_cap)
+    floor_progression_target = min(goal_floor, allowed_growth_cap)
+
+    longest_km = float(weekly_goal.get("current_longest_km") or 0.0)
+    consistency = float(weekly_goal.get("training_consistency_ratio") or 0.0)
+    established = consistency >= 0.65 or recent_anchor >= goal_floor * 0.75
+    durable_long_base = longest_km >= 18.0
+    current_long_support = round(longest_km / 0.35, 1) if longest_km >= 16.0 else 0.0
+    next_long_support = round(long_target / 0.35, 1) if long_target > 0 else 0.0
+
+    weekly_target = max(recent_anchor, baseline_soft_target, floor_progression_target)
+    if (current_long_support > 0 and baseline_weekly_target >= current_long_support) or (
+        next_long_support > 0 and baseline_weekly_target >= next_long_support
+    ):
+        weekly_target = max(weekly_target, baseline_weekly_target)
+    if established and current_long_support > 0:
+        weekly_target = max(weekly_target, current_long_support)
+    elif durable_long_base and current_long_support > 0:
+        support_bridge = max(goal_floor + 6.0, recent_anchor + 12.0)
+        weekly_target = max(weekly_target, min(current_long_support, support_bridge))
+    elif next_long_support > weekly_target:
+        support_bridge = recent_anchor + (6.0 if phase in {"base", "build"} else 8.0)
+        weekly_target = max(weekly_target, min(next_long_support, support_bridge))
+
+    if phase in {"taper", "recovery", "rebuild"}:
+        weekly_target = min(weekly_target, max(baseline_weekly_target, allowed_growth_cap))
+    return round(max(18.0, weekly_target), 1)
+
+
+def _calibrated_long_run_target(weekly_goal, longest_km, progression_target, weekly_target):
+    phase = weekly_goal.get("phase", "build")
+    support_cap = round(max(0.0, weekly_target * 0.35), 1)
+    if phase in {"taper", "recovery", "rebuild"}:
+        return round(min(progression_target, support_cap if support_cap > 0 else progression_target), 1)
+    if support_cap <= 0:
+        return round(progression_target, 1)
+
+    long_target = min(progression_target, support_cap)
+    if longest_km >= 16.0 and support_cap >= longest_km:
+        long_target = max(long_target, round(longest_km, 1))
+    return round(max(12.0, long_target), 1)
+
+
 def plan_meta_for_session(session_name):
     catalog = {
         "Race Day": {"intensity": "race", "importance": "High", "purpose": "Execute the marathon race plan with controlled pacing and fueling."},
@@ -159,63 +304,99 @@ def select_best_run_for_session(run_acts, session_name, weekly_goal, run_pace_fn
 
 
 def build_weekly_plan_template(weekly_goal, long_run):
-    """Build a fixed 7-day training template.
+    """Build a fixed 7-day training template with a coherent weekly contract.
 
-    Weekly structure (Mon=0 … Sun=6):
-        MON: Easy Run    — weekly_target × 0.20
-        TUE: Tempo Run   — weekly_target × 0.15  (marathon pace + 20 s/km)
-        WED: Strength    — gym / cross-training
-        THU: Easy Run    — weekly_target × 0.20
-        FRI: Strength    — gym / cross-training
-        SAT: Easy Run    — weekly_target × 0.20
-        SUN: Long Run    — next ladder distance
-
-    Weekly target is driven by CTL (chronic training load):
-        CTL < 30   →  45 km
-        CTL 30–45  →  55 km
-        CTL 45–60  →  65 km
-        CTL ≥ 60   →  75 km
+    The planner must satisfy two rules:
+    1. The sum of planned run rows equals the chosen weekly target.
+    2. If the next long-run step requires a larger week under the 35% rule,
+       the weekly target is raised explicitly to support it.
     """
-    ctl = float(weekly_goal.get("ctl_proxy") or 0.0)
-    if ctl < 30:
-        weekly_target = 45.0
-    elif ctl < 45:
-        weekly_target = 55.0
-    elif ctl < 60:
-        weekly_target = 65.0
+    explicit_weekly_target = float(weekly_goal.get("weekly_goal_km") or 0.0)
+    if explicit_weekly_target > 0:
+        baseline_weekly_target = explicit_weekly_target
     else:
-        weekly_target = 75.0
+        ctl = float(weekly_goal.get("ctl_proxy") or 0.0)
+        if ctl < 30:
+            baseline_weekly_target = 45.0
+        elif ctl < 45:
+            baseline_weekly_target = 55.0
+        elif ctl < 60:
+            baseline_weekly_target = 65.0
+        else:
+            baseline_weekly_target = 75.0
 
     phase = weekly_goal.get("phase", "build")
     rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
     longest_km = float(long_run.get("longest_km") or 0.0)
     next_milestone = float(long_run.get("next_milestone_km") or max(22.0, min(32.0, longest_km + 2.0)))
+    weekly_goal = {**weekly_goal, "current_longest_km": longest_km}
 
     # Long run target from progression ladder — not capacity-capped.
     # The CTL-based weekly_target drives easy/tempo volume only; the long
     # run is determined purely by the progression ladder so it always
     # advances to the next milestone regardless of total weekly km.
-    long_target = _next_long_run_target(
+    progression_long_target = _next_long_run_target(
         "rebuild" if rebuild_mode else phase,
         longest_km,
         next_milestone,
-        weekly_target,
+        baseline_weekly_target,
         weekly_goal,
         apply_capacity_cap=False,
     )
+    weekly_target = _calibrated_weekly_target(weekly_goal, baseline_weekly_target, progression_long_target)
+    long_target = _calibrated_long_run_target(weekly_goal, longest_km, progression_long_target, weekly_target)
+    non_long_total = round(max(0.0, weekly_target - long_target), 1)
 
-    easy_km  = round(weekly_target * 0.20, 1)
-    tempo_km = round(weekly_target * 0.15, 1)
+    if phase == "base":
+        sessions = ["Easy Run", "Aerobic Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.30, 0.24, 0.28, 0.18]
+        min_km = [6.0, 5.0, 6.0, 4.0]
+    elif phase == "peak":
+        sessions = ["Easy Run", "Marathon Pace Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.27, 0.25, 0.28, 0.20]
+        min_km = [6.0, 6.0, 6.0, 4.0]
+    elif phase in {"recovery", "rebuild"}:
+        sessions = ["Easy Run", "Aerobic Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.28, 0.22, 0.28, 0.22]
+        min_km = [5.0, 5.0, 5.0, 4.0]
+    elif phase == "taper":
+        sessions = ["Easy Run", "Marathon Pace Run", "Strength", "Recovery Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.28, 0.24, 0.24, 0.24]
+        min_km = [5.0, 5.0, 4.0, 4.0]
+    else:
+        sessions = ["Easy Run", "Tempo Run", "Strength", "Easy Run", "Strength", "Aerobic Run", "Long Run"]
+        weights = [0.28, 0.24, 0.26, 0.22]
+        min_km = [6.0, 5.0, 6.0, 5.0]
 
-    template = {
-        0: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
-        1: {"workout_type": "RUN",      "session": "Tempo Run", "target_km": tempo_km,  **plan_meta_for_session("Tempo Run")},
-        2: {"workout_type": "STRENGTH", "session": "Strength",  "target_km": None,      **plan_meta_for_session("Strength")},
-        3: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
-        4: {"workout_type": "STRENGTH", "session": "Strength",  "target_km": None,      **plan_meta_for_session("Strength")},
-        5: {"workout_type": "RUN",      "session": "Easy Run",  "target_km": easy_km,   **plan_meta_for_session("Easy Run")},
-        6: {"workout_type": "RUN",      "session": "Long Run",  "target_km": long_target, **plan_meta_for_session("Long Run")},
-    }
+    run_slots = [0, 1, 3, 5]
+    remaining_total = non_long_total
+    allocated = []
+    remaining_weight = sum(weights)
+    for idx, (weight, floor_km) in enumerate(zip(weights, min_km)):
+        slots_left = len(weights) - idx
+        if slots_left == 1:
+            km = round(max(floor_km, remaining_total), 1)
+        else:
+            target_share = remaining_total * (weight / remaining_weight) if remaining_weight > 0 else 0.0
+            max_allowing_remainder = remaining_total - sum(min_km[idx + 1 :])
+            km = round(max(floor_km, min(target_share, max_allowing_remainder)), 1)
+        allocated.append(km)
+        remaining_total = round(max(0.0, remaining_total - km), 1)
+        remaining_weight -= weight
+
+    if allocated:
+        drift = round(non_long_total - sum(allocated), 1)
+        allocated[-1] = round(max(min_km[-1], allocated[-1] + drift), 1)
+
+    template = {}
+    allocated_map = dict(zip(run_slots, allocated))
+    for day_index in range(7):
+        session = sessions[day_index]
+        if session == "Strength":
+            template[day_index] = {"workout_type": "STRENGTH", "session": session, "target_km": None, **plan_meta_for_session(session)}
+        else:
+            target_km = long_target if session == "Long Run" else allocated_map.get(day_index, 0.0)
+            template[day_index] = {"workout_type": "RUN", "session": session, "target_km": round(target_km, 1), **plan_meta_for_session(session)}
     return apply_race_week_overrides(template, weekly_goal)
 
 
