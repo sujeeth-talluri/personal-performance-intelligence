@@ -636,7 +636,7 @@
                 {% if lr.variant_short_label %}
                   <span class="ladder-variant">
                     {{ lr.variant_short_label }}
-                    {% if lr.variant_pace_guidance %}
+                    {% if lr.variant_pace_guidance and not loop.first %}
                       <span class="tooltip-wrap" style="font-size:inherit;display:inline-flex;vertical-align:baseline;margin-left:2px">
                         <span class="tooltip-icon">?</span>
                         <span class="tooltip-text">{{ lr.variant_pace_guidance }}</span>
