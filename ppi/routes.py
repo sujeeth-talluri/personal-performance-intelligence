@@ -449,6 +449,12 @@ def _deterministic_long_run_progression(intel, week_start, current_week_weekly_t
                     else week["phase"].title()
                 ),
                 "week_type": week["week_type"],
+                "variant_name": (week.get("long_run_variant") or {}).get("name"),
+                "variant_short_label": (week.get("long_run_variant") or {}).get("short_label"),
+                "variant_note": (week.get("long_run_variant") or {}).get("note"),
+                "variant_pace_guidance": (week.get("long_run_variant") or {}).get("pace_guidance"),
+                "variant_quality_type": (week.get("long_run_variant") or {}).get("quality_type"),
+                "quality_block_km": (week.get("long_run_variant") or {}).get("quality_block_km", 0),
             }
         )
     return output

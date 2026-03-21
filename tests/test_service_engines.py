@@ -2012,3 +2012,47 @@ def test_prescribed_long_run_snaps_to_standard_marathon_steps():
     assert prescribed_long_run_km(29.1, phase="peak") == 30
     assert prescribed_long_run_km(25.4, phase="build") == 26
     assert prescribed_long_run_km(19.4, phase="taper") == 20
+
+
+def test_build_progression_weeks_assigns_varied_long_run_types_for_stable_sub4_runner():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "training_consistency_ratio": 0.8,
+        "week_start": "2026-03-23",
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=14)
+
+    variant_names = {week["long_run_variant"]["name"] for week in weeks if week.get("long_run_variant")}
+    assert "Easy Long Run" in variant_names
+    assert "Fast-Finish Long Run" in variant_names
+    assert "Marathon Pace Long Run" in variant_names
+
+
+def test_build_progression_weeks_keeps_cutback_long_runs_easy():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "training_consistency_ratio": 0.8,
+        "week_start": "2026-03-23",
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=8)
+
+    cutback_weeks = [week for week in weeks if week["week_type"] == "cutback"]
+    assert cutback_weeks
+    assert all(week["long_run_variant"]["name"] == "Cutback Long Run" for week in cutback_weeks)
+    assert all(week["long_run_variant"]["quality_type"] == "cutback" for week in cutback_weeks)

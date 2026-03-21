@@ -264,6 +264,39 @@ def test_deterministic_feasibility_fields_use_current_week_metrics():
     assert "14 km" in fields["text"]
 
 
+def test_deterministic_long_run_progression_exposes_long_run_variant_fields():
+    intel = {
+        "weekly": {
+            "weekly_goal_km": 38.0,
+            "phase": "base",
+            "weeks_to_race": 23.0,
+            "race_distance_km": 42.195,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 38.0,
+            "recent_avg_km": 36.0,
+            "training_consistency_ratio": 0.8,
+        },
+        "goal": {"days_remaining": 162, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "long_run": {
+            "latest_km": 18.3,
+            "latest_date": "2026-03-15",
+            "longest_km": 26.6,
+            "longest_date": "2026-01-04",
+            "next_milestone_km": 21.0,
+        },
+    }
+    progression = _deterministic_long_run_progression(
+        intel,
+        date(2026, 3, 16),
+        current_week_weekly_target_km=38.0,
+        current_week_long_run_km=14.0,
+    )
+    assert progression
+    assert progression[0]["variant_name"] in {"Easy Long Run", "Fast-Finish Long Run", "Marathon Pace Long Run"}
+    assert progression[0]["variant_short_label"]
+    assert progression[0]["variant_pace_guidance"]
+
+
 def test_current_week_coaching_message_mentions_recent_long_run_when_outside_current_week():
     message = _build_current_week_coaching_message(
         26.0,

@@ -717,6 +717,139 @@ def prescribed_long_run_km(km_value, phase="build", race_distance_km=42.195):
     return min(allowed_steps, key=lambda step: abs(step - km_value))
 
 
+def _even_quality_block_km(long_run_km, ratio, minimum, maximum):
+    long_run_km = float(long_run_km or 0.0)
+    if long_run_km <= 0:
+        return 0
+    block = int(round(long_run_km * ratio))
+    block = max(int(minimum), min(int(maximum), block))
+    if block % 2 != 0:
+        block += 1
+    return max(0, min(block, max(0, int(round(long_run_km)) - 4)))
+
+
+def _load_week_position(week_index):
+    if week_index <= 0:
+        return 0
+    return week_index % 4
+
+
+def long_run_variant_for_week(phase, week_type, week_index, long_run_km, weekly_goal, previous_week_type=None):
+    phase = str(phase or "build").lower()
+    week_type = str(week_type or "build").lower()
+    goal_band = _goal_band(weekly_goal)
+    weeks_to_race = float(weekly_goal.get("weeks_to_race") or 0.0)
+    long_run_km = prescribed_long_run_km(
+        long_run_km,
+        phase=phase,
+        race_distance_km=float(weekly_goal.get("race_distance_km") or 42.195),
+    )
+
+    easy_variant = {
+        "name": "Easy Long Run",
+        "short_label": "Easy long run",
+        "quality_block_km": 0,
+        "quality_type": "easy",
+        "pace_guidance": "Easy conversational pace throughout.",
+        "note": "Keep the whole run relaxed and conversational.",
+    }
+    if week_type in {"cutback", "recovery", "rebuild"}:
+        return {
+            "name": "Cutback Long Run",
+            "short_label": "Cutback long run",
+            "quality_block_km": 0,
+            "quality_type": "cutback",
+            "pace_guidance": "Easy conversational pace throughout.",
+            "note": "Shorter absorption week. Keep the effort easy all the way through.",
+        }
+
+    quality_eligible = goal_band in {"advanced", "performance", "sub4"} and long_run_km >= 20
+    load_position = _load_week_position(week_index)
+    if phase == "taper":
+        if quality_eligible and weeks_to_race > 2.0 and long_run_km >= 18:
+            block_km = _even_quality_block_km(long_run_km, ratio=0.28, minimum=4, maximum=6)
+            return {
+                "name": "Marathon Pace Long Run",
+                "short_label": f"MP {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "marathon_pace",
+                "pace_guidance": f"{block_km} km at goal marathon pace inside the long run.",
+                "note": f"Keep most of the run easy, with {block_km} km at goal marathon pace.",
+            }
+        return easy_variant
+
+    if phase == "base":
+        if quality_eligible and load_position == 1 and previous_week_type != "cutback" and long_run_km >= 20:
+            block_km = _even_quality_block_km(long_run_km, ratio=0.24, minimum=4, maximum=6)
+            return {
+                "name": "Fast-Finish Long Run",
+                "short_label": f"Fast finish {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "fast_finish",
+                "pace_guidance": f"Finish the last {block_km} km at steady to marathon effort.",
+                "note": f"Run easy early, then finish the last {block_km} km strong but controlled.",
+            }
+        return easy_variant
+
+    if phase == "build":
+        if quality_eligible and load_position == 2 and previous_week_type != "cutback" and long_run_km >= 24:
+            block_km = _even_quality_block_km(long_run_km, ratio=0.30, minimum=6, maximum=10)
+            return {
+                "name": "Marathon Pace Long Run",
+                "short_label": f"MP {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "marathon_pace",
+                "pace_guidance": f"{block_km} km at goal marathon pace inside the long run.",
+                "note": f"Keep the run easy around a {block_km} km block at goal marathon pace.",
+            }
+        if quality_eligible and load_position == 1 and long_run_km >= 20:
+            block_km = _even_quality_block_km(long_run_km, ratio=0.25, minimum=4, maximum=8)
+            return {
+                "name": "Fast-Finish Long Run",
+                "short_label": f"Fast finish {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "fast_finish",
+                "pace_guidance": f"Finish the final {block_km} km at steady to marathon effort.",
+                "note": f"Run easy early, then finish the final {block_km} km stronger than easy pace.",
+            }
+        return easy_variant
+
+    if phase == "peak":
+        if quality_eligible and long_run_km >= 28:
+            if load_position in {0, 2}:
+                block_km = _even_quality_block_km(long_run_km, ratio=0.32, minimum=8, maximum=12)
+                return {
+                    "name": "Marathon Pace Long Run",
+                    "short_label": f"MP {block_km} km",
+                    "quality_block_km": block_km,
+                    "quality_type": "marathon_pace",
+                    "pace_guidance": f"{block_km} km at goal marathon pace inside the long run.",
+                    "note": f"Structure this as an easy long run with {block_km} km at goal marathon pace.",
+                }
+            block_km = _even_quality_block_km(long_run_km, ratio=0.24, minimum=6, maximum=8)
+            return {
+                "name": "Fast-Finish Long Run",
+                "short_label": f"Fast finish {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "fast_finish",
+                "pace_guidance": f"Finish the last {block_km} km at steady to marathon effort.",
+                "note": f"Stay controlled early, then close the last {block_km} km with purpose.",
+            }
+        if quality_eligible and load_position == 1:
+            block_km = _even_quality_block_km(long_run_km, ratio=0.24, minimum=4, maximum=6)
+            return {
+                "name": "Fast-Finish Long Run",
+                "short_label": f"Fast finish {block_km} km",
+                "quality_block_km": block_km,
+                "quality_type": "fast_finish",
+                "pace_guidance": f"Finish the last {block_km} km at steady to marathon effort.",
+                "note": f"Keep the first part easy and lift the final {block_km} km.",
+            }
+        return easy_variant
+
+    return easy_variant
+
+
 def _projected_weekly_target_seed(previous_target, goal_band, phase, week_type, weekly_goal):
     previous_target = float(previous_target or 0.0)
     goal_floor = _goal_band_phase_floor(goal_band, phase)
@@ -765,6 +898,7 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
     base_long_run = dict(long_run or {})
     goal_band = _goal_band(base_weekly_goal)
     rebuild_mode = bool(base_weekly_goal.get("rebuild_mode"))
+    race_date_value = _coerce_date(base_weekly_goal.get("race_date"))
 
     week_start_value = base_weekly_goal.get("week_start")
     if isinstance(week_start_value, str):
@@ -792,6 +926,14 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
             "week_type": _progression_week_type(0, current_phase, current_weeks_to_race, rebuild_mode),
             "weekly_target_km": current_week_target,
             "long_run_km": current_long_target,
+            "long_run_variant": long_run_variant_for_week(
+                current_phase,
+                _progression_week_type(0, current_phase, current_weeks_to_race, rebuild_mode),
+                0,
+                current_long_target,
+                {**base_weekly_goal, "phase": current_phase, "weeks_to_race": current_weeks_to_race},
+                previous_week_type=None,
+            ),
             "template": current_template,
         }
     ]
@@ -803,7 +945,11 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
     previous_target = current_week_target
 
     for offset in range(1, weeks):
-        weeks_left = max(0.0, current_weeks_to_race - offset)
+        projected_week_start = week_start_value + timedelta(days=7 * offset)
+        if race_date_value:
+            weeks_left = max(0.0, (race_date_value - projected_week_start).days / 7.0)
+        else:
+            weeks_left = max(0.0, current_weeks_to_race - offset)
         phase = _phase_for_weeks_to_race(weeks_left, rebuild_mode and offset <= 2)
         week_type = _progression_week_type(offset, phase, weeks_left, rebuild_mode and offset <= 2)
         planner_phase = "recovery" if week_type == "cutback" else phase
@@ -811,7 +957,7 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
             **base_weekly_goal,
             "phase": planner_phase,
             "weeks_to_race": weeks_left,
-            "week_start": (week_start_value + timedelta(days=7 * offset)).isoformat(),
+            "week_start": projected_week_start.isoformat(),
             "weekly_goal_km": _projected_weekly_target_seed(previous_target, goal_band, planner_phase, week_type, {**base_weekly_goal, "phase": planner_phase, "weeks_to_race": weeks_left}),
             # After the first projected week, assume future planning is not already
             # constrained by the current week's transient fatigue spike.
@@ -848,12 +994,20 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
         progression.append(
             {
                 "week_index": offset,
-                "week_start": week_start_value + timedelta(days=7 * offset),
+                "week_start": projected_week_start,
                 "weeks_to_race": weeks_left,
                 "phase": phase,
                 "week_type": week_type,
                 "weekly_target_km": weekly_target,
                 "long_run_km": long_target,
+                "long_run_variant": long_run_variant_for_week(
+                    phase,
+                    week_type,
+                    offset,
+                    long_target,
+                    candidate_weekly_goal,
+                    previous_week_type=progression[-1]["week_type"],
+                ),
                 "template": template,
             }
         )

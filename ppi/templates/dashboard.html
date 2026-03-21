@@ -328,11 +328,23 @@
     .pill-orange { background: #ffedd5; color: #c2410c; }
 
     /* ─── Ladder ─────────────────────────────────────────────────── */
-    .ladder { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ladder {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: stretch;
+    }
     .ladder-step {
-      flex: 1; text-align: center; background: var(--bg); border-radius: 8px;
-      padding: 10px 6px; font-size: .8rem; font-weight: 600; color: var(--muted);
+      text-align: center; background: var(--bg); border-radius: 8px;
+      padding: 10px 8px; font-size: .8rem; font-weight: 600; color: var(--muted);
       border: 2px solid transparent;
+      min-height: 132px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      overflow-wrap: anywhere;
+      word-break: normal;
     }
     .ladder-step.done   { background: #dcfce7; color: #16a34a; border-color: #86efac; }
     .ladder-step.next   { background: #fff9db; color: #a16207; border-color: #fde68a; font-weight: 700; }
@@ -399,10 +411,13 @@
       .grid-2  { grid-template-columns: 1fr; }
       .load-tiles { grid-template-columns: repeat(3, 1fr); }
       .fm-compare { flex-direction: column; }
+      .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 480px) {
       .dist-grid  { grid-template-columns: repeat(2, 1fr); }
       .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
+      .ladder { grid-template-columns: 1fr; }
+      .ladder-step { min-height: 0; }
     }
   </style>
 </head>
@@ -595,12 +610,18 @@
                 {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
                 <span class="km">{{ lr.target_km|int }} km</span>
                 <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.week_date_display or lr.week_date[5:] }}</span>
+                {% if lr.variant_short_label %}
+                  <span style="font-size:.62rem;display:block;margin-top:3px;color:#1f2937;font-weight:600">{{ lr.variant_short_label }}</span>
+                {% endif %}
                 {% if lr.is_recovery_week %}
                   <span style="font-size:.6rem;display:block;margin-top:2px;color:#f59e0b;font-weight:600">Recovery</span>
                 {% elif lr.is_peak_run %}
                   <span style="font-size:.6rem;display:block;margin-top:2px;color:#00C853;font-weight:600">Peak Run</span>
                 {% elif lr.label %}
                   <span style="font-size:.6rem;display:block;margin-top:2px;color:var(--muted)">{{ lr.label }}</span>
+                {% endif %}
+                {% if lr.variant_pace_guidance %}
+                  <span style="font-size:.58rem;display:block;margin-top:4px;color:var(--muted);line-height:1.35">{{ lr.variant_pace_guidance }}</span>
                 {% endif %}
               </div>
             {% endfor %}
