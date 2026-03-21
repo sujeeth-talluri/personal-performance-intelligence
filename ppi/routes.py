@@ -76,7 +76,7 @@ from .services.training_state_engine import (
     compute_week_metrics,
     today_session_from_plan,
 )
-from .models import Activity, CoachingPlan, Goal, Metric, RunnerProfile, WorkoutLog
+from .models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, WorkoutLog
 from .extensions import db
 
 web = Blueprint("web", __name__)
@@ -145,6 +145,70 @@ def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
         snapshots[key] = snapshot
         _save_coaching_freeze_state(plan_row, freeze_state)
     return snapshot
+
+
+def _infer_session_type_from_log(session_name, workout_type, fallback_type):
+    if workout_type == "STRENGTH":
+        return "strength"
+    if workout_type == "REST":
+        return "rest"
+    normalized = (session_name or "").strip().lower()
+    mapping = {
+        "easy run": "easy",
+        "long run": "long",
+        "tempo run": "tempo",
+        "recovery run": "recovery",
+        "active recovery": "active_recovery",
+        "interval session": "intervals",
+        "marathon pace run": "marathon_pace",
+        "steady run": "steady",
+        "aerobic run": "aerobic",
+        "race day": "race",
+    }
+    return mapping.get(normalized, fallback_type)
+
+
+def _build_current_week_coaching_message(
+    weekly_target_km,
+    actual_km,
+    longest_run_km,
+    planned_long_run_km,
+    long_run_goal_met,
+    quality_goal_met,
+    today_item,
+):
+    target_text = f"{weekly_target_km:.0f} km" if weekly_target_km else "your planned volume"
+    progress_text = f"You have completed {actual_km:.1f} km so far out of {target_text} this week."
+    if planned_long_run_km > 0:
+        if long_run_goal_met:
+            long_run_text = (
+                f"Your long-run target for the week is already covered with a longest run of "
+                f"{longest_run_km:.1f} km."
+            )
+        else:
+            long_run_text = (
+                f"The key remaining endurance job is a run of about {planned_long_run_km:.0f} km this week. "
+                f"Your longest run so far is {longest_run_km:.1f} km."
+            )
+    else:
+        long_run_text = f"Your longest run so far this week is {longest_run_km:.1f} km."
+
+    quality_text = (
+        "Your quality session is already done."
+        if quality_goal_met
+        else "Your quality session is still open, so protect that session if fatigue stays under control."
+    )
+
+    today_text = ""
+    if today_item:
+        if today_item["status"] == "different_activity":
+            today_text = " You did other activity today, but the planned run still remains open."
+        elif today_item["status"] == "partial":
+            today_text = " Today's planned session was only partially completed, so keep the next run controlled."
+        elif today_item["status"] == "overdone":
+            today_text = " Today ended heavier than planned, so the next run should stay conservative."
+
+    return f"{progress_text} {long_run_text} {quality_text}{today_text}".strip()
 
 
 def _persist_snapshot_workout_logs(user_id, snapshot):
@@ -749,6 +813,15 @@ def login_required(fn):
     return wrapper
 
 
+def _admin_reset_allowed(user):
+    if not current_app.config.get("ALLOW_ADMIN_RESET"):
+        return False
+    allowed_email = (current_app.config.get("ADMIN_RESET_EMAIL") or "").strip().lower()
+    if allowed_email and (user.email or "").strip().lower() != allowed_email:
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # /api/dashboard — structured JSON coaching output (login required)
 #
@@ -937,6 +1010,93 @@ def api_predict():
             "time_seconds": round(source_sec),
         },
     })
+
+
+@web.route("/admin/reset-training-data", methods=["GET", "POST"])
+@login_required
+def admin_reset_training_data():
+    user = _current_user()
+    if not _admin_reset_allowed(user):
+        return redirect(url_for("web.dashboard"))
+
+    confirm_phrase = "RESET TRAINING DATA"
+    if request.method == "GET":
+        nonce = secrets.token_urlsafe(24)
+        session["admin_reset_nonce"] = nonce
+        owner_text = f" for {user.email}" if user and user.email else ""
+        return (
+            f"""
+            <html>
+              <body style="font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:24px;">
+                <h1>Reset training data</h1>
+                <p>This will permanently delete your derived training data{owner_text}.</p>
+                <p>It keeps your account, Strava token, goal, and runner profile.</p>
+                <p>Type <strong>{confirm_phrase}</strong> to continue.</p>
+                <form method="post">
+                  <input type="hidden" name="nonce" value="{nonce}">
+                  <input name="confirm_text" style="width:100%;padding:10px;margin:12px 0;" autocomplete="off">
+                  <button type="submit" style="padding:10px 14px;">Delete training data</button>
+                </form>
+              </body>
+            </html>
+            """,
+            200,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    form_nonce = request.form.get("nonce", "")
+    session_nonce = session.pop("admin_reset_nonce", "")
+    confirm_text = (request.form.get("confirm_text") or "").strip()
+    if not form_nonce or form_nonce != session_nonce or confirm_text != confirm_phrase:
+        return (
+            "Reset confirmation failed. Reload the page and type the exact phrase again.",
+            400,
+            {"Content-Type": "text/plain; charset=utf-8"},
+        )
+
+    counts_before = {
+        "activities": Activity.query.filter_by(user_id=user.id).count(),
+        "metrics": Metric.query.filter_by(user_id=user.id).count(),
+        "workout_logs": WorkoutLog.query.filter_by(user_id=user.id).count(),
+        "prediction_history": PredictionHistory.query.filter_by(user_id=user.id).count(),
+        "coaching_plans": CoachingPlan.query.filter_by(user_id=user.id).count(),
+    }
+    current_app.logger.warning("Admin reset start user=%s counts=%s", user.email, counts_before)
+
+    Activity.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    Metric.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    WorkoutLog.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    PredictionHistory.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    CoachingPlan.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    db.session.commit()
+
+    session.pop("last_sync_at", None)
+    counts_after = {
+        "activities": Activity.query.filter_by(user_id=user.id).count(),
+        "metrics": Metric.query.filter_by(user_id=user.id).count(),
+        "workout_logs": WorkoutLog.query.filter_by(user_id=user.id).count(),
+        "prediction_history": PredictionHistory.query.filter_by(user_id=user.id).count(),
+        "coaching_plans": CoachingPlan.query.filter_by(user_id=user.id).count(),
+        "goals": Goal.query.filter_by(user_id=user.id).count(),
+        "profiles": RunnerProfile.query.filter_by(user_id=user.id).count(),
+        "strava_tokens": StravaToken.query.filter_by(user_id=user.id).count(),
+    }
+    current_app.logger.warning("Admin reset complete user=%s counts=%s", user.email, counts_after)
+
+    return (
+        """
+        <html>
+          <body style="font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:24px;">
+            <h1>Training data reset complete</h1>
+            <p>Your activities, metrics, workout logs, prediction history, and coaching plan were cleared.</p>
+            <p>Your goal, runner profile, and Strava connection were kept.</p>
+            <p><a href="/?sync=1">Run a fresh Strava sync</a></p>
+          </body>
+        </html>
+        """,
+        200,
+        {"Content-Type": "text/html; charset=utf-8"},
+    )
 
 
 def _send_reset_email(email, link):
@@ -1342,6 +1502,11 @@ def dashboard():
             continue
         frozen_day["workout_type"] = frozen_log.workout_type or frozen_day["workout_type"]
         frozen_day["session_name"] = frozen_log.session_name or frozen_day["session_name"]
+        frozen_day["session_type"] = _infer_session_type_from_log(
+            frozen_log.session_name,
+            frozen_log.workout_type,
+            frozen_day.get("session_type", "easy"),
+        )
         frozen_day["planned_distance_km"] = round(float(frozen_log.target_distance_km or frozen_day["planned_distance_km"] or 0.0), 1)
 
     actual_by_date = aggregate_actual_activities(
@@ -1483,10 +1648,10 @@ def dashboard():
         weekly_signal_color = "amber"
 
     # ?? Upcoming long runs ? with formatted display dates ????????????????????
-    _today_str = today_local.strftime("%Y-%m-%d")
+    _week_end_str = week_end.strftime("%Y-%m-%d")
     upcoming_long_runs = [
         w for w in canonical_long_run_progression
-        if w.get("week_date", "") > _today_str
+        if w.get("week_date", "") > _week_end_str
     ][:4]
     for _w in upcoming_long_runs:
         try:
@@ -1528,11 +1693,11 @@ def dashboard():
 
     _status_label = {
         "completed": "Completed",
-        "overdone": "Overdone",
+        "overdone": "Over target",
         "partial": "Partial",
         "missed": "Missed",
         "skipped": "Skipped",
-        "different_activity": "Different Activity",
+        "different_activity": "Other activity done",
         "today": "Planned",
         "planned": "Planned",
         "rest": "Rest",
@@ -1556,6 +1721,15 @@ def dashboard():
         "pace_guidance":   today_item["pace_guidance"] if today_item else "",
         "notes":           today_item["notes"] if today_item else "",
     }
+    current_week_coaching_message = _build_current_week_coaching_message(
+        canonical_weekly_target_km,
+        week_actual_km,
+        weekly_longest_run_km,
+        weekly_planned_long_run_km,
+        weekly_long_run_goal_met,
+        weekly_quality_goal_met,
+        today_item,
+    )
 
     consistency_score = _training_consistency_score(user.id, today_local)
 
@@ -1661,6 +1835,7 @@ def dashboard():
         canonical_weekly_target_km=canonical_weekly_target_km,
         canonical_long_run_km=canonical_long_run_km,
         canonical_coaching_message=canonical_coaching_message,
+        current_week_coaching_message=current_week_coaching_message,
         canonical_alerts=canonical_alerts,
         canonical_week_theme=canonical_week_theme,
         canonical_focus_point=canonical_focus_point,
