@@ -262,10 +262,10 @@ def _build_current_week_coaching_message(
         else:
             long_run_text = (
                 f"The key remaining endurance job is a run of about {planned_long_run_km:.0f} km this week. "
-                f"Your longest run so far is {longest_run_km:.1f} km."
+                f"This week's longest run so far is {longest_run_km:.1f} km."
             )
     else:
-        long_run_text = f"Your longest run so far this week is {longest_run_km:.1f} km."
+        long_run_text = f"This week's longest run so far is {longest_run_km:.1f} km."
 
     if recent_long_run_km > longest_run_km and recent_long_run_date_text:
         long_run_text += (
@@ -390,10 +390,10 @@ def _deterministic_feasibility_fields(intel, current_week_model):
     long_run_target = float(current_week_model.get("planned_long_run_km") or 0.0)
     days_remaining = int(goal.get("days_remaining") or 0)
 
-    if score >= 80:
+    if score >= 70:
         color = "green"
         label = "On Track"
-    elif score >= 60:
+    elif score >= 55:
         color = "amber"
         label = "Building"
     else:
@@ -1963,16 +1963,16 @@ def dashboard():
 
     # ?? Recent Activities (all types) ????????????????????????????????????????
     _TYPE_ICONS = {
-        "run": "R", "trail run": "R", "trail_run": "R", "track": "R",
-        "virtualrun": "R", "treadmill": "R",
-        "strength": "S", "weight_training": "S", "strength_training": "S",
-        "crossfit": "S", "core": "S", "workout": "S", "flexibility": "S",
-        "yoga": "Y", "pilates": "Y",
-        "walk": "W", "hike": "H",
-        "ride": "C", "virtualride": "C", "cycling": "C",
-        "swim": "Sw", "swimming": "Sw",
-        "rowing": "Rw", "elliptical": "E", "stairstepper": "St",
-        "hiit": "H", "aerobics": "A",
+        "run": "🏃", "trail run": "🏃", "trail_run": "🏃", "track": "🏃",
+        "virtualrun": "🏃", "treadmill": "🏃",
+        "strength": "🏋️", "weight_training": "🏋️", "strength_training": "🏋️",
+        "crossfit": "🏋️", "core": "🏋️", "workout": "🏋️", "flexibility": "🧘",
+        "yoga": "🧘", "pilates": "🧘",
+        "walk": "🚶", "hike": "🥾",
+        "ride": "🚴", "virtualride": "🚴", "cycling": "🚴",
+        "swim": "🏊", "swimming": "🏊",
+        "rowing": "🚣", "elliptical": "💪", "stairstepper": "🪜",
+        "hiit": "🔥", "aerobics": "🤸",
     }
 
     def _fmt_pace(moving_time, distance_km):

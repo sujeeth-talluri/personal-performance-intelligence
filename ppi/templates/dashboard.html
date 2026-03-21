@@ -435,11 +435,11 @@
           &nbsp;·&nbsp; {{ today_date }}
         </div>
         <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
-          {{ canonical_phase_label }}
-          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}
+          Phase: {{ canonical_phase_label }}
+          &nbsp;|&nbsp; {% set _tsb = intel.current_tsb %}
           {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
           <span class="tooltip-wrap">
-            {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
+            Freshness: {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
             <span class="tooltip-icon">?</span>
             <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
           </span>
@@ -498,23 +498,23 @@
                   {% if p.session_type == 'strength' %}
                     Gym
                   {% elif p.status in ['completed', 'done'] %}
-                    done {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
                   {% elif p.status == 'overdone' %}
-                    over {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
                   {% elif p.status == 'partial' %}
-                    partial {{ p.actual_km }}km / {{ p.planned_km|int }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
                   {% elif p.status == 'missed' %}
-                    missed ({{ p.planned_km|int }}km planned)
+                    missed ({{ '%.1f'|format(p.planned_km) }}km planned)
                   {% elif p.status == 'skipped' %}
-                    skipped ({{ p.planned_km|int }}km planned)
+                    skipped ({{ '%.1f'|format(p.planned_km) }}km planned)
                   {% elif p.status == 'different_activity' %}
                     Other activity done
                   {% elif p.session_type == 'active_recovery' %}
-                    {{ p.planned_km|int }}km - easy run or walk
+                    {{ '%.1f'|format(p.planned_km) }}km - easy run or walk
                   {% elif p.status == 'bonus' %}
-                    bonus {{ p.actual_km }}km
+                    {{ '%.1f'|format(p.actual_km) }}km bonus
                   {% elif p.planned_km > 0 %}
-                    {{ p.planned_km|int }}km planned
+                    {{ '%.1f'|format(p.planned_km) }}km planned
                   {% endif %}
                 </div>
                 {% if p.workout_type == 'RUN' and p.pace_guidance %}
@@ -595,7 +595,7 @@
             {% endfor %}
           </div>
           <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Longest recent training long run: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
+            Longest recent training run: {{ long_run.longest_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
           </div>
         {% else %}
           <div class="ladder">
@@ -607,7 +607,7 @@
               </div>
             {% endfor %}
           </div>
-          <div style="font-size:.75rem;color:var(--muted)">Longest recent training long run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
+          <div style="font-size:.75rem;color:var(--muted)">Longest recent training run: {{ long_run.longest_km }} km{% if long_run.longest_date %} on {{ long_run.longest_date }}{% endif %}</div>
         {% endif %}
       </div>
     </div>

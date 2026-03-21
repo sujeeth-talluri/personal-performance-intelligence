@@ -250,8 +250,8 @@ def test_deterministic_feasibility_fields_use_current_week_metrics():
     }
     fields = _deterministic_feasibility_fields(intel, current_week_model)
     assert fields["score"] == 75
-    assert fields["color"] == "amber"
-    assert fields["label"] == "Building"
+    assert fields["color"] == "green"
+    assert fields["label"] == "On Track"
     assert "20.4 km" in fields["text"]
 
 
@@ -268,7 +268,7 @@ def test_current_week_coaching_message_mentions_recent_long_run_when_outside_cur
         18.3,
         "Sun 15 Mar",
     )
-    assert "8.0 km" in message
+    assert "This week's longest run so far is 8.0 km." in message
     assert "18.3 km on Sun 15 Mar" in message
 
 
