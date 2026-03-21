@@ -1041,15 +1041,6 @@ def login_required(fn):
     return wrapper
 
 
-def _admin_reset_allowed(user):
-    if not current_app.config.get("ALLOW_ADMIN_RESET"):
-        return False
-    allowed_email = (current_app.config.get("ADMIN_RESET_EMAIL") or "").strip().lower()
-    if allowed_email and (user.email or "").strip().lower() != allowed_email:
-        return False
-    return True
-
-
 # ---------------------------------------------------------------------------
 # /api/dashboard — structured JSON coaching output (login required)
 #
@@ -1238,93 +1229,6 @@ def api_predict():
             "time_seconds": round(source_sec),
         },
     })
-
-
-@web.route("/admin/reset-training-data", methods=["GET", "POST"])
-@login_required
-def admin_reset_training_data():
-    user = _current_user()
-    if not _admin_reset_allowed(user):
-        return redirect(url_for("web.dashboard"))
-
-    confirm_phrase = "RESET TRAINING DATA"
-    if request.method == "GET":
-        nonce = secrets.token_urlsafe(24)
-        session["admin_reset_nonce"] = nonce
-        owner_text = f" for {user.email}" if user and user.email else ""
-        return (
-            f"""
-            <html>
-              <body style="font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:24px;">
-                <h1>Reset training data</h1>
-                <p>This will permanently delete your derived training data{owner_text}.</p>
-                <p>It keeps your account, Strava token, goal, and runner profile.</p>
-                <p>Type <strong>{confirm_phrase}</strong> to continue.</p>
-                <form method="post">
-                  <input type="hidden" name="nonce" value="{nonce}">
-                  <input name="confirm_text" style="width:100%;padding:10px;margin:12px 0;" autocomplete="off">
-                  <button type="submit" style="padding:10px 14px;">Delete training data</button>
-                </form>
-              </body>
-            </html>
-            """,
-            200,
-            {"Content-Type": "text/html; charset=utf-8"},
-        )
-
-    form_nonce = request.form.get("nonce", "")
-    session_nonce = session.pop("admin_reset_nonce", "")
-    confirm_text = (request.form.get("confirm_text") or "").strip()
-    if not form_nonce or form_nonce != session_nonce or confirm_text != confirm_phrase:
-        return (
-            "Reset confirmation failed. Reload the page and type the exact phrase again.",
-            400,
-            {"Content-Type": "text/plain; charset=utf-8"},
-        )
-
-    counts_before = {
-        "activities": Activity.query.filter_by(user_id=user.id).count(),
-        "metrics": Metric.query.filter_by(user_id=user.id).count(),
-        "workout_logs": WorkoutLog.query.filter_by(user_id=user.id).count(),
-        "prediction_history": PredictionHistory.query.filter_by(user_id=user.id).count(),
-        "coaching_plans": CoachingPlan.query.filter_by(user_id=user.id).count(),
-    }
-    current_app.logger.warning("Admin reset start user=%s counts=%s", user.email, counts_before)
-
-    Activity.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-    Metric.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-    WorkoutLog.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-    PredictionHistory.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-    CoachingPlan.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-    db.session.commit()
-
-    session.pop("last_sync_at", None)
-    counts_after = {
-        "activities": Activity.query.filter_by(user_id=user.id).count(),
-        "metrics": Metric.query.filter_by(user_id=user.id).count(),
-        "workout_logs": WorkoutLog.query.filter_by(user_id=user.id).count(),
-        "prediction_history": PredictionHistory.query.filter_by(user_id=user.id).count(),
-        "coaching_plans": CoachingPlan.query.filter_by(user_id=user.id).count(),
-        "goals": Goal.query.filter_by(user_id=user.id).count(),
-        "profiles": RunnerProfile.query.filter_by(user_id=user.id).count(),
-        "strava_tokens": StravaToken.query.filter_by(user_id=user.id).count(),
-    }
-    current_app.logger.warning("Admin reset complete user=%s counts=%s", user.email, counts_after)
-
-    return (
-        """
-        <html>
-          <body style="font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:24px;">
-            <h1>Training data reset complete</h1>
-            <p>Your activities, metrics, workout logs, prediction history, and coaching plan were cleared.</p>
-            <p>Your goal, runner profile, and Strava connection were kept.</p>
-            <p><a href="/?sync=1">Run a fresh Strava sync</a></p>
-          </body>
-        </html>
-        """,
-        200,
-        {"Content-Type": "text/html; charset=utf-8"},
-    )
 
 
 def _send_reset_email(email, link):

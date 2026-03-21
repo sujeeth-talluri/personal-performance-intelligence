@@ -28,7 +28,6 @@ class TestConfig:
     OPENAI_API_KEY = None
     OPENAI_MODEL = "gpt-4.1-mini"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    ALLOW_ADMIN_RESET = True
 
 
 @pytest.fixture()
@@ -368,95 +367,3 @@ def test_deterministic_current_week_daily_plan_preserves_long_run_for_stable_sub
     assert run_total == 52.3
 
 
-def test_admin_reset_training_data_clears_training_tables_only(client, app):
-    client.post(
-        "/register",
-        data={"name": "Reset User", "email": "reset@example.com", "password": "secret12"},
-        follow_redirects=False,
-    )
-
-    with app.app_context():
-        user = User.query.filter_by(email="reset@example.com").first()
-        db.session.add(Goal(
-            user_id=user.id,
-            race_name="Reset Marathon",
-            race_distance=42.2,
-            race_date=date(2026, 12, 1),
-            goal_time="03:45:00",
-            elevation_type="flat",
-        ))
-        db.session.add(RunnerProfile(
-            user_id=user.id,
-            consistency_level="consistent",
-            race_experience="once",
-            injury_status="healthy",
-            training_days_per_week=5,
-            long_run_day="sunday",
-            strength_days_per_week=2,
-            preferred_run_time="morning",
-            goal_priority="hit_time",
-            onboarding_completed=True,
-        ))
-        db.session.add(StravaToken(
-            user_id=user.id,
-            athlete_id=123456,
-            access_token="a",
-            refresh_token="r",
-            expires_at=9999999999,
-        ))
-        db.session.add(Activity(
-            user_id=user.id,
-            strava_activity_id=1,
-            activity_type="run",
-            date=datetime(2026, 3, 20, 6, 0, 0),
-            distance_km=10.0,
-            moving_time=3600.0,
-            elevation_gain=0,
-        ))
-        db.session.add(Metric(user_id=user.id, date=date(2026, 3, 20), stress=50.0, atl=20.0, ctl=25.0, tsb=5.0))
-        db.session.add(WorkoutLog(
-            user_id=user.id,
-            workout_date=date(2026, 3, 20),
-            workout_type="RUN",
-            session_name="Easy Run",
-            target_distance_km=8.0,
-            status="completed",
-            actual_distance_km=10.0,
-            source="engine",
-        ))
-        db.session.add(PredictionHistory(user_id=user.id, projection_seconds=14400.0))
-        db.session.add(CoachingPlan(
-            user_id=user.id,
-            generated_at=datetime(2026, 3, 20, 6, 0, 0),
-            plan_json="{}",
-            context_json="{}",
-            weekly_target_km=40.0,
-            long_run_km=18.0,
-        ))
-        db.session.commit()
-
-    get_page = client.get("/admin/reset-training-data", follow_redirects=False)
-    assert get_page.status_code == 200
-    assert b"RESET TRAINING DATA" in get_page.data
-
-    with client.session_transaction() as sess:
-        nonce = sess["admin_reset_nonce"]
-
-    post_page = client.post(
-        "/admin/reset-training-data",
-        data={"nonce": nonce, "confirm_text": "RESET TRAINING DATA"},
-        follow_redirects=False,
-    )
-    assert post_page.status_code == 200
-    assert b"Training data reset complete" in post_page.data
-
-    with app.app_context():
-        user = User.query.filter_by(email="reset@example.com").first()
-        assert Activity.query.filter_by(user_id=user.id).count() == 0
-        assert Metric.query.filter_by(user_id=user.id).count() == 0
-        assert WorkoutLog.query.filter_by(user_id=user.id).count() == 0
-        assert PredictionHistory.query.filter_by(user_id=user.id).count() == 0
-        assert CoachingPlan.query.filter_by(user_id=user.id).count() == 0
-        assert Goal.query.filter_by(user_id=user.id).count() == 1
-        assert RunnerProfile.query.filter_by(user_id=user.id).count() == 1
-        assert StravaToken.query.filter_by(user_id=user.id).count() == 1
