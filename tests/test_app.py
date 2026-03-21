@@ -194,7 +194,7 @@ def test_weekly_plan_advances_long_run_to_next_ladder_step():
 def test_current_week_display_metrics_follow_adapted_weekly_plan():
     weekly_plan = [
         {"workout_type": "RUN", "session": "Easy Run", "planned_km": 6.0, "actual_km": 6.3, "status": "completed"},
-        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 6.0, "actual_km": 6.1, "status": "completed"},
+        {"workout_type": "RUN", "session": "Aerobic Run", "day": "Tuesday", "planned_km": 5.0, "actual_km": 6.1, "status": "completed"},
         {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "completed"},
         {"workout_type": "RUN", "session": "Easy Run", "planned_km": 8.0, "actual_km": 8.0, "status": "completed"},
         {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "completed"},
@@ -208,6 +208,20 @@ def test_current_week_display_metrics_follow_adapted_weekly_plan():
     assert metrics["longest_run_km"] == 8.0
     assert metrics["planned_long_run_km"] == 14.0
     assert metrics["long_run_goal_met"] is False
+    assert metrics["quality_session_name"] is None
+
+
+def test_current_week_display_metrics_exposes_quality_session_when_scheduled():
+    weekly_plan = [
+        {"workout_type": "RUN", "session": "Easy Run", "day": "Monday", "planned_km": 6.0, "actual_km": 6.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Tempo Run", "day": "Tuesday", "planned_km": 8.0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "RUN", "session": "Long Run", "day": "Sunday", "planned_km": 16.0, "actual_km": 0.0, "status": "planned"},
+    ]
+    metrics = _derive_current_week_display_metrics(weekly_plan, 30.0)
+    assert metrics["quality_session_name"] == "Tempo Run"
+    assert metrics["quality_session_day"] == "Tuesday"
+    assert metrics["quality_goal_met"] is False
 
 
 def test_today_date_label_returns_string_for_valid_timezone():
@@ -255,6 +269,15 @@ def test_current_week_coaching_message_mentions_recent_long_run_when_outside_cur
     )
     assert "8.0 km" in message
     assert "18.3 km on Sun 15 Mar" in message
+
+
+def test_activity_local_date_maps_utc_timestamp_into_kolkata_thursday():
+    from datetime import timezone
+    from ppi.routes import _activity_local_date
+
+    # 18:45 UTC on Wed is 00:15 local on Thu in Asia/Kolkata.
+    dt_value = datetime(2026, 3, 18, 18, 45, tzinfo=timezone.utc)
+    assert _activity_local_date(dt_value, "Asia/Kolkata").isoformat() == "2026-03-19"
 
 
 def test_deterministic_current_week_daily_plan_uses_analytics_inputs():

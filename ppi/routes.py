@@ -329,6 +329,14 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
         and item.get("status") in {"completed", "overdone"}
         for item in weekly_plan
     )
+    quality_session = next(
+        (
+            item for item in weekly_plan
+            if item.get("workout_type") == "RUN"
+            and item.get("session") in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}
+        ),
+        None,
+    )
     strength_goal_met = any(
         item.get("workout_type") == "STRENGTH"
         and item.get("status") == "completed"
@@ -344,6 +352,8 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
         "planned_long_run_km": planned_long_run_km,
         "long_run_goal_met": long_run_goal_met,
         "quality_goal_met": quality_goal_met,
+        "quality_session_name": quality_session.get("session") if quality_session else None,
+        "quality_session_day": quality_session.get("day") if quality_session else None,
         "strength_goal_met": strength_goal_met,
         "progress_pct": progress_pct,
     }
@@ -493,7 +503,13 @@ def _activity_local_date(dt_value, user_timezone):
     try:
         tz = ZoneInfo(user_timezone)
     except ZoneInfoNotFoundError:
-        tz = timezone.utc
+        fallback = {
+            "asia/kolkata": timezone(timedelta(hours=5, minutes=30)),
+            "asia/calcutta": timezone(timedelta(hours=5, minutes=30)),
+            "utc": timezone.utc,
+            "etc/utc": timezone.utc,
+        }
+        tz = fallback.get((user_timezone or "").lower(), timezone.utc)
     if dt_value.tzinfo is None:
         dt_utc = dt_value.replace(tzinfo=timezone.utc)
     else:
@@ -1649,8 +1665,11 @@ def dashboard():
         })
     weekly_ctl_series = weekly_ctl_series[-8:]
 
-    week_cutoff_dt = datetime.combine(week_start, datetime.min.time())
-    week_end_dt    = datetime.combine(week_end, datetime.max.time())
+    # Query a padded UTC window, then assign each activity to the user's local
+    # date. This prevents local-day runs near midnight from being dropped before
+    # local-date bucketing.
+    week_cutoff_dt = datetime.combine(week_start - timedelta(days=1), datetime.min.time())
+    week_end_dt    = datetime.combine(week_end + timedelta(days=1), datetime.max.time())
 
     # Activity type sets — confirmed from production Strava data
     _RUN_TYPES            = {"run", "virtualrun", "trail run", "trail_run", "treadmill", "track"}
@@ -1796,6 +1815,8 @@ def dashboard():
     weekly_planned_long_run_km = current_week_model["planned_long_run_km"]
     weekly_long_run_goal_met = current_week_model["long_run_goal_met"]
     weekly_quality_goal_met = current_week_model["quality_goal_met"]
+    weekly_quality_session_name = current_week_model["quality_session_name"]
+    weekly_quality_session_day = current_week_model["quality_session_day"]
     weekly_strength_goal_met = current_week_model["strength_goal_met"]
     week_actual_km = current_week_model["actual_km"]
     progress_pct = current_week_model["progress_pct"]
@@ -2018,6 +2039,8 @@ def dashboard():
         weekly_planned_long_run_km=weekly_planned_long_run_km,
         weekly_long_run_goal_met=weekly_long_run_goal_met,
         weekly_quality_goal_met=weekly_quality_goal_met,
+        weekly_quality_session_name=weekly_quality_session_name,
+        weekly_quality_session_day=weekly_quality_session_day,
         weekly_strength_goal_met=weekly_strength_goal_met,
         recent_activities=recent_activities,
         runs=runs,
