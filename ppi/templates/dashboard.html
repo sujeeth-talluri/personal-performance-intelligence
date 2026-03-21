@@ -630,7 +630,7 @@
           <div class="ladder">
             {% for lr in upcoming_long_runs %}
               <div class="ladder-step {{ 'next' if loop.first else '' }}" style="{{ 'background:#fff9db;border-color:#fde68a;' if loop.first else '' }}">
-                {% if loop.first %}<span class="tooltip-wrap" style="font-size:.6rem;display:block;margin-bottom:2px">NEXT<span class="tooltip-icon">?</span><span class="tooltip-text">Your next scheduled long run distance. Long runs build the endurance base needed for marathon racing. Progress every 2 weeks with a recovery week every 4th week.</span></span>{% endif %}
+                {% if loop.first %}<span style="font-size:.6rem;display:block;margin-bottom:2px;font-weight:700;letter-spacing:.03em;color:#a16207">NEXT</span>{% endif %}
                 <span class="km">{{ lr.target_km|int }} km</span>
                 <span class="ladder-meta">{{ lr.week_date_display or lr.week_date[5:] }}</span>
                 {% if lr.variant_short_label %}
