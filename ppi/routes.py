@@ -247,6 +247,7 @@ def _build_current_week_coaching_message(
     long_run_goal_met,
     quality_goal_met,
     today_item,
+    quality_session_name=None,
     recent_long_run_km=0.0,
     recent_long_run_date_text="",
 ):
@@ -267,13 +268,19 @@ def _build_current_week_coaching_message(
         long_run_text = f"Your longest run so far this week is {longest_run_km:.1f} km."
 
     if recent_long_run_km > longest_run_km and recent_long_run_date_text:
-        long_run_text += f" Your most recent long run was {recent_long_run_km:.1f} km on {recent_long_run_date_text}."
+        long_run_text += (
+            f" Your most recent training long run was {recent_long_run_km:.1f} km on "
+            f"{recent_long_run_date_text}."
+        )
 
-    quality_text = (
-        "Your quality session is already done."
-        if quality_goal_met
-        else "Your quality session is still open, so protect that session if fatigue stays under control."
-    )
+    if quality_session_name:
+        quality_text = (
+            f"Your {quality_session_name.lower()} is already done."
+            if quality_goal_met
+            else f"Your {quality_session_name.lower()} is still open, so protect that session if fatigue stays under control."
+        )
+    else:
+        quality_text = "No quality session is scheduled this week."
 
     today_text = ""
     if today_item:
@@ -363,6 +370,9 @@ def _deterministic_phase_label(intel):
     weekly = intel.get("weekly") or {}
     base_phase = str(weekly.get("display_phase") or weekly.get("base_phase") or weekly.get("phase") or "training").title()
     week_type = str(weekly.get("week_type") or "").strip()
+    suppressed_week_types = {"cutback week", "cutback", "recovery week"}
+    if week_type.lower() in suppressed_week_types:
+        return base_phase
     if week_type and week_type.lower() not in {base_phase.lower(), "race week"}:
         return f"{base_phase} · {week_type}"
     return base_phase
@@ -1893,10 +1903,10 @@ def dashboard():
         _tmrw_km = tomorrow_item.get("planned_km", 0)
         _tmrw_type = tomorrow_item.get("session_type", "")
         _tmrw_km_str = (
-            f" ? {int(_tmrw_km)}km" if _tmrw_km > 0 and _tmrw_type not in ("strength", "rest", "active_recovery")
+            f" | {int(_tmrw_km)}km" if _tmrw_km > 0 and _tmrw_type not in ("strength", "rest", "active_recovery")
             else ""
         )
-        tomorrow_display = f"{_tmrw_date.strftime('%a %d %b')} ? {_tmrw_session}{_tmrw_km_str}"
+        tomorrow_display = f"{_tmrw_date.strftime('%a %d %b')} | {_tmrw_session}{_tmrw_km_str}"
     else:
         tomorrow_display = "Rest Day"
 
@@ -1922,7 +1932,7 @@ def dashboard():
         "completed":       today_item["done"] if today_item else False,
         "distance_actual": _fmt_km(today_item["actual_km"]) if today_item else "?",
         "distance_target": (
-            "Gym ? strength session"
+            "Gym | strength session"
             if today_item and today_item.get("session_type") == "strength"
             else _fmt_km(today_item["planned_km"]) if today_item else "?"
         ),
@@ -1941,6 +1951,7 @@ def dashboard():
         weekly_long_run_goal_met,
         weekly_quality_goal_met,
         today_item,
+        weekly_quality_session_name,
         recent_long_run_km,
         recent_long_run_date_display,
     )
@@ -1952,16 +1963,16 @@ def dashboard():
 
     # ?? Recent Activities (all types) ????????????????????????????????????????
     _TYPE_ICONS = {
-        "run": "??", "trail run": "??", "trail_run": "??", "track": "??",
-        "virtualrun": "??", "treadmill": "??",
-        "strength": "??", "weight_training": "??", "strength_training": "??",
-        "crossfit": "??", "core": "??", "workout": "??", "flexibility": "??",
-        "yoga": "??", "pilates": "??",
-        "walk": "??", "hike": "??",
-        "ride": "??", "virtualride": "??", "cycling": "??",
-        "swim": "??", "swimming": "??",
-        "rowing": "??", "elliptical": "?", "stairstepper": "?",
-        "hiit": "??", "aerobics": "??",
+        "run": "R", "trail run": "R", "trail_run": "R", "track": "R",
+        "virtualrun": "R", "treadmill": "R",
+        "strength": "S", "weight_training": "S", "strength_training": "S",
+        "crossfit": "S", "core": "S", "workout": "S", "flexibility": "S",
+        "yoga": "Y", "pilates": "Y",
+        "walk": "W", "hike": "H",
+        "ride": "C", "virtualride": "C", "cycling": "C",
+        "swim": "Sw", "swimming": "Sw",
+        "rowing": "Rw", "elliptical": "E", "stairstepper": "St",
+        "hiit": "H", "aerobics": "A",
     }
 
     def _fmt_pace(moving_time, distance_km):

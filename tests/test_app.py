@@ -264,11 +264,34 @@ def test_current_week_coaching_message_mentions_recent_long_run_when_outside_cur
         False,
         False,
         None,
+        None,
         18.3,
         "Sun 15 Mar",
     )
     assert "8.0 km" in message
     assert "18.3 km on Sun 15 Mar" in message
+
+
+def test_current_week_coaching_message_uses_no_quality_session_copy_when_unscheduled():
+    message = _build_current_week_coaching_message(
+        36.0,
+        20.4,
+        8.0,
+        14.0,
+        False,
+        False,
+        None,
+        None,
+        18.3,
+        "Sun 15 Mar",
+    )
+    assert "No quality session is scheduled this week." in message
+    assert "still open" not in message
+
+
+def test_deterministic_phase_label_suppresses_cutback_week():
+    intel = {"weekly": {"display_phase": "base", "week_type": "Cutback Week"}}
+    assert _deterministic_phase_label(intel) == "Base"
 
 
 def test_activity_local_date_maps_utc_timestamp_into_kolkata_thursday():
