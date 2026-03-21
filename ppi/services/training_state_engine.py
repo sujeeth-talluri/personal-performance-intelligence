@@ -34,6 +34,7 @@ SESSION_NAMES = {
 }
 
 DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+WEEKLY_SNAPSHOT_VERSION = 2
 
 
 def classify_activity_type(activity_type):
@@ -89,10 +90,34 @@ def build_weekly_plan_snapshot(week_start, daily_plan):
         1,
     )
     return {
+        "version": WEEKLY_SNAPSHOT_VERSION,
         "week_start": week_start.isoformat(),
         "weekly_target_km": weekly_target_km,
         "days": snapshot_days,
     }
+
+
+def weekly_snapshot_is_valid(snapshot):
+    if not isinstance(snapshot, dict):
+        return False
+    if int(snapshot.get("version") or 0) != WEEKLY_SNAPSHOT_VERSION:
+        return False
+    days = snapshot.get("days") or {}
+    if len(days) != 7:
+        return False
+    try:
+        run_total = round(
+            sum(
+                float(day.get("planned_distance_km") or 0.0)
+                for day in days.values()
+                if day.get("workout_type") == RUN
+            ),
+            1,
+        )
+        frozen_target = round(float(snapshot.get("weekly_target_km") or 0.0), 1)
+    except Exception:
+        return False
+    return abs(run_total - frozen_target) <= 0.1
 
 
 def aggregate_actual_activities(activities, local_date_fn):

@@ -75,6 +75,7 @@ from .services.training_state_engine import (
     build_weekly_plan_snapshot,
     compute_week_metrics,
     today_session_from_plan,
+    weekly_snapshot_is_valid,
 )
 from .models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, WorkoutLog
 from .extensions import db
@@ -140,6 +141,8 @@ def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
     snapshots = freeze_state.setdefault("weekly_plan_snapshots", {})
     key = week_start.isoformat()
     snapshot = snapshots.get(key)
+    if snapshot and not weekly_snapshot_is_valid(snapshot):
+        snapshot = None
     if not snapshot:
         snapshot = build_weekly_plan_snapshot(week_start, daily_plan)
         snapshots[key] = snapshot
@@ -244,6 +247,8 @@ def _build_current_week_coaching_message(
     long_run_goal_met,
     quality_goal_met,
     today_item,
+    recent_long_run_km=0.0,
+    recent_long_run_date_text="",
 ):
     target_text = f"{weekly_target_km:.0f} km" if weekly_target_km else "your planned volume"
     progress_text = f"You have completed {actual_km:.1f} km so far out of {target_text} this week."
@@ -260,6 +265,9 @@ def _build_current_week_coaching_message(
             )
     else:
         long_run_text = f"Your longest run so far this week is {longest_run_km:.1f} km."
+
+    if recent_long_run_km > longest_run_km and recent_long_run_date_text:
+        long_run_text += f" Your most recent long run was {recent_long_run_km:.1f} km on {recent_long_run_date_text}."
 
     quality_text = (
         "Your quality session is already done."
@@ -1791,6 +1799,13 @@ def dashboard():
     weekly_strength_goal_met = current_week_model["strength_goal_met"]
     week_actual_km = current_week_model["actual_km"]
     progress_pct = current_week_model["progress_pct"]
+    _long_run_summary = intel.get("long_run") or {}
+    recent_long_run_km = round(float(_long_run_summary.get("latest_km") or _long_run_summary.get("longest_km") or 0.0), 1)
+    recent_long_run_date = _long_run_summary.get("latest_date") or _long_run_summary.get("longest_date")
+    try:
+        recent_long_run_date_display = datetime.fromisoformat(recent_long_run_date).strftime("%a %d %b") if recent_long_run_date else ""
+    except Exception:
+        recent_long_run_date_display = recent_long_run_date or ""
     weekly_plan_completion_pct = (
         min(100, int(round(weekly_plan_completed_km / max(1.0, weekly_plan_goal_km) * 100)))
         if weekly_plan_goal_km > 0 else 0
@@ -1905,6 +1920,8 @@ def dashboard():
         weekly_long_run_goal_met,
         weekly_quality_goal_met,
         today_item,
+        recent_long_run_km,
+        recent_long_run_date_display,
     )
     canonical_phase_label = _deterministic_phase_label(intel)
     canonical_feasibility = _deterministic_feasibility_fields(intel, current_week_model)
@@ -2021,6 +2038,8 @@ def dashboard():
         canonical_long_run_progression=canonical_long_run_progression,
         upcoming_long_runs=upcoming_long_runs,
         week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
+        recent_long_run_km=recent_long_run_km,
+        recent_long_run_date_display=recent_long_run_date_display,
         canonical_feasibility=canonical_feasibility,
         canonical_feasibility_score=canonical_feasibility.get("score", 0),
         canonical_feasibility_color=canonical_feasibility.get("color", "grey"),

@@ -540,6 +540,7 @@
         <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
         <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
         <div class="metric-row"><span>Longest run this week</span><strong>{{ weekly_longest_run_km }} km</strong></div>
+        <div class="metric-row"><span>Most recent long run</span><strong>{{ recent_long_run_km }} km{% if recent_long_run_date_display %} · {{ recent_long_run_date_display }}{% endif %}</strong></div>
         <div class="metric-row"><span>Long-run goal</span><strong>{{ 'Met' if weekly_long_run_goal_met else ('Target ' ~ weekly_planned_long_run_km ~ ' km') }}</strong></div>
         <div class="metric-row"><span>Quality session</span><strong>{{ 'Met' if weekly_quality_goal_met else 'Not yet met' }}</strong></div>
         <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>

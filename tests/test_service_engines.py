@@ -17,6 +17,7 @@ from ppi.services.training_state_engine import (
     build_week_plan_state,
     build_weekly_plan_snapshot,
     compute_week_metrics,
+    weekly_snapshot_is_valid,
 )
 
 
@@ -305,6 +306,23 @@ def test_training_state_plan_snapshot_is_immutable_after_ai_changes():
     assert original["days"]["2026-03-16"]["planned_distance_km"] == 8.0
     assert regenerated["days"]["2026-03-16"]["session_name"] == "Strength & Conditioning"
     assert original["weekly_target_km"] != regenerated["weekly_target_km"]
+
+
+def test_weekly_snapshot_validation_fails_when_target_and_day_rows_disagree():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 6.0},
+            "tuesday": {"type": "easy", "km": 6.0},
+            "wednesday": {"type": "strength", "km": 0},
+            "thursday": {"type": "easy", "km": 8.0},
+            "friday": {"type": "strength", "km": 0},
+            "saturday": {"type": "recovery", "km": 4.0},
+            "sunday": {"type": "long", "km": 14.0},
+        },
+    )
+    snapshot["weekly_target_km"] = 26.0
+    assert weekly_snapshot_is_valid(snapshot) is False
 
 
 def test_weekly_snapshot_loader_keeps_first_plan_for_the_week():

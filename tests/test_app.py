@@ -6,6 +6,7 @@ from ppi import create_app
 from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
+    _build_current_week_coaching_message,
     _derive_current_week_display_metrics,
     _deterministic_current_week_daily_plan,
     _deterministic_feasibility_fields,
@@ -238,6 +239,22 @@ def test_deterministic_feasibility_fields_use_current_week_metrics():
     assert fields["color"] == "amber"
     assert fields["label"] == "Building"
     assert "20.4 km" in fields["text"]
+
+
+def test_current_week_coaching_message_mentions_recent_long_run_when_outside_current_week():
+    message = _build_current_week_coaching_message(
+        26.0,
+        20.4,
+        8.0,
+        14.0,
+        False,
+        False,
+        None,
+        18.3,
+        "Sun 15 Mar",
+    )
+    assert "8.0 km" in message
+    assert "18.3 km on Sun 15 Mar" in message
 
 
 def test_deterministic_current_week_daily_plan_uses_analytics_inputs():
