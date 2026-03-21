@@ -1486,29 +1486,6 @@ def dashboard():
     def _run_acts(acts):
         return [a for a in acts if (a.activity_type or "").lower() in _RUN_TYPES]
 
-    logs_by_date = {
-        log.workout_date.isoformat(): log
-        for log in WorkoutLog.query.filter(
-            WorkoutLog.user_id == user.id,
-            WorkoutLog.workout_date >= week_start,
-            WorkoutLog.workout_date <= week_end,
-        ).all()
-    }
-    for day_key, frozen_day in weekly_snapshot.get("days", {}).items():
-        if day_key >= today_local.isoformat():
-            continue
-        frozen_log = logs_by_date.get(day_key)
-        if not frozen_log:
-            continue
-        frozen_day["workout_type"] = frozen_log.workout_type or frozen_day["workout_type"]
-        frozen_day["session_name"] = frozen_log.session_name or frozen_day["session_name"]
-        frozen_day["session_type"] = _infer_session_type_from_log(
-            frozen_log.session_name,
-            frozen_log.workout_type,
-            frozen_day.get("session_type", "easy"),
-        )
-        frozen_day["planned_distance_km"] = round(float(frozen_log.target_distance_km or frozen_day["planned_distance_km"] or 0.0), 1)
-
     actual_by_date = aggregate_actual_activities(
         week_activities,
         lambda dt_value: _activity_local_date(dt_value, user_tz),
@@ -1614,6 +1591,22 @@ def dashboard():
         weekly_plan = _apply_adaptive_plan(copy.deepcopy(weekly_plan), today_local, adaptive_weekly_goal)
     except Exception:
         current_app.logger.exception("adaptive weekly plan fallback")
+
+    adapted_long_run_target_km = round(
+        max(
+            [
+                float(item.get("planned_km") or 0.0)
+                for item in weekly_plan
+                if item.get("workout_type") == "RUN" and item.get("session") == "Long Run"
+            ]
+            or [0.0]
+        ),
+        1,
+    )
+    if adapted_long_run_target_km > 0:
+        weekly_planned_long_run_km = adapted_long_run_target_km
+        weekly_long_run_goal_met = weekly_longest_run_km >= max(12.0, round(adapted_long_run_target_km * 0.8, 1))
+
     weekly_plan_completion_pct = (
         min(100, int(round(weekly_plan_completed_km / max(1.0, weekly_plan_goal_km) * 100)))
         if weekly_plan_goal_km > 0 else 0
