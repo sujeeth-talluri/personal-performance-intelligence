@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 LONG_RUN_LADDER = [21.0, 24.0, 28.0, 30.0, 32.0]
@@ -646,6 +646,77 @@ def _next_progression_long_milestone(longest_km):
     return LONG_RUN_LADDER[-1]
 
 
+def _coerce_date(value):
+    if isinstance(value, date):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value[:10]).date()
+        except Exception:
+            return None
+    return None
+
+
+def effective_long_run_base_km(long_run, reference_date=None):
+    reference_date = _coerce_date(reference_date) or date.today()
+    long_run = dict(long_run or {})
+
+    def _decayed(km_value, dt_value, *, current=False):
+        km_value = float(km_value or 0.0)
+        if km_value <= 0:
+            return 0.0
+        if current:
+            return km_value
+        dt_value = _coerce_date(dt_value)
+        if not dt_value:
+            return km_value * 0.75
+        age_days = max(0, (reference_date - dt_value).days)
+        if age_days <= 21:
+            weight = 1.00
+        elif age_days <= 42:
+            weight = 0.90
+        elif age_days <= 56:
+            weight = 0.80
+        elif age_days <= 84:
+            weight = 0.65
+        else:
+            weight = 0.50
+        return round(km_value * weight, 1)
+
+    current_week_long = _decayed(long_run.get("current_week_long_km"), reference_date, current=True)
+    latest_long = _decayed(long_run.get("latest_km"), long_run.get("latest_date"))
+    longest_recent = _decayed(long_run.get("longest_km"), long_run.get("longest_date"))
+    return round(max(current_week_long, latest_long, longest_recent), 1)
+
+
+def prescribed_long_run_km(km_value, phase="build", race_distance_km=42.195):
+    """Snap prescribed marathon long runs to coach-standard steps.
+
+    Internal engine math can remain decimal-based, but the athlete-facing
+    long-run prescription should usually land on clean marathon-plan values.
+    """
+    km_value = float(km_value or 0.0)
+    phase = str(phase or "build").lower()
+    if km_value <= 0:
+        return 0
+
+    if phase == "taper":
+        taper_steps = [8, 10, 12, 14, 16, 18, 20]
+        return min(taper_steps, key=lambda step: abs(step - km_value))
+    if phase in {"recovery", "rebuild"}:
+        easy_steps = [10, 12, 14, 16, 18, 20]
+        return min(easy_steps, key=lambda step: abs(step - km_value))
+
+    max_peak = 32 if float(race_distance_km or 42.195) >= 40 else 28
+    standard_steps = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]
+    allowed_steps = [step for step in standard_steps if step <= max_peak]
+    if km_value < 12:
+        return int(round(km_value))
+    return min(allowed_steps, key=lambda step: abs(step - km_value))
+
+
 def _projected_weekly_target_seed(previous_target, goal_band, phase, week_type, weekly_goal):
     previous_target = float(previous_target or 0.0)
     goal_floor = _goal_band_phase_floor(goal_band, phase)
@@ -702,11 +773,13 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
         week_start_value = date.today()
 
     current_template = build_weekly_plan_template(base_weekly_goal, base_long_run)
-    current_week_target = round(
+    template_week_target = round(
         sum(float(day["target_km"] or 0.0) for day in current_template.values() if day["workout_type"] == "RUN"),
         1,
     )
-    current_long_target = round(float(current_template[6]["target_km"] or 0.0), 1)
+    template_long_target = round(float(current_template[6]["target_km"] or 0.0), 1)
+    current_week_target = round(float(base_weekly_goal.get("anchor_weekly_target_km") or template_week_target), 1)
+    current_long_target = round(float(base_weekly_goal.get("anchor_long_run_km") or template_long_target), 1)
     current_weeks_to_race = float(base_weekly_goal.get("weeks_to_race") or 0.0)
     current_phase = base_weekly_goal.get("phase") or _phase_for_weeks_to_race(current_weeks_to_race, rebuild_mode)
 
@@ -723,7 +796,10 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
         }
     ]
 
-    projected_longest = max(float(base_long_run.get("longest_km") or 0.0), current_long_target)
+    effective_base = float(base_long_run.get("effective_longest_km") or 0.0)
+    if effective_base <= 0:
+        effective_base = effective_long_run_base_km(base_long_run, week_start_value)
+    projected_longest = max(effective_base, current_long_target)
     previous_target = current_week_target
 
     for offset in range(1, weeks):

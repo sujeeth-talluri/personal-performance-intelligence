@@ -39,9 +39,11 @@ from .services.plan_engine import (
     build_progression_weeks as service_build_progression_weeks,
     build_weekly_plan_template,
     classify_quality_completion as service_classify_quality_completion,
+    effective_long_run_base_km as service_effective_long_run_base_km,
     classify_run_completion as service_classify_run_completion,
     goal_marathon_pace as service_goal_marathon_pace,
     plan_meta_for_session as service_plan_meta_for_session,
+    prescribed_long_run_km as service_prescribed_long_run_km,
     select_best_run_for_session as service_select_best_run_for_session,
     training_consistency_score as service_training_consistency_score,
 )
@@ -371,13 +373,20 @@ def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
 
 
-def _deterministic_long_run_progression(intel, week_start):
+def _deterministic_long_run_progression(intel, week_start, current_week_weekly_target_km, current_week_long_run_km):
     weekly = intel.get("weekly") or {}
     goal = intel.get("goal") or {}
     long_run = intel.get("long_run") or {}
+    race_date = goal.get("race_date") or weekly.get("race_date")
+    try:
+        race_date_obj = datetime.fromisoformat(str(race_date)[:10]).date() if race_date else None
+    except Exception:
+        race_date_obj = None
 
     weekly_goal = {
-        "weekly_goal_km": float(weekly.get("weekly_goal_km") or 0.0),
+        "weekly_goal_km": float(current_week_weekly_target_km or weekly.get("weekly_goal_km") or 0.0),
+        "anchor_weekly_target_km": float(current_week_weekly_target_km or weekly.get("weekly_goal_km") or 0.0),
+        "anchor_long_run_km": float(current_week_long_run_km or 0.0),
         "phase": weekly.get("phase") or weekly.get("display_phase") or "base",
         "rebuild_mode": bool(weekly.get("rebuild_mode")),
         "weeks_to_race": float(weekly.get("weeks_to_race") or max(0.0, float(goal.get("days_remaining") or 0.0) / 7.0)),
@@ -391,15 +400,36 @@ def _deterministic_long_run_progression(intel, week_start):
         "atl_spike": bool(weekly.get("atl_spike")),
         "week_start": week_start.isoformat(),
     }
+    effective_longest = service_effective_long_run_base_km(
+        {
+            "current_week_long_km": float(current_week_long_run_km or 0.0),
+            "latest_km": float(long_run.get("latest_km") or 0.0),
+            "latest_date": long_run.get("latest_date"),
+            "longest_km": float(long_run.get("longest_km") or 0.0),
+            "longest_date": long_run.get("longest_date"),
+        },
+        week_start,
+    )
     long_run_state = {
-        "longest_km": float(long_run.get("longest_km") or 0.0),
+        "longest_km": effective_longest,
+        "effective_longest_km": effective_longest,
         "next_milestone_km": float(long_run.get("next_milestone_km") or 0.0),
+        "latest_km": float(long_run.get("latest_km") or 0.0),
+        "latest_date": long_run.get("latest_date"),
+        "current_week_long_km": float(current_week_long_run_km or 0.0),
     }
     progression = service_build_progression_weeks(weekly_goal, long_run_state, weeks=18)
     output = []
     for week in progression[1:]:
         week_date = week["week_start"] + timedelta(days=6)
+        if race_date_obj and week_date >= race_date_obj:
+            break
         target_km = _display_planned_km(week["long_run_km"])
+        target_km = service_prescribed_long_run_km(
+            target_km,
+            phase=week["phase"],
+            race_distance_km=weekly_goal["race_distance_km"],
+        )
         output.append(
             {
                 "week_date": week_date.isoformat(),
@@ -1455,7 +1485,6 @@ def dashboard():
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
-    canonical_long_run_progression = _deterministic_long_run_progression(intel, week_start)
 
     # Compute weekly target from the frozen weekly snapshot only.
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -1823,6 +1852,12 @@ def dashboard():
             if item.get("workout_type") == "RUN" and item.get("session") == "Long Run"
         ]
         or [0]
+    )
+    canonical_long_run_progression = _deterministic_long_run_progression(
+        intel,
+        week_start,
+        display_weekly_target_km,
+        display_long_run_target_km,
     )
     _long_run_summary = intel.get("long_run") or {}
     recent_long_run_km = round(float(_long_run_summary.get("latest_km") or _long_run_summary.get("longest_km") or 0.0), 1)

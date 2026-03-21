@@ -384,11 +384,11 @@ def test_deterministic_long_run_progression_uses_whole_km_targets():
         },
         "long_run": {"longest_km": 18.3, "next_milestone_km": 21.0},
     }
-    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16))
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16), 42, 18)
 
     assert progression
     assert all(isinstance(item["target_km"], int) for item in progression)
-    assert progression[0]["target_km"] == 20
+    assert progression[0]["target_km"] in {18, 19, 20}
 
 
 def test_deterministic_long_run_progression_reaches_thirty_for_stable_sub4_with_runway():
@@ -407,8 +407,69 @@ def test_deterministic_long_run_progression_reaches_thirty_for_stable_sub4_with_
         },
         "long_run": {"longest_km": 18.3, "next_milestone_km": 21.0},
     }
-    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16))
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16), 42, 18)
 
     assert max(item["target_km"] for item in progression) >= 30
+
+
+def test_deterministic_long_run_progression_anchors_from_current_week_and_recent_long_history():
+    intel = {
+        "goal": {"days_remaining": 162, "distance_km": 42.195},
+        "weekly": {
+            "weekly_goal_km": 38.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.0,
+            "race_distance_km": 42.195,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 23.0,
+            "recent_avg_km": 22.0,
+            "training_consistency_ratio": 0.55,
+        },
+        "long_run": {
+            "longest_km": 26.6,
+            "longest_date": "2026-01-04",
+            "latest_km": 18.3,
+            "latest_date": "2026-03-15",
+            "next_milestone_km": 28.0,
+        },
+    }
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16), 38, 14)
+
+    assert progression[0]["target_km"] <= 20
+    assert progression[0]["target_km"] >= 18
+
+
+def test_deterministic_long_run_progression_stops_before_race_day():
+    intel = {
+        "goal": {
+            "days_remaining": (date(2026, 8, 30) - date(2026, 3, 21)).days,
+            "distance_km": 42.195,
+            "race_date": "2026-08-30",
+        },
+        "weekly": {
+            "weekly_goal_km": 38.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": (date(2026, 8, 30) - date(2026, 3, 16)).days / 7.0,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 23.0,
+            "recent_avg_km": 22.0,
+            "training_consistency_ratio": 0.55,
+        },
+        "long_run": {
+            "longest_km": 26.6,
+            "longest_date": "2026-01-04",
+            "latest_km": 18.3,
+            "latest_date": "2026-03-15",
+            "next_milestone_km": 28.0,
+        },
+    }
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16), 38, 14)
+
+    assert progression
+    assert progression[-1]["week_date"] < "2026-08-30"
 
 

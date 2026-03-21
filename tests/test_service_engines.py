@@ -8,6 +8,8 @@ from ppi.services.plan_engine import (
     build_progression_weeks,
     build_weekly_plan_template,
     classify_run_completion,
+    effective_long_run_base_km,
+    prescribed_long_run_km,
     training_consistency_score,
 )
 from ppi.services.prediction_engine import marathon_prediction_seconds
@@ -1988,3 +1990,25 @@ def test_build_progression_weeks_does_not_force_30_plus_long_run_for_lower_base_
     weeks = build_progression_weeks(weekly_goal, long_run, weeks=8)
 
     assert max(week["long_run_km"] for week in weeks) < 30.0
+
+
+def test_effective_long_run_base_weights_recent_history_over_stale_peak():
+    base = effective_long_run_base_km(
+        {
+            "current_week_long_km": 14.0,
+            "latest_km": 18.3,
+            "latest_date": "2026-03-15",
+            "longest_km": 26.6,
+            "longest_date": "2026-01-04",
+        },
+        reference_date=date(2026, 3, 21),
+    )
+
+    assert 18.0 <= base <= 18.5
+
+
+def test_prescribed_long_run_snaps_to_standard_marathon_steps():
+    assert prescribed_long_run_km(27.2, phase="build") == 28
+    assert prescribed_long_run_km(29.1, phase="peak") == 30
+    assert prescribed_long_run_km(25.4, phase="build") == 26
+    assert prescribed_long_run_km(19.4, phase="taper") == 20
