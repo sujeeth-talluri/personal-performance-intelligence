@@ -36,6 +36,7 @@ from .services.analytics_service import (
 )
 from .services.plan_engine import (
     apply_adaptive_plan as service_apply_adaptive_plan,
+    build_progression_weeks as service_build_progression_weeks,
     build_weekly_plan_template,
     classify_quality_completion as service_classify_quality_completion,
     classify_run_completion as service_classify_run_completion,
@@ -368,6 +369,59 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
 
 def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
+
+
+def _deterministic_long_run_progression(intel, week_start):
+    weekly = intel.get("weekly") or {}
+    goal = intel.get("goal") or {}
+    long_run = intel.get("long_run") or {}
+
+    weekly_goal = {
+        "weekly_goal_km": float(weekly.get("weekly_goal_km") or 0.0),
+        "phase": weekly.get("phase") or weekly.get("display_phase") or "base",
+        "rebuild_mode": bool(weekly.get("rebuild_mode")),
+        "weeks_to_race": float(weekly.get("weeks_to_race") or max(0.0, float(goal.get("days_remaining") or 0.0) / 7.0)),
+        "race_distance_km": float(weekly.get("race_distance_km") or goal.get("distance_km") or 42.195),
+        "goal_marathon_pace_sec_per_km": float(weekly.get("goal_marathon_pace_sec_per_km") or 0.0),
+        "prior_avg_km": float(weekly.get("prior_avg_km") or 0.0),
+        "recent_avg_km": float(weekly.get("recent_avg_km") or 0.0),
+        "training_consistency_ratio": float(weekly.get("training_consistency_ratio") or 0.0),
+        "high_fatigue": bool(weekly.get("high_fatigue")),
+        "moderate_fatigue": bool(weekly.get("moderate_fatigue")),
+        "atl_spike": bool(weekly.get("atl_spike")),
+        "week_start": week_start.isoformat(),
+    }
+    long_run_state = {
+        "longest_km": float(long_run.get("longest_km") or 0.0),
+        "next_milestone_km": float(long_run.get("next_milestone_km") or 0.0),
+    }
+    progression = service_build_progression_weeks(weekly_goal, long_run_state, weeks=18)
+    output = []
+    for week in progression[1:]:
+        week_date = week["week_start"] + timedelta(days=6)
+        target_km = _display_planned_km(week["long_run_km"])
+        output.append(
+            {
+                "week_date": week_date.isoformat(),
+                "week_date_display": f"{week_date.strftime('%a')} {week_date.day} {week_date.strftime('%b')}",
+                "target_km": target_km,
+                "is_recovery_week": week["week_type"] in {"cutback", "recovery", "rebuild"},
+                "is_peak_run": week["phase"] == "peak" and target_km >= 28,
+                "label": (
+                    "Peak phase"
+                    if week["phase"] == "peak"
+                    else "Base building"
+                    if week["phase"] == "base"
+                    else "Build phase"
+                    if week["phase"] == "build"
+                    else "Taper"
+                    if week["phase"] == "taper"
+                    else week["phase"].title()
+                ),
+                "week_type": week["week_type"],
+            }
+        )
+    return output
 
 
 def _deterministic_phase_label(intel):
@@ -1394,13 +1448,14 @@ def dashboard():
     canonical_alerts               = _coaching_plan.get("alerts", [])
     canonical_week_theme           = _coaching_plan.get("week_theme", "")
     canonical_focus_point          = _coaching_plan.get("this_week", {}).get("focus_point", "")
-    canonical_long_run_progression = _coaching_plan.get("long_run_progression", [])
+    canonical_long_run_progression = []
     canonical_feasibility          = {}
     _daily_plan                    = _deterministic_current_week_daily_plan(intel, _week_bounds(_today_local_date(user_tz))[0])
     _profile_data                  = _coaching_plan.get("runner_profile", {})
     canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
+    canonical_long_run_progression = _deterministic_long_run_progression(intel, week_start)
 
     # Compute weekly target from the frozen weekly snapshot only.
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]

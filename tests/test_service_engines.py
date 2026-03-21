@@ -3,7 +3,13 @@ from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from ppi.services.load_engine import classify_run_intensity, load_model, running_stress_score
-from ppi.services.plan_engine import apply_adaptive_plan, build_weekly_plan_template, classify_run_completion, training_consistency_score
+from ppi.services.plan_engine import (
+    apply_adaptive_plan,
+    build_progression_weeks,
+    build_weekly_plan_template,
+    classify_run_completion,
+    training_consistency_score,
+)
 from ppi.services.prediction_engine import marathon_prediction_seconds
 from ppi.services.training_state_engine import (
     DIFFERENT_ACTIVITY,
@@ -118,7 +124,7 @@ def test_plan_template_raises_weekly_target_to_support_long_run_and_keeps_row_su
     plan = build_weekly_plan_template(weekly_goal, long_run)
     run_total = round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
     long_target = float(plan[6]["target_km"])
-    assert 15.0 <= long_target <= 15.5
+    assert 16.5 <= long_target <= 17.0
     assert run_total == 44.0
     assert run_total == round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
 
@@ -138,7 +144,7 @@ def test_plan_template_preserves_long_run_base_for_stable_sub4_runner():
     plan = build_weekly_plan_template(weekly_goal, long_run)
     run_total = round(sum(float(day["target_km"] or 0.0) for day in plan.values() if day["workout_type"] == "RUN"), 1)
     assert float(plan[6]["target_km"]) == 18.3
-    assert run_total == 52.3
+    assert run_total == 48.2
 
 
 def test_training_consistency_score_uses_last_planned_runs():
@@ -1851,3 +1857,134 @@ def test_consistency_score_not_broken_by_datetime_keys():
 
     assert score >= 30, f"Expected ≥30 for 30km/week runner, got {score}"
     assert score <= 100, f"Score must be ≤100, got {score}"
+
+
+def test_build_progression_weeks_creates_cutback_rhythm_for_stable_sub4_runner():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "recent_avg_km": 36.0,
+        "training_consistency_ratio": 0.8,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=8)
+
+    assert len(weeks) == 8
+    assert weeks[0]["phase"] == "base"
+    assert weeks[3]["week_type"] == "cutback"
+    assert weeks[3]["weekly_target_km"] < weeks[2]["weekly_target_km"]
+    assert all(
+        weeks[idx]["weekly_target_km"] <= round(weeks[idx - 1]["weekly_target_km"] * 1.11, 1)
+        for idx in range(1, 3)
+    )
+    assert weeks[0]["long_run_km"] == 18.3
+    assert weeks[1]["long_run_km"] >= 18.3
+
+
+def test_build_progression_weeks_suppresses_next_week_growth_under_high_fatigue():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 12.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 50 * 60) / 42.195,
+        "prior_avg_km": 40.0,
+        "recent_avg_km": 39.0,
+        "training_consistency_ratio": 0.78,
+        "high_fatigue": True,
+        "atl_spike": True,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 20.0, "next_milestone_km": 21.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=3)
+
+    assert weeks[1]["weekly_target_km"] <= weeks[0]["weekly_target_km"]
+
+
+def test_build_progression_weeks_keeps_rebuild_runner_conservative():
+    weekly_goal = {
+        "weekly_goal_km": 28.0,
+        "phase": "rebuild",
+        "rebuild_mode": True,
+        "weeks_to_race": 18.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (4 * 3600 + 30 * 60) / 42.195,
+        "prior_avg_km": 24.0,
+        "recent_avg_km": 22.0,
+        "training_consistency_ratio": 0.35,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 14.0, "next_milestone_km": 16.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=4)
+
+    assert weeks[1]["phase"] == "rebuild"
+    assert weeks[1]["weekly_target_km"] <= round(weeks[0]["weekly_target_km"] * 1.05, 1)
+    assert weeks[1]["long_run_km"] <= 18.0
+
+
+def test_build_progression_weeks_late_start_moves_from_peak_into_taper():
+    weekly_goal = {
+        "weekly_goal_km": 34.0,
+        "phase": "peak",
+        "rebuild_mode": False,
+        "weeks_to_race": 7.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (4 * 3600 + 15 * 60) / 42.195,
+        "prior_avg_km": 32.0,
+        "recent_avg_km": 31.0,
+        "training_consistency_ratio": 0.62,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 18.0, "next_milestone_km": 21.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=6)
+
+    assert weeks[0]["phase"] == "peak"
+    assert any(week["phase"] == "taper" for week in weeks[1:])
+    taper_weeks = [week for week in weeks if week["phase"] == "taper"]
+    assert taper_weeks[-1]["weekly_target_km"] <= taper_weeks[0]["weekly_target_km"]
+
+
+def test_build_progression_weeks_can_reach_30_plus_long_run_for_stable_sub4_runner():
+    weekly_goal = {
+        "weekly_goal_km": 42.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "recent_avg_km": 36.0,
+        "training_consistency_ratio": 0.82,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=18)
+
+    peak_weeks = [week for week in weeks if week["phase"] in {"build", "peak"}]
+    assert max(week["long_run_km"] for week in peak_weeks) >= 30.0
+
+
+def test_build_progression_weeks_does_not_force_30_plus_long_run_for_lower_base_sub4_runner_too_early():
+    weekly_goal = {
+        "weekly_goal_km": 26.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 23.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 23.0,
+        "recent_avg_km": 22.0,
+        "training_consistency_ratio": 0.55,
+        "week_start": "2026-03-16",
+    }
+    long_run = {"longest_km": 18.3, "next_milestone_km": 21.0}
+    weeks = build_progression_weeks(weekly_goal, long_run, weeks=8)
+
+    assert max(week["long_run_km"] for week in weeks) < 30.0

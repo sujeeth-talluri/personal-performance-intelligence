@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, timedelta
 
 
-LONG_RUN_LADDER = [21.0, 24.0, 28.0, 32.0]
+LONG_RUN_LADDER = [21.0, 24.0, 28.0, 30.0, 32.0]
 
 
 def goal_marathon_pace(weekly_goal):
@@ -98,6 +98,34 @@ def _goal_band_phase_floor(goal_band, phase):
     return floors.get(goal_band, floors["sub4"]).get(phase, 38.0)
 
 
+def _long_run_support_share(weekly_goal):
+    phase = weekly_goal.get("phase", "build")
+    goal_band = _goal_band(weekly_goal)
+    consistency = float(weekly_goal.get("training_consistency_ratio") or 0.0)
+    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
+    high_fatigue = bool(weekly_goal.get("high_fatigue"))
+    atl_spike = bool(weekly_goal.get("atl_spike"))
+
+    if rebuild_mode or high_fatigue or atl_spike:
+        return 0.35
+    if phase == "taper":
+        return 0.45
+    if phase == "recovery":
+        return 0.38
+
+    by_band = {
+        "advanced": {"base": 0.35, "build": 0.35, "peak": 0.36},
+        "performance": {"base": 0.36, "build": 0.37, "peak": 0.38},
+        "sub4": {"base": 0.38, "build": 0.39, "peak": 0.40},
+        "completion_plus": {"base": 0.40, "build": 0.41, "peak": 0.43},
+        "finish": {"base": 0.42, "build": 0.44, "peak": 0.46},
+    }
+    share = by_band.get(goal_band, by_band["sub4"]).get(phase, 0.38)
+    if consistency >= 0.8 and phase in {"build", "peak"}:
+        share += 0.01
+    return min(0.46, share)
+
+
 def _recent_weekly_anchor(weekly_goal, baseline_weekly_target):
     prior_avg = float(weekly_goal.get("prior_avg_km") or 0.0)
     recent_avg = float(weekly_goal.get("recent_avg_km") or 0.0)
@@ -163,6 +191,7 @@ def _controlled_progression_cap(recent_anchor, weekly_goal):
 def _calibrated_weekly_target(weekly_goal, baseline_weekly_target, long_target):
     phase = weekly_goal.get("phase", "build")
     goal_band = _goal_band(weekly_goal)
+    support_share = _long_run_support_share(weekly_goal)
     recent_anchor = _recent_weekly_anchor(weekly_goal, baseline_weekly_target)
     goal_floor = _goal_band_phase_floor(goal_band, phase)
     safe_cap = _safe_weekly_cap(recent_anchor, weekly_goal)
@@ -175,8 +204,8 @@ def _calibrated_weekly_target(weekly_goal, baseline_weekly_target, long_target):
     consistency = float(weekly_goal.get("training_consistency_ratio") or 0.0)
     established = consistency >= 0.65 or recent_anchor >= goal_floor * 0.75
     durable_long_base = longest_km >= 18.0
-    current_long_support = round(longest_km / 0.35, 1) if longest_km >= 16.0 else 0.0
-    next_long_support = round(long_target / 0.35, 1) if long_target > 0 else 0.0
+    current_long_support = round(longest_km / max(0.3, support_share), 1) if longest_km >= 16.0 else 0.0
+    next_long_support = round(long_target / max(0.3, support_share), 1) if long_target > 0 else 0.0
 
     weekly_target = max(recent_anchor, baseline_soft_target, floor_progression_target)
     if (current_long_support > 0 and baseline_weekly_target >= current_long_support) or (
@@ -199,7 +228,7 @@ def _calibrated_weekly_target(weekly_goal, baseline_weekly_target, long_target):
 
 def _calibrated_long_run_target(weekly_goal, longest_km, progression_target, weekly_target):
     phase = weekly_goal.get("phase", "build")
-    support_cap = round(max(0.0, weekly_target * 0.35), 1)
+    support_cap = round(max(0.0, weekly_target * _long_run_support_share(weekly_goal)), 1)
     if phase in {"taper", "recovery", "rebuild"}:
         return round(min(progression_target, support_cap if support_cap > 0 else progression_target), 1)
     if support_cap <= 0:
@@ -580,3 +609,180 @@ def training_consistency_score(logs):
     if not planned_runs:
         return 0
     return int(round((len(completed_runs) / len(planned_runs)) * 100))
+
+
+def _phase_for_weeks_to_race(weeks_to_race, rebuild_mode=False):
+    weeks_to_race = float(weeks_to_race or 0.0)
+    if rebuild_mode and weeks_to_race > 8.0:
+        return "rebuild"
+    if weeks_to_race <= 3.0:
+        return "taper"
+    if weeks_to_race <= 8.0:
+        return "peak"
+    if weeks_to_race <= 16.0:
+        return "build"
+    return "base"
+
+
+def _progression_week_type(week_index, phase, weeks_to_race, rebuild_mode=False):
+    if weeks_to_race <= 0:
+        return "race"
+    if phase == "taper":
+        return "taper"
+    if phase == "rebuild" or rebuild_mode:
+        return "rebuild"
+    if phase == "recovery":
+        return "recovery"
+    if week_index > 0 and (week_index + 1) % 4 == 0 and weeks_to_race > 4.0:
+        return "cutback"
+    return "build"
+
+
+def _next_progression_long_milestone(longest_km):
+    longest_km = float(longest_km or 0.0)
+    for step in LONG_RUN_LADDER:
+        if step > longest_km + 0.4:
+            return step
+    return LONG_RUN_LADDER[-1]
+
+
+def _projected_weekly_target_seed(previous_target, goal_band, phase, week_type, weekly_goal):
+    previous_target = float(previous_target or 0.0)
+    goal_floor = _goal_band_phase_floor(goal_band, phase)
+    rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
+    high_fatigue = bool(weekly_goal.get("high_fatigue"))
+    moderate_fatigue = bool(weekly_goal.get("moderate_fatigue"))
+    atl_spike = bool(weekly_goal.get("atl_spike"))
+
+    if week_type == "cutback":
+        return round(max(goal_floor * 0.82, previous_target * 0.84), 1)
+    if phase == "taper":
+        weeks_to_race = float(weekly_goal.get("weeks_to_race") or 0.0)
+        taper_factor = 0.72 if weeks_to_race <= 1.5 else 0.84
+        return round(max(goal_floor, previous_target * taper_factor), 1)
+    if rebuild_mode or high_fatigue or atl_spike:
+        ramp_pct = 0.00
+        step_km = 2.0
+    elif moderate_fatigue:
+        ramp_pct = 0.04
+        step_km = 2.0
+    elif phase == "base":
+        ramp_pct = 0.08
+        step_km = 4.0
+    elif phase == "build":
+        ramp_pct = 0.10
+        step_km = 5.0
+    else:
+        ramp_pct = 0.08
+        step_km = 4.0
+
+    capped_target = previous_target * (1.0 + ramp_pct)
+    stepped_target = previous_target + step_km
+    return round(min(max(goal_floor, stepped_target), capped_target), 1)
+
+
+def build_progression_weeks(weekly_goal, long_run, weeks=8):
+    """Project a deterministic sequence of weeks from the current state.
+
+    Week 0 reflects the current deterministic template. Future weeks progress
+    using explicit rules for phase transitions, cutback rhythm, safe ramping,
+    and long-run ladder steps. This keeps the plan reproducible while moving
+    beyond a single isolated week.
+    """
+    weeks = max(1, int(weeks or 1))
+    base_weekly_goal = dict(weekly_goal or {})
+    base_long_run = dict(long_run or {})
+    goal_band = _goal_band(base_weekly_goal)
+    rebuild_mode = bool(base_weekly_goal.get("rebuild_mode"))
+
+    week_start_value = base_weekly_goal.get("week_start")
+    if isinstance(week_start_value, str):
+        week_start_value = date.fromisoformat(week_start_value)
+    if not isinstance(week_start_value, date):
+        week_start_value = date.today()
+
+    current_template = build_weekly_plan_template(base_weekly_goal, base_long_run)
+    current_week_target = round(
+        sum(float(day["target_km"] or 0.0) for day in current_template.values() if day["workout_type"] == "RUN"),
+        1,
+    )
+    current_long_target = round(float(current_template[6]["target_km"] or 0.0), 1)
+    current_weeks_to_race = float(base_weekly_goal.get("weeks_to_race") or 0.0)
+    current_phase = base_weekly_goal.get("phase") or _phase_for_weeks_to_race(current_weeks_to_race, rebuild_mode)
+
+    progression = [
+        {
+            "week_index": 0,
+            "week_start": week_start_value,
+            "weeks_to_race": current_weeks_to_race,
+            "phase": current_phase,
+            "week_type": _progression_week_type(0, current_phase, current_weeks_to_race, rebuild_mode),
+            "weekly_target_km": current_week_target,
+            "long_run_km": current_long_target,
+            "template": current_template,
+        }
+    ]
+
+    projected_longest = max(float(base_long_run.get("longest_km") or 0.0), current_long_target)
+    previous_target = current_week_target
+
+    for offset in range(1, weeks):
+        weeks_left = max(0.0, current_weeks_to_race - offset)
+        phase = _phase_for_weeks_to_race(weeks_left, rebuild_mode and offset <= 2)
+        week_type = _progression_week_type(offset, phase, weeks_left, rebuild_mode and offset <= 2)
+        planner_phase = "recovery" if week_type == "cutback" else phase
+        candidate_weekly_goal = {
+            **base_weekly_goal,
+            "phase": planner_phase,
+            "weeks_to_race": weeks_left,
+            "week_start": (week_start_value + timedelta(days=7 * offset)).isoformat(),
+            "weekly_goal_km": _projected_weekly_target_seed(previous_target, goal_band, planner_phase, week_type, {**base_weekly_goal, "phase": planner_phase, "weeks_to_race": weeks_left}),
+            # After the first projected week, assume future planning is not already
+            # constrained by the current week's transient fatigue spike.
+            "high_fatigue": bool(base_weekly_goal.get("high_fatigue")) if offset == 1 else False,
+            "moderate_fatigue": bool(base_weekly_goal.get("moderate_fatigue")) if offset == 1 else False,
+            "atl_spike": bool(base_weekly_goal.get("atl_spike")) if offset == 1 else False,
+            "prior_avg_km": round(max(_recent_weekly_anchor(base_weekly_goal, previous_target), previous_target * 0.85), 1),
+            "current_longest_km": projected_longest,
+        }
+
+        if week_type == "cutback":
+            next_long_milestone = max(14.0, round(projected_longest * 0.82, 1))
+        elif phase == "taper":
+            if weeks_left <= 1.5:
+                next_long_milestone = max(0.0, round(projected_longest * 0.35, 1))
+            elif weeks_left <= 2.5:
+                next_long_milestone = max(12.0, round(projected_longest * 0.60, 1))
+            else:
+                next_long_milestone = max(14.0, round(projected_longest * 0.78, 1))
+        else:
+            next_long_milestone = _next_progression_long_milestone(projected_longest)
+
+        candidate_long_run = {
+            "longest_km": projected_longest,
+            "next_milestone_km": next_long_milestone,
+        }
+        template = build_weekly_plan_template(candidate_weekly_goal, candidate_long_run)
+        weekly_target = round(
+            sum(float(day["target_km"] or 0.0) for day in template.values() if day["workout_type"] == "RUN"),
+            1,
+        )
+        long_target = round(float(template[6]["target_km"] or 0.0), 1)
+
+        progression.append(
+            {
+                "week_index": offset,
+                "week_start": week_start_value + timedelta(days=7 * offset),
+                "weeks_to_race": weeks_left,
+                "phase": phase,
+                "week_type": week_type,
+                "weekly_target_km": weekly_target,
+                "long_run_km": long_target,
+                "template": template,
+            }
+        )
+        if week_type != "cutback" and phase != "taper":
+            projected_longest = max(projected_longest, long_target)
+        previous_target = weekly_target
+
+    return progression

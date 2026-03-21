@@ -7,6 +7,7 @@ from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
     _build_current_week_coaching_message,
+    _deterministic_long_run_progression,
     _derive_current_week_display_metrics,
     _deterministic_current_week_daily_plan,
     _deterministic_feasibility_fields,
@@ -336,7 +337,7 @@ def test_deterministic_current_week_daily_plan_uses_analytics_inputs():
     assert daily_plan["monday"]["type"] == "easy"
     assert daily_plan["wednesday"]["type"] == "strength"
     assert daily_plan["sunday"]["type"] == "long"
-    assert 15.0 <= daily_plan["sunday"]["km"] <= 15.5
+    assert 16.5 <= daily_plan["sunday"]["km"] <= 17.0
     run_total = round(sum(float(day.get("km") or 0.0) for day in daily_plan.values()), 1)
     assert run_total == 44.0
 
@@ -364,6 +365,50 @@ def test_deterministic_current_week_daily_plan_preserves_long_run_for_stable_sub
     daily_plan = _deterministic_current_week_daily_plan(intel, date(2026, 3, 16))
     run_total = round(sum(float(day.get("km") or 0.0) for day in daily_plan.values()), 1)
     assert daily_plan["sunday"]["km"] == 18.3
-    assert run_total == 52.3
+    assert run_total == 48.2
+
+
+def test_deterministic_long_run_progression_uses_whole_km_targets():
+    intel = {
+        "goal": {"days_remaining": 162, "distance_km": 42.195},
+        "weekly": {
+            "weekly_goal_km": 42.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.0,
+            "race_distance_km": 42.195,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 38.0,
+            "recent_avg_km": 36.0,
+            "training_consistency_ratio": 0.82,
+        },
+        "long_run": {"longest_km": 18.3, "next_milestone_km": 21.0},
+    }
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16))
+
+    assert progression
+    assert all(isinstance(item["target_km"], int) for item in progression)
+    assert progression[0]["target_km"] == 20
+
+
+def test_deterministic_long_run_progression_reaches_thirty_for_stable_sub4_with_runway():
+    intel = {
+        "goal": {"days_remaining": 162, "distance_km": 42.195},
+        "weekly": {
+            "weekly_goal_km": 42.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.0,
+            "race_distance_km": 42.195,
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 38.0,
+            "recent_avg_km": 36.0,
+            "training_consistency_ratio": 0.82,
+        },
+        "long_run": {"longest_km": 18.3, "next_milestone_km": 21.0},
+    }
+    progression = _deterministic_long_run_progression(intel, date(2026, 3, 16))
+
+    assert max(item["target_km"] for item in progression) >= 30
 
 
