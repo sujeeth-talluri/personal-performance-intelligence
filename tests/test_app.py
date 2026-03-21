@@ -9,6 +9,7 @@ from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
     _build_current_week_coaching_message,
+    _deterministic_future_week_preview,
     _deterministic_long_run_progression,
     _derive_current_week_display_metrics,
     _deterministic_current_week_daily_plan,
@@ -506,6 +507,87 @@ def test_deterministic_long_run_progression_stops_before_race_day():
 
     assert progression
     assert progression[-1]["week_date"] < "2026-08-30"
+
+
+def test_deterministic_future_week_preview_exposes_whole_km_sessions():
+    intel = {
+        "goal": {"days_remaining": 162, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "weekly": {
+            "weekly_goal_km": 38.0,
+            "phase": "base",
+            "rebuild_mode": False,
+            "weeks_to_race": 23.0,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 38.0,
+            "recent_avg_km": 36.0,
+            "training_consistency_ratio": 0.82,
+        },
+        "long_run": {
+            "longest_km": 18.3,
+            "longest_date": "2026-03-15",
+            "latest_km": 18.3,
+            "latest_date": "2026-03-15",
+            "next_milestone_km": 21.0,
+        },
+    }
+
+    preview = _deterministic_future_week_preview(
+        intel,
+        date(2026, 3, 16),
+        current_week_weekly_target_km=38,
+        current_week_long_run_km=14,
+        limit=3,
+    )
+
+    assert len(preview) == 3
+    assert all(isinstance(item["weekly_target_km"], int) for item in preview)
+    for item in preview:
+        if item["quality_session"]:
+            assert isinstance(item["quality_session"]["km"], int)
+        if item["medium_long_session"]:
+            assert isinstance(item["medium_long_session"]["km"], int)
+        if item["long_run_session"]:
+            assert isinstance(item["long_run_session"]["km"], int)
+
+
+def test_deterministic_future_week_preview_shows_medium_long_and_long_run_structure():
+    intel = {
+        "goal": {"days_remaining": 140, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "weekly": {
+            "weekly_goal_km": 44.0,
+            "phase": "build",
+            "rebuild_mode": False,
+            "weeks_to_race": 20.0,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 44.0,
+            "recent_avg_km": 42.0,
+            "training_consistency_ratio": 0.84,
+        },
+        "long_run": {
+            "longest_km": 21.0,
+            "longest_date": "2026-03-15",
+            "latest_km": 21.0,
+            "latest_date": "2026-03-15",
+            "next_milestone_km": 24.0,
+        },
+    }
+
+    preview = _deterministic_future_week_preview(
+        intel,
+        date(2026, 3, 16),
+        current_week_weekly_target_km=44,
+        current_week_long_run_km=21,
+        limit=3,
+    )
+
+    assert preview
+    assert any(item["medium_long_session"] for item in preview)
+    assert all(item["long_run_session"] for item in preview)
+    assert any(item["quality_session"] for item in preview)
 
 
 

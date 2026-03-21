@@ -372,6 +372,69 @@
       line-height: 1.35;
       font-weight: 500;
     }
+    .week-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .week-preview-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 10px 12px;
+      min-height: 138px;
+    }
+    .week-preview-label {
+      font-size: .63rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .week-preview-target {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-top: 3px;
+    }
+    .week-preview-phase {
+      font-size: .68rem;
+      color: var(--muted);
+      margin-top: 2px;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .week-preview-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .week-preview-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: .72rem;
+      line-height: 1.25;
+    }
+    .week-preview-row .label {
+      color: var(--muted);
+      flex: 1;
+      min-width: 0;
+    }
+    .week-preview-row .value {
+      color: var(--text);
+      font-weight: 600;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .week-preview-row .value.empty {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    @media (max-width: 900px) {
+      .week-preview-grid { grid-template-columns: 1fr; }
+    }
 
     /* ─── Feasibility strip ──────────────────────────────────────── */
     .feasibility-strip {
@@ -660,6 +723,48 @@
           <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
             Recent training long run: {{ footer_long_run_km }} km{% if longest_date_display %} on {{ longest_date_display }}{% endif %}
           </div>
+          {% if future_week_preview %}
+            <div style="font-size:.76rem;font-weight:700;margin-top:14px;margin-bottom:8px">Next {{ future_week_preview|length }} Weeks</div>
+            <div class="week-preview-grid">
+              {% for fw in future_week_preview %}
+                <div class="week-preview-card">
+                  <div class="week-preview-label">{{ fw.week_label }}</div>
+                  <div class="week-preview-target">{{ fw.weekly_target_km }} km week</div>
+                  <div class="week-preview-phase">
+                    {{ fw.phase_label }}
+                    {% if fw.week_type == 'cutback' %} · Recovery week{% endif %}
+                    {% if fw.week_type == 'taper' %} · Taper{% endif %}
+                  </div>
+                  <div class="week-preview-list">
+                    <div class="week-preview-row">
+                      <span class="label">Quality</span>
+                      {% if fw.quality_session %}
+                        <span class="value">{{ fw.quality_session.name }} · {{ fw.quality_session.km }} km</span>
+                      {% else %}
+                        <span class="value empty">No quality</span>
+                      {% endif %}
+                    </div>
+                    <div class="week-preview-row">
+                      <span class="label">Medium-long</span>
+                      {% if fw.medium_long_session %}
+                        <span class="value">{{ fw.medium_long_session.km }} km</span>
+                      {% else %}
+                        <span class="value empty">Not scheduled</span>
+                      {% endif %}
+                    </div>
+                    <div class="week-preview-row">
+                      <span class="label">Long run</span>
+                      {% if fw.long_run_session %}
+                        <span class="value">{{ fw.long_run_session.km }} km</span>
+                      {% else %}
+                        <span class="value empty">Not scheduled</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
         {% else %}
           <div class="ladder">
             {% set lk = long_run.longest_km %}

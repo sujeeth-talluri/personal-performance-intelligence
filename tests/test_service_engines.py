@@ -149,6 +149,82 @@ def test_plan_template_preserves_long_run_base_for_stable_sub4_runner():
     assert run_total == 48.2
 
 
+def test_base_plan_can_schedule_medium_long_run_for_stable_runner():
+    weekly_goal = {
+        "weekly_goal_km": 48.0,
+        "phase": "base",
+        "rebuild_mode": False,
+        "weeks_to_race": 20.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "training_consistency_ratio": 0.8,
+        "progression_week_index": 1,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 21.0, "next_milestone_km": 24.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[3]["session"] == "Medium Long Run"
+    assert plan[1]["session"] in {"Aerobic Run", "Steady Run"}
+
+
+def test_build_plan_rotates_quality_session_and_keeps_medium_long_run():
+    weekly_goal = {
+        "weekly_goal_km": 56.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 12.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 48.0,
+        "training_consistency_ratio": 0.8,
+        "progression_week_index": 2,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 24.0, "next_milestone_km": 28.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[1]["session"] == "Tempo Run"
+    assert plan[3]["session"] == "Medium Long Run"
+
+
+def test_build_plan_can_schedule_marathon_pace_quality_when_long_run_is_not_mp_week():
+    weekly_goal = {
+        "weekly_goal_km": 56.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 11.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 48.0,
+        "training_consistency_ratio": 0.8,
+        "progression_week_index": 1,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 23.0, "next_milestone_km": 26.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[1]["session"] == "Marathon Pace Run"
+    assert plan[3]["session"] == "Medium Long Run"
+
+
+def test_cutback_week_removes_medium_long_and_quality_session():
+    weekly_goal = {
+        "weekly_goal_km": 48.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 11.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 48.0,
+        "training_consistency_ratio": 0.8,
+        "progression_week_index": 3,
+        "progression_week_type": "cutback",
+    }
+    long_run = {"longest_km": 24.0, "next_milestone_km": 20.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+    assert plan[1]["session"] == "Aerobic Run"
+    assert plan[3]["session"] == "Easy Run"
+
+
 def test_training_consistency_score_uses_last_planned_runs():
     logs = [DummyLog("RUN", "completed"), DummyLog("RUN", "completed"), DummyLog("RUN", "missed"), DummyLog("STRENGTH", "completed")]
     assert training_consistency_score(logs) == 67

@@ -354,18 +354,20 @@ def build_weekly_plan_template(weekly_goal, long_run):
         else:
             baseline_weekly_target = 75.0
 
-    phase = weekly_goal.get("phase", "build")
+    phase = str(weekly_goal.get("phase", "build")).lower()
+    progression_week_type = str(weekly_goal.get("progression_week_type") or "").lower()
+    template_phase = "recovery" if progression_week_type in {"cutback", "recovery"} and phase not in {"taper", "rebuild"} else phase
     rebuild_mode = bool(weekly_goal.get("rebuild_mode"))
     longest_km = float(long_run.get("longest_km") or 0.0)
     next_milestone = float(long_run.get("next_milestone_km") or max(22.0, min(32.0, longest_km + 2.0)))
-    weekly_goal = {**weekly_goal, "current_longest_km": longest_km}
+    weekly_goal = {**weekly_goal, "current_longest_km": longest_km, "phase": template_phase}
 
     # Long run target from progression ladder — not capacity-capped.
     # The CTL-based weekly_target drives easy/tempo volume only; the long
     # run is determined purely by the progression ladder so it always
     # advances to the next milestone regardless of total weekly km.
     progression_long_target = _next_long_run_target(
-        "rebuild" if rebuild_mode else phase,
+        "rebuild" if rebuild_mode else template_phase,
         longest_km,
         next_milestone,
         baseline_weekly_target,
@@ -376,26 +378,7 @@ def build_weekly_plan_template(weekly_goal, long_run):
     long_target = _calibrated_long_run_target(weekly_goal, longest_km, progression_long_target, weekly_target)
     non_long_total = round(max(0.0, weekly_target - long_target), 1)
 
-    if phase == "base":
-        sessions = ["Easy Run", "Aerobic Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
-        weights = [0.30, 0.24, 0.28, 0.18]
-        min_km = [6.0, 5.0, 6.0, 4.0]
-    elif phase == "peak":
-        sessions = ["Easy Run", "Marathon Pace Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
-        weights = [0.27, 0.25, 0.28, 0.20]
-        min_km = [6.0, 6.0, 6.0, 4.0]
-    elif phase in {"recovery", "rebuild"}:
-        sessions = ["Easy Run", "Aerobic Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
-        weights = [0.28, 0.22, 0.28, 0.22]
-        min_km = [5.0, 5.0, 5.0, 4.0]
-    elif phase == "taper":
-        sessions = ["Easy Run", "Marathon Pace Run", "Strength", "Recovery Run", "Strength", "Recovery Run", "Long Run"]
-        weights = [0.28, 0.24, 0.24, 0.24]
-        min_km = [5.0, 5.0, 4.0, 4.0]
-    else:
-        sessions = ["Easy Run", "Tempo Run", "Strength", "Easy Run", "Strength", "Aerobic Run", "Long Run"]
-        weights = [0.28, 0.24, 0.26, 0.22]
-        min_km = [6.0, 5.0, 6.0, 5.0]
+    sessions, weights, min_km = _weekly_session_structure(weekly_goal, weekly_target, long_target)
 
     run_slots = [0, 1, 3, 5]
     remaining_total = non_long_total
@@ -734,6 +717,71 @@ def _load_week_position(week_index):
     return week_index % 4
 
 
+def _weekly_session_structure(weekly_goal, weekly_target, long_target):
+    phase = str(weekly_goal.get("phase") or "build").lower()
+    goal_band = _goal_band(weekly_goal)
+    week_type = str(weekly_goal.get("progression_week_type") or ("build" if phase not in {"rebuild", "recovery", "taper"} else phase)).lower()
+    week_index = int(weekly_goal.get("progression_week_index") or 0)
+    weeks_to_race = float(weekly_goal.get("weeks_to_race") or 0.0)
+    load_position = _load_week_position(week_index)
+    strong_goal_band = goal_band in {"advanced", "performance", "sub4"}
+    can_medium_long = (
+        week_type not in {"cutback", "rebuild", "recovery", "taper"}
+        and weekly_target >= 42.0
+        and long_target >= 20.0
+    )
+
+    if phase in {"recovery", "rebuild"} or week_type in {"cutback", "recovery", "rebuild"}:
+        sessions = ["Easy Run", "Aerobic Run", "Strength", "Easy Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.30, 0.22, 0.28, 0.20]
+        min_km = [5.0, 5.0, 5.0, 4.0]
+        return sessions, weights, min_km
+
+    if phase == "taper":
+        sessions = ["Easy Run", "Marathon Pace Run", "Strength", "Recovery Run", "Strength", "Recovery Run", "Long Run"]
+        weights = [0.28, 0.24, 0.24, 0.24]
+        min_km = [5.0, 5.0, 4.0, 4.0]
+        return sessions, weights, min_km
+
+    if phase == "base":
+        tuesday = "Steady Run" if strong_goal_band and weekly_target >= 42.0 and load_position == 1 and weeks_to_race <= 20.0 else "Aerobic Run"
+        thursday = "Medium Long Run" if can_medium_long else "Easy Run"
+        sessions = ["Easy Run", tuesday, "Strength", thursday, "Strength", "Recovery Run", "Long Run"]
+        weights = [0.24, 0.20, 0.36 if thursday == "Medium Long Run" else 0.32, 0.20 if thursday == "Medium Long Run" else 0.24]
+        min_km = [6.0, 5.0, 8.0 if thursday == "Medium Long Run" else 6.0, 4.0]
+        return sessions, weights, min_km
+
+    if phase == "build":
+        if strong_goal_band and weekly_target >= 50.0:
+            tuesday = "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
+        elif strong_goal_band and weekly_target >= 44.0:
+            tuesday = "Steady Run" if load_position == 0 else "Tempo Run"
+        else:
+            tuesday = "Steady Run" if weekly_target >= 40.0 else "Aerobic Run"
+        thursday = "Medium Long Run" if can_medium_long else "Easy Run"
+        saturday = "Recovery Run" if weekly_target >= 44.0 else "Aerobic Run"
+        sessions = ["Easy Run", tuesday, "Strength", thursday, "Strength", saturday, "Long Run"]
+        weights = [0.20, 0.22, 0.36 if thursday == "Medium Long Run" else 0.32, 0.22 if thursday == "Medium Long Run" else 0.26]
+        min_km = [6.0, 6.0 if tuesday in {"Tempo Run", "Marathon Pace Run"} else 5.0, 8.0 if thursday == "Medium Long Run" else 6.0, 5.0]
+        return sessions, weights, min_km
+
+    if phase == "peak":
+        if strong_goal_band and weekly_target >= 54.0:
+            tuesday = "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
+        else:
+            tuesday = "Steady Run"
+        thursday = "Medium Long Run" if weekly_target >= 48.0 else "Easy Run"
+        sessions = ["Easy Run", tuesday, "Strength", thursday, "Strength", "Recovery Run", "Long Run"]
+        weights = [0.18, 0.22, 0.40 if thursday == "Medium Long Run" else 0.36, 0.20]
+        min_km = [6.0, 6.0, 8.0 if thursday == "Medium Long Run" else 6.0, 4.0]
+        return sessions, weights, min_km
+
+    sessions = ["Easy Run", "Tempo Run", "Strength", "Easy Run", "Strength", "Aerobic Run", "Long Run"]
+    weights = [0.28, 0.24, 0.26, 0.22]
+    min_km = [6.0, 5.0, 6.0, 5.0]
+    return sessions, weights, min_km
+
+
 def long_run_variant_for_week(phase, week_type, week_index, long_run_km, weekly_goal, previous_week_type=None):
     phase = str(phase or "build").lower()
     week_type = str(week_type or "build").lower()
@@ -906,7 +954,13 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
     if not isinstance(week_start_value, date):
         week_start_value = date.today()
 
-    current_template = build_weekly_plan_template(base_weekly_goal, base_long_run)
+    current_week_type = _progression_week_type(0, base_weekly_goal.get("phase") or _phase_for_weeks_to_race(base_weekly_goal.get("weeks_to_race"), rebuild_mode), base_weekly_goal.get("weeks_to_race"), rebuild_mode)
+    current_week_goal = {
+        **base_weekly_goal,
+        "progression_week_index": 0,
+        "progression_week_type": current_week_type,
+    }
+    current_template = build_weekly_plan_template(current_week_goal, base_long_run)
     template_week_target = round(
         sum(float(day["target_km"] or 0.0) for day in current_template.values() if day["workout_type"] == "RUN"),
         1,
@@ -923,7 +977,7 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
             "week_start": week_start_value,
             "weeks_to_race": current_weeks_to_race,
             "phase": current_phase,
-            "week_type": _progression_week_type(0, current_phase, current_weeks_to_race, rebuild_mode),
+            "week_type": current_week_type,
             "weekly_target_km": current_week_target,
             "long_run_km": current_long_target,
             "long_run_variant": long_run_variant_for_week(
@@ -956,6 +1010,8 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
         candidate_weekly_goal = {
             **base_weekly_goal,
             "phase": planner_phase,
+            "progression_week_index": offset,
+            "progression_week_type": week_type,
             "weeks_to_race": weeks_left,
             "week_start": projected_week_start.isoformat(),
             "weekly_goal_km": _projected_weekly_target_seed(previous_target, goal_band, planner_phase, week_type, {**base_weekly_goal, "phase": planner_phase, "weeks_to_race": weeks_left}),

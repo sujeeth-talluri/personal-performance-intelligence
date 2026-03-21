@@ -174,6 +174,7 @@ def _session_type_from_template_session(session_name):
 def _pace_guidance_for_session(session_name):
     guidance = {
         "Long Run": "Easy conversational pace",
+        "Medium Long Run": "Controlled easy-to-steady aerobic effort",
         "Recovery Run": "Very easy recovery effort",
         "Easy Run": "Relaxed conversational pace",
         "Aerobic Run": "Comfortable aerobic effort",
@@ -235,6 +236,7 @@ def _infer_session_type_from_log(session_name, workout_type, fallback_type):
         "active recovery": "active_recovery",
         "interval session": "intervals",
         "marathon pace run": "marathon_pace",
+        "medium long run": "steady",
         "steady run": "steady",
         "aerobic run": "aerobic",
         "race day": "race",
@@ -373,7 +375,7 @@ def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
 
 
-def _deterministic_long_run_progression(intel, week_start, current_week_weekly_target_km, current_week_long_run_km):
+def _deterministic_progression_weeks(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, weeks=18):
     weekly = intel.get("weekly") or {}
     goal = intel.get("goal") or {}
     long_run = intel.get("long_run") or {}
@@ -418,7 +420,18 @@ def _deterministic_long_run_progression(intel, week_start, current_week_weekly_t
         "latest_date": long_run.get("latest_date"),
         "current_week_long_km": float(current_week_long_run_km or 0.0),
     }
-    progression = service_build_progression_weeks(weekly_goal, long_run_state, weeks=18)
+    progression = service_build_progression_weeks(weekly_goal, long_run_state, weeks=weeks)
+    return progression, weekly_goal, race_date_obj
+
+
+def _deterministic_long_run_progression(intel, week_start, current_week_weekly_target_km, current_week_long_run_km):
+    progression, weekly_goal, race_date_obj = _deterministic_progression_weeks(
+        intel,
+        week_start,
+        current_week_weekly_target_km,
+        current_week_long_run_km,
+        weeks=18,
+    )
     output = []
     for week in progression[1:]:
         week_date = week["week_start"] + timedelta(days=6)
@@ -458,6 +471,69 @@ def _deterministic_long_run_progression(intel, week_start, current_week_weekly_t
             }
         )
     return output
+
+
+def _deterministic_future_week_preview(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, limit=3):
+    progression, weekly_goal, race_date_obj = _deterministic_progression_weeks(
+        intel,
+        week_start,
+        current_week_weekly_target_km,
+        current_week_long_run_km,
+        weeks=max(6, limit + 2),
+    )
+    preview = []
+    for week in progression[1:]:
+        week_end = week["week_start"] + timedelta(days=6)
+        if race_date_obj and week["week_start"] >= race_date_obj:
+            break
+        if race_date_obj and week_end >= race_date_obj:
+            break
+        template = week.get("template") or {}
+        run_days = [day for day in template.values() if day.get("workout_type") == "RUN"]
+        weekly_target = sum(_display_planned_km(day.get("target_km") or 0.0) for day in run_days)
+        quality_day = next(
+            (
+                day for day in run_days
+                if day.get("session") in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}
+            ),
+            None,
+        )
+        medium_long_day = next((day for day in run_days if day.get("session") == "Medium Long Run"), None)
+        long_day = next((day for day in run_days if day.get("session") == "Long Run"), None)
+        week_label = f"{week['week_start'].strftime('%d %b')} - {week_end.strftime('%d %b')}"
+        preview.append(
+            {
+                "week_label": week_label,
+                "phase_label": (
+                    "Base build"
+                    if week["phase"] == "base"
+                    else "Build"
+                    if week["phase"] == "build"
+                    else "Peak"
+                    if week["phase"] == "peak"
+                    else "Taper"
+                    if week["phase"] == "taper"
+                    else week["phase"].title()
+                ),
+                "week_type": week["week_type"],
+                "weekly_target_km": weekly_target,
+                "quality_session": {
+                    "name": quality_day.get("session"),
+                    "km": _display_planned_km(quality_day.get("target_km") or 0.0),
+                } if quality_day else None,
+                "medium_long_session": {
+                    "name": medium_long_day.get("session"),
+                    "km": _display_planned_km(medium_long_day.get("target_km") or 0.0),
+                } if medium_long_day else None,
+                "long_run_session": {
+                    "name": long_day.get("session"),
+                    "km": _display_planned_km(long_day.get("target_km") or 0.0),
+                } if long_day else None,
+            }
+        )
+        if len(preview) >= limit:
+            break
+    return preview
 
 
 def _deterministic_phase_label(intel):
@@ -2119,6 +2195,13 @@ def dashboard():
         canonical_focus_point=canonical_focus_point,
         canonical_long_run_progression=canonical_long_run_progression,
         upcoming_long_runs=upcoming_long_runs,
+        future_week_preview=_deterministic_future_week_preview(
+            intel,
+            week_start,
+            display_weekly_target_km,
+            display_long_run_target_km,
+            limit=5,
+        ),
         week_remaining_km=display_weekly_remaining_km,
         recent_long_run_km=recent_long_run_km,
         recent_long_run_date_display=recent_long_run_date_display,
