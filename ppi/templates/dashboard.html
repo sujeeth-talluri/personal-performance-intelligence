@@ -234,15 +234,16 @@
     /* ─── Tooltips ───────────────────────────────────────────────── */
     .tooltip-wrap {
       position: relative; display: inline-flex; align-items: center;
-      gap: 4px; cursor: help;
+      gap: 2px; cursor: help;
     }
     .tooltip-wrap .tooltip-icon {
       width: 14px; height: 14px; border-radius: 50%;
       background: rgba(0,0,0,.08); color: #888;
       font-size: 10px; display: inline-flex;
       align-items: center; justify-content: center; line-height: 1;
-      flex-shrink: 0;
+      flex-shrink: 0; margin-left: 1px;
     }
+    .hero .tooltip-wrap { gap: 1px; }
     .tooltip-wrap .tooltip-text {
       visibility: hidden; opacity: 0;
       background: #1e2736; color: #e0e0e0;
@@ -498,23 +499,23 @@
                   {% if p.session_type == 'strength' %}
                     Gym
                   {% elif p.status in ['completed', 'done'] %}
-                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ p.display_planned_km }}km planned
                   {% elif p.status == 'overdone' %}
-                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ p.display_planned_km }}km planned
                   {% elif p.status == 'partial' %}
-                    {{ '%.1f'|format(p.actual_km) }}km vs {{ '%.1f'|format(p.planned_km) }}km planned
+                    {{ '%.1f'|format(p.actual_km) }}km vs {{ p.display_planned_km }}km planned
                   {% elif p.status == 'missed' %}
-                    missed ({{ '%.1f'|format(p.planned_km) }}km planned)
+                    missed ({{ p.display_planned_km }}km planned)
                   {% elif p.status == 'skipped' %}
-                    skipped ({{ '%.1f'|format(p.planned_km) }}km planned)
+                    skipped ({{ p.display_planned_km }}km planned)
                   {% elif p.status == 'different_activity' %}
                     Other activity done
                   {% elif p.session_type == 'active_recovery' %}
-                    {{ '%.1f'|format(p.planned_km) }}km - easy run or walk
+                    {{ p.display_planned_km }}km - easy run or walk
                   {% elif p.status == 'bonus' %}
                     {{ '%.1f'|format(p.actual_km) }}km bonus
                   {% elif p.planned_km > 0 %}
-                    {{ '%.1f'|format(p.planned_km) }}km planned
+                    {{ p.display_planned_km }}km planned
                   {% endif %}
                 </div>
                 {% if p.workout_type == 'RUN' and p.pace_guidance %}
@@ -539,12 +540,12 @@
         {% if week_closed %}
           <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
         {% endif %}
-        <div class="metric-row"><span>Weekly target</span><strong>{{ canonical_weekly_target_km|round|int }} km</strong></div>
+        <div class="metric-row"><span>Weekly target</span><strong>{{ display_weekly_target_km }} km</strong></div>
         <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
-        <div class="metric-row"><span>Remaining</span><strong>{{ [canonical_weekly_target_km - week_actual_km, 0]|max|round(1) }} km</strong></div>
+        <div class="metric-row"><span>Remaining</span><strong>{{ display_weekly_remaining_km }} km</strong></div>
         <div class="metric-row"><span>Longest run this week</span><strong>{{ weekly_longest_run_km }} km</strong></div>
         <div class="metric-row"><span>Most recent training long run</span><strong>{{ recent_long_run_km }} km{% if recent_long_run_date_display %} | {{ recent_long_run_date_display }}{% endif %}</strong></div>
-        <div class="metric-row"><span>Long-run goal</span><strong>{{ 'Met' if weekly_long_run_goal_met else ('Target ' ~ weekly_planned_long_run_km ~ ' km') }}</strong></div>
+        <div class="metric-row"><span>Long-run goal</span><strong>{{ 'Met' if weekly_long_run_goal_met else ('Target ' ~ display_long_run_target_km ~ ' km') }}</strong></div>
         <div class="metric-row">
           <span>Quality session</span>
           <strong>

@@ -163,7 +163,7 @@ def derive_plan_state(planned_workout, actual_bucket, today_date):
     if planned_date > today_date.isoformat():
         state = PLANNED
     elif workout_type == RUN:
-        if run_km > max(1.5, planned_km * 1.2):
+        if run_km > max(planned_km * 1.25, planned_km + 2.0):
             state = OVERDONE
         elif run_km >= max(0.001, planned_km * 0.8):
             state = DONE

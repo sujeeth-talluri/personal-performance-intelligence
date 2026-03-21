@@ -226,6 +226,27 @@ def test_training_state_does_not_reassign_moved_long_run():
     assert sunday["actual_run_km"] == 0.0
 
 
+def test_training_state_treats_modest_run_overage_as_done():
+    snapshot = build_weekly_plan_snapshot(
+        date(2026, 3, 16),
+        {
+            "monday": {"type": "easy", "km": 6.6},
+            "tuesday": {"type": "rest", "km": 0},
+            "wednesday": {"type": "rest", "km": 0},
+            "thursday": {"type": "rest", "km": 0},
+            "friday": {"type": "rest", "km": 0},
+            "saturday": {"type": "rest", "km": 0},
+            "sunday": {"type": "rest", "km": 0},
+        },
+    )
+    activities = [DummyActivity(datetime(2026, 3, 16, 7), "run", 8.0)]
+    actual_by_date = aggregate_actual_activities(activities, lambda dt: dt.date())
+    plan_items = build_week_plan_state(snapshot, actual_by_date, date(2026, 3, 17))
+    monday = next(item for item in plan_items if item["date"] == "2026-03-16")
+    assert monday["state"] == DONE
+    assert monday["actual_run_km"] == 8.0
+
+
 def test_week_metrics_capture_long_run_goal_even_if_done_on_wrong_day():
     snapshot = build_weekly_plan_snapshot(
         date(2026, 3, 16),

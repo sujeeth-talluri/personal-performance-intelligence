@@ -366,6 +366,10 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
     }
 
 
+def _display_planned_km(km):
+    return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
+
+
 def _deterministic_phase_label(intel):
     weekly = intel.get("weekly") or {}
     base_phase = str(weekly.get("display_phase") or weekly.get("base_phase") or weekly.get("phase") or "training").title()
@@ -1750,6 +1754,7 @@ def dashboard():
             "session_type": item["session_type"],
             "session": item["session_name"],
             "planned_km": item["planned_distance_km"],
+            "display_planned_km": _display_planned_km(item["planned_distance_km"]),
             "actual_km": item["actual_run_km"],
             "done": item["state"] == DONE,
             "status": _state_to_status[item["state"]],
@@ -1817,6 +1822,9 @@ def dashboard():
     except Exception:
         current_app.logger.exception("adaptive weekly plan fallback")
 
+    for item in weekly_plan:
+        item["display_planned_km"] = _display_planned_km(item.get("planned_km") or 0.0)
+
     current_week_model = _derive_current_week_display_metrics(weekly_plan, canonical_weekly_target_km)
     weekly_plan_goal_km = current_week_model["weekly_target_km"]
     weekly_plan_completed_km = current_week_model["actual_km"]
@@ -1830,6 +1838,20 @@ def dashboard():
     weekly_strength_goal_met = current_week_model["strength_goal_met"]
     week_actual_km = current_week_model["actual_km"]
     progress_pct = current_week_model["progress_pct"]
+    display_weekly_target_km = sum(
+        int(item.get("display_planned_km") or 0)
+        for item in weekly_plan
+        if item.get("workout_type") == "RUN"
+    )
+    display_weekly_remaining_km = max(0, round(display_weekly_target_km - week_actual_km, 1))
+    display_long_run_target_km = max(
+        [
+            int(item.get("display_planned_km") or 0)
+            for item in weekly_plan
+            if item.get("workout_type") == "RUN" and item.get("session") == "Long Run"
+        ]
+        or [0]
+    )
     _long_run_summary = intel.get("long_run") or {}
     recent_long_run_km = round(float(_long_run_summary.get("latest_km") or _long_run_summary.get("longest_km") or 0.0), 1)
     recent_long_run_date = _long_run_summary.get("latest_date") or _long_run_summary.get("longest_date")
@@ -1910,8 +1932,11 @@ def dashboard():
     else:
         tomorrow_display = "Rest Day"
 
-    def _fmt_km(km):
-        return f"{km} km" if km else "?"
+    def _fmt_actual_km(km):
+        return f"{km:.1f} km" if km else "?"
+
+    def _fmt_target_km(km):
+        return f"{_display_planned_km(km)} km" if km else "?"
 
     _status_label = {
         "completed": "Completed",
@@ -1930,11 +1955,11 @@ def dashboard():
         "workout_type":    today_item["workout_type"] if today_item else (today_plan_state["workout_type"] if today_plan_state else "REST"),
         "status":          _status_label.get(today_item["status"], "Planned") if today_item else "Rest",
         "completed":       today_item["done"] if today_item else False,
-        "distance_actual": _fmt_km(today_item["actual_km"]) if today_item else "?",
+        "distance_actual": _fmt_actual_km(today_item["actual_km"]) if today_item else "?",
         "distance_target": (
             "Gym | strength session"
             if today_item and today_item.get("session_type") == "strength"
-            else _fmt_km(today_item["planned_km"]) if today_item else "?"
+            else _fmt_target_km(today_item["planned_km"]) if today_item else "?"
         ),
         "tomorrow":        tomorrow_display,
         "session":         today_item["session"] if today_item else "Rest Day",
@@ -1944,10 +1969,10 @@ def dashboard():
         "notes":           today_item["notes"] if today_item else "",
     }
     current_week_coaching_message = _build_current_week_coaching_message(
-        canonical_weekly_target_km,
+        float(display_weekly_target_km),
         week_actual_km,
         weekly_longest_run_km,
-        weekly_planned_long_run_km,
+        float(display_long_run_target_km),
         weekly_long_run_goal_met,
         weekly_quality_goal_met,
         today_item,
@@ -2063,6 +2088,9 @@ def dashboard():
         dq=dq_report,
         canonical_phase_label=canonical_phase_label,
         canonical_weekly_target_km=canonical_weekly_target_km,
+        display_weekly_target_km=display_weekly_target_km,
+        display_weekly_remaining_km=display_weekly_remaining_km,
+        display_long_run_target_km=display_long_run_target_km,
         canonical_long_run_km=canonical_long_run_km,
         canonical_coaching_message=canonical_coaching_message,
         current_week_coaching_message=current_week_coaching_message,
@@ -2071,7 +2099,7 @@ def dashboard():
         canonical_focus_point=canonical_focus_point,
         canonical_long_run_progression=canonical_long_run_progression,
         upcoming_long_runs=upcoming_long_runs,
-        week_remaining_km=round(max(0.0, canonical_weekly_target_km - week_actual_km), 1),
+        week_remaining_km=display_weekly_remaining_km,
         recent_long_run_km=recent_long_run_km,
         recent_long_run_date_display=recent_long_run_date_display,
         canonical_feasibility=canonical_feasibility,
