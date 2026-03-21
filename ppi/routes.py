@@ -382,7 +382,12 @@ def _deterministic_phase_label(intel):
     return base_phase
 
 
-def _deterministic_feasibility_fields(intel, current_week_model):
+def _deterministic_feasibility_fields(
+    intel,
+    current_week_model,
+    display_weekly_target_km=None,
+    display_long_run_target_km=None,
+):
     score = int(round(float(intel.get("marathon_readiness_pct") or 0.0)))
     score = max(0, min(100, score))
     status = str(intel.get("marathon_readiness_status") or "").strip().lower()
@@ -390,8 +395,16 @@ def _deterministic_feasibility_fields(intel, current_week_model):
     weekly = intel.get("weekly") or {}
     goal = intel.get("goal") or {}
     actual_km = float(current_week_model.get("actual_km") or 0.0)
-    weekly_target = float(current_week_model.get("weekly_target_km") or 0.0)
-    long_run_target = float(current_week_model.get("planned_long_run_km") or 0.0)
+    weekly_target = float(
+        display_weekly_target_km
+        if display_weekly_target_km is not None
+        else (current_week_model.get("weekly_target_km") or 0.0)
+    )
+    long_run_target = float(
+        display_long_run_target_km
+        if display_long_run_target_km is not None
+        else (current_week_model.get("planned_long_run_km") or 0.0)
+    )
     days_remaining = int(goal.get("days_remaining") or 0)
 
     if score >= 70:
@@ -1981,7 +1994,12 @@ def dashboard():
         recent_long_run_date_display,
     )
     canonical_phase_label = _deterministic_phase_label(intel)
-    canonical_feasibility = _deterministic_feasibility_fields(intel, current_week_model)
+    canonical_feasibility = _deterministic_feasibility_fields(
+        intel,
+        current_week_model,
+        display_weekly_target_km=display_weekly_target_km,
+        display_long_run_target_km=display_long_run_target_km,
+    )
     canonical_feasibility_label_emoji = canonical_feasibility.get("label", "")
 
     consistency_score = _training_consistency_score(user.id, today_local)

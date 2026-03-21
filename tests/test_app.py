@@ -248,11 +248,18 @@ def test_deterministic_feasibility_fields_use_current_week_metrics():
         "weekly_target_km": 44.0,
         "planned_long_run_km": 15.4,
     }
-    fields = _deterministic_feasibility_fields(intel, current_week_model)
+    fields = _deterministic_feasibility_fields(
+        intel,
+        current_week_model,
+        display_weekly_target_km=38,
+        display_long_run_target_km=14,
+    )
     assert fields["score"] == 75
     assert fields["color"] == "green"
     assert fields["label"] == "On Track"
     assert "20.4 km" in fields["text"]
+    assert "38 km" in fields["text"]
+    assert "14 km" in fields["text"]
 
 
 def test_current_week_coaching_message_mentions_recent_long_run_when_outside_current_week():

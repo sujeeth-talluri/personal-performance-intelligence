@@ -243,7 +243,8 @@
       align-items: center; justify-content: center; line-height: 1;
       flex-shrink: 0; margin-left: 1px;
     }
-    .hero .tooltip-wrap { gap: 1px; }
+    .hero .tooltip-wrap { gap: 0; white-space: nowrap; vertical-align: middle; }
+    .hero .tooltip-wrap .tooltip-icon { margin-left: 0; transform: translateX(-1px); }
     .tooltip-wrap .tooltip-text {
       visibility: hidden; opacity: 0;
       background: #1e2736; color: #e0e0e0;
