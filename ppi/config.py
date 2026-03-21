@@ -54,6 +54,8 @@ class Config:
 
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
     SESSION_COOKIE_HTTPONLY = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+    ALLOW_ADMIN_RESET = os.getenv("ALLOW_ADMIN_RESET", "0").lower() in {"1", "true", "yes", "on"}
+    ADMIN_RESET_EMAIL = os.getenv("ADMIN_RESET_EMAIL")
 
     SMTP_HOST = os.getenv("SMTP_HOST")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
