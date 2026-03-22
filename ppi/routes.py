@@ -2200,7 +2200,7 @@ def dashboard():
             week_start,
             display_weekly_target_km,
             display_long_run_target_km,
-            limit=5,
+            limit=3,
         ),
         week_remaining_km=display_weekly_remaining_km,
         recent_long_run_km=recent_long_run_km,
