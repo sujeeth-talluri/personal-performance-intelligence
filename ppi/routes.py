@@ -500,6 +500,14 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
         )
         medium_long_day = next((day for day in run_days if day.get("session") == "Medium Long Run"), None)
         long_day = next((day for day in run_days if day.get("session") == "Long Run"), None)
+        snapped_long_run_km = service_prescribed_long_run_km(
+            _display_planned_km(long_day.get("target_km") or 0.0) if long_day else 0,
+            phase=week["phase"],
+            race_distance_km=weekly_goal["race_distance_km"],
+        )
+        weekly_target = sum(_display_planned_km(day.get("target_km") or 0.0) for day in run_days)
+        if long_day:
+            weekly_target = weekly_target - _display_planned_km(long_day.get("target_km") or 0.0) + snapped_long_run_km
         week_label = f"{week['week_start'].strftime('%d %b')} - {week_end.strftime('%d %b')}"
         preview.append(
             {
@@ -527,7 +535,7 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
                 } if medium_long_day else None,
                 "long_run_session": {
                     "name": long_day.get("session"),
-                    "km": _display_planned_km(long_day.get("target_km") or 0.0),
+                    "km": snapped_long_run_km,
                 } if long_day else None,
             }
         )

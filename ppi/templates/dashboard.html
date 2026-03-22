@@ -621,7 +621,7 @@
         <h2>Weekly Plan</h2>
         <div>
           {% for p in weekly_plan %}
-            <div class="plan-row {{ 'done-row' if p.status in ['completed','done','overdone'] else '' }} {{ 'skip-row' if p.status in ['missed','skipped','different_activity'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
+            <div class="plan-row {{ 'done-row' if p.status in ['completed','done','overdone'] else '' }} {{ 'skip-row' if p.status in ['skipped','different_activity'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
               <div class="plan-main">
                 <div class="plan-meta">{{ p.day }} | {{ p.session }}</div>
                 <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
