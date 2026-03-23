@@ -187,10 +187,25 @@ def _pace_guidance_for_session(session_name):
     return guidance.get(session_name, "")
 
 
-def _deterministic_current_week_daily_plan(intel, week_start):
+def _schedule_preferences_from_profile(profile):
+    if not profile:
+        return {
+            "training_days_per_week": 5,
+            "long_run_day": "sunday",
+            "strength_days_per_week": 2,
+        }
+    return {
+        "training_days_per_week": int(getattr(profile, "training_days_per_week", 5) or 5),
+        "long_run_day": str(getattr(profile, "long_run_day", "sunday") or "sunday").lower(),
+        "strength_days_per_week": int(getattr(profile, "strength_days_per_week", 2) or 2),
+    }
+
+
+def _deterministic_current_week_daily_plan(intel, week_start, schedule_prefs=None):
     weekly = intel.get("weekly") or {}
     goal = intel.get("goal") or {}
     long_run = intel.get("long_run") or {}
+    schedule_prefs = dict(schedule_prefs or {})
     weekly_goal = {
         "weekly_goal_km": float(weekly.get("weekly_goal_km") or 0.0),
         "phase": weekly.get("phase") or weekly.get("display_phase") or "base",
@@ -206,6 +221,9 @@ def _deterministic_current_week_daily_plan(intel, week_start):
         "high_fatigue": bool(weekly.get("high_fatigue")),
         "moderate_fatigue": bool(weekly.get("moderate_fatigue")),
         "atl_spike": bool(weekly.get("atl_spike")),
+        "training_days_per_week": int(schedule_prefs.get("training_days_per_week") or 5),
+        "long_run_day": str(schedule_prefs.get("long_run_day") or "sunday").lower(),
+        "strength_days_per_week": int(schedule_prefs.get("strength_days_per_week") or 2),
     }
     template = _weekly_plan_template(weekly_goal, long_run)
     day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -375,10 +393,11 @@ def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
 
 
-def _deterministic_progression_weeks(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, weeks=18):
+def _deterministic_progression_weeks(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, weeks=18, schedule_prefs=None):
     weekly = intel.get("weekly") or {}
     goal = intel.get("goal") or {}
     long_run = intel.get("long_run") or {}
+    schedule_prefs = dict(schedule_prefs or {})
     race_date = goal.get("race_date") or weekly.get("race_date")
     try:
         race_date_obj = datetime.fromisoformat(str(race_date)[:10]).date() if race_date else None
@@ -401,6 +420,9 @@ def _deterministic_progression_weeks(intel, week_start, current_week_weekly_targ
         "moderate_fatigue": bool(weekly.get("moderate_fatigue")),
         "atl_spike": bool(weekly.get("atl_spike")),
         "week_start": week_start.isoformat(),
+        "training_days_per_week": int(schedule_prefs.get("training_days_per_week") or 5),
+        "long_run_day": str(schedule_prefs.get("long_run_day") or "sunday").lower(),
+        "strength_days_per_week": int(schedule_prefs.get("strength_days_per_week") or 2),
     }
     effective_longest = service_effective_long_run_base_km(
         {
@@ -424,13 +446,14 @@ def _deterministic_progression_weeks(intel, week_start, current_week_weekly_targ
     return progression, weekly_goal, race_date_obj
 
 
-def _deterministic_long_run_progression(intel, week_start, current_week_weekly_target_km, current_week_long_run_km):
+def _deterministic_long_run_progression(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, schedule_prefs=None):
     progression, weekly_goal, race_date_obj = _deterministic_progression_weeks(
         intel,
         week_start,
         current_week_weekly_target_km,
         current_week_long_run_km,
         weeks=18,
+        schedule_prefs=schedule_prefs,
     )
     output = []
     for week in progression[1:]:
@@ -473,13 +496,14 @@ def _deterministic_long_run_progression(intel, week_start, current_week_weekly_t
     return output
 
 
-def _deterministic_future_week_preview(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, limit=3):
+def _deterministic_future_week_preview(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, limit=3, schedule_prefs=None):
     progression, weekly_goal, race_date_obj = _deterministic_progression_weeks(
         intel,
         week_start,
         current_week_weekly_target_km,
         current_week_long_run_km,
         weeks=max(6, limit + 2),
+        schedule_prefs=schedule_prefs,
     )
     preview = []
     for week in progression[1:]:
@@ -1611,9 +1635,14 @@ def dashboard():
     canonical_focus_point          = _coaching_plan.get("this_week", {}).get("focus_point", "")
     canonical_long_run_progression = []
     canonical_feasibility          = {}
-    _daily_plan                    = _deterministic_current_week_daily_plan(intel, _week_bounds(_today_local_date(user_tz))[0])
+    schedule_prefs                 = _schedule_preferences_from_profile(_profile)
+    _daily_plan                    = _deterministic_current_week_daily_plan(
+        intel,
+        _week_bounds(_today_local_date(user_tz))[0],
+        schedule_prefs=schedule_prefs,
+    )
     _profile_data                  = _coaching_plan.get("runner_profile", {})
-    canonical_long_run_day         = _profile_data.get("long_run_day", "sunday").title()
+    canonical_long_run_day         = schedule_prefs.get("long_run_day", "sunday").title()
     today_local = _today_local_date(user_tz)
     week_start, week_end = _week_bounds(today_local)
 
@@ -1989,6 +2018,7 @@ def dashboard():
         week_start,
         display_weekly_target_km,
         display_long_run_target_km,
+        schedule_prefs=schedule_prefs,
     )
     _long_run_summary = intel.get("long_run") or {}
     recent_long_run_km = round(float(_long_run_summary.get("latest_km") or _long_run_summary.get("longest_km") or 0.0), 1)
@@ -2251,6 +2281,7 @@ def dashboard():
             display_weekly_target_km,
             display_long_run_target_km,
             limit=3,
+            schedule_prefs=schedule_prefs,
         ),
         week_remaining_km=display_weekly_remaining_km,
         recent_long_run_km=recent_long_run_km,

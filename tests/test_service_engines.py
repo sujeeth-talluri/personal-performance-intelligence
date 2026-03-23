@@ -206,6 +206,80 @@ def test_build_plan_can_schedule_marathon_pace_quality_when_long_run_is_not_mp_w
     assert plan[3]["session"] == "Medium Long Run"
 
 
+def test_build_plan_respects_saturday_long_run_preference_for_four_day_runner():
+    weekly_goal = {
+        "weekly_goal_km": 48.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 14.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 42.0,
+        "training_consistency_ratio": 0.78,
+        "training_days_per_week": 4,
+        "long_run_day": "saturday",
+        "strength_days_per_week": 2,
+        "progression_week_index": 1,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 21.0, "next_milestone_km": 24.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    assert plan[5]["session"] == "Long Run"
+    assert plan[6]["workout_type"] != "RUN"
+    assert plan[1]["session"] in {"Tempo Run", "Marathon Pace Run", "Steady Run"}
+    assert sum(1 for day in plan.values() if day["workout_type"] == "RUN") == 4
+
+
+def test_build_plan_respects_sunday_long_run_preference_for_four_day_runner_without_saturday_run():
+    weekly_goal = {
+        "weekly_goal_km": 46.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 15.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (4 * 3600 + 5 * 60) / 42.195,
+        "prior_avg_km": 38.0,
+        "training_consistency_ratio": 0.72,
+        "training_days_per_week": 4,
+        "long_run_day": "sunday",
+        "strength_days_per_week": 2,
+        "progression_week_index": 0,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 20.0, "next_milestone_km": 21.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    assert plan[6]["session"] == "Long Run"
+    assert plan[5]["workout_type"] != "RUN"
+    assert sum(1 for day in plan.values() if day["workout_type"] == "RUN") == 4
+
+
+def test_build_plan_degrades_cleanly_for_three_day_runner():
+    weekly_goal = {
+        "weekly_goal_km": 40.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 13.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (4 * 3600 + 10 * 60) / 42.195,
+        "prior_avg_km": 34.0,
+        "training_consistency_ratio": 0.64,
+        "training_days_per_week": 3,
+        "long_run_day": "sunday",
+        "strength_days_per_week": 1,
+        "progression_week_index": 0,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 18.0, "next_milestone_km": 20.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    run_days = [idx for idx, day in plan.items() if day["workout_type"] == "RUN"]
+    assert run_days == [1, 3, 6]
+    assert plan[3]["session"] == "Easy Run"
+    assert plan[6]["session"] == "Long Run"
+
+
 def test_cutback_week_removes_medium_long_and_quality_session():
     weekly_goal = {
         "weekly_goal_km": 48.0,
