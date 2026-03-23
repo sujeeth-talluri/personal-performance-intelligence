@@ -839,9 +839,9 @@
             <div class="activity-main">
               {% if act.show_distance %}
                 {{ act.distance_km }}km
-                {% if act.is_run and act.pace %} · {{ act.pace }}/km{% endif %}
-                · {{ act.type|title }}
-                {% if act.elevation %} · +{{ act.elevation }}m{% endif %}
+                {% if act.is_run and act.pace %} at {{ act.pace }}/km{% endif %}
+                {{ act.type|title }}
+                {% if act.elevation %} (+{{ act.elevation }}m){% endif %}
               {% else %}
                 {{ act.type|title }}
               {% endif %}

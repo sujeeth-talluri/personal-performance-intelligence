@@ -544,6 +544,47 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
     return preview
 
 
+def _build_upcoming_long_runs(current_week_plan, future_progression, today_local, limit=4):
+    upcoming = []
+    current_long_run = next(
+        (
+            item for item in current_week_plan
+            if item.get("workout_type") == "RUN"
+            and item.get("session") == "Long Run"
+            and item.get("day_date") > today_local
+            and item.get("status") in {"planned", "today"}
+        ),
+        None,
+    )
+    if current_long_run:
+        day_date = current_long_run["day_date"]
+        upcoming.append(
+            {
+                "week_date": day_date.isoformat(),
+                "week_date_display": f"{day_date.strftime('%a')} {day_date.day} {day_date.strftime('%b')}",
+                "target_km": int(current_long_run.get("display_planned_km") or 0),
+                "is_recovery_week": False,
+                "is_peak_run": False,
+                "label": "This week",
+                "week_type": "current",
+                "variant_name": current_long_run.get("session"),
+                "variant_short_label": "Long run",
+                "variant_note": current_long_run.get("notes"),
+                "variant_pace_guidance": current_long_run.get("pace_guidance"),
+                "variant_quality_type": "easy",
+                "quality_block_km": 0,
+            }
+        )
+
+    for item in future_progression:
+        if item.get("week_date", "") <= today_local.isoformat():
+            continue
+        upcoming.append(item)
+        if len(upcoming) >= limit:
+            break
+    return upcoming[:limit]
+
+
 def _deterministic_phase_label(intel):
     weekly = intel.get("weekly") or {}
     base_phase = str(weekly.get("display_phase") or weekly.get("base_phase") or weekly.get("phase") or "training").title()
@@ -1989,11 +2030,12 @@ def dashboard():
         weekly_signal_color = "amber"
 
     # ?? Upcoming long runs ? with formatted display dates ????????????????????
-    _week_end_str = week_end.strftime("%Y-%m-%d")
-    upcoming_long_runs = [
-        w for w in canonical_long_run_progression
-        if w.get("week_date", "") > _week_end_str
-    ][:4]
+    upcoming_long_runs = _build_upcoming_long_runs(
+        weekly_plan,
+        canonical_long_run_progression,
+        today_local,
+        limit=4,
+    )
     for _w in upcoming_long_runs:
         try:
             _wd = datetime.strptime(_w["week_date"], "%Y-%m-%d")

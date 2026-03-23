@@ -9,6 +9,7 @@ from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
     _build_current_week_coaching_message,
+    _build_upcoming_long_runs,
     _deterministic_future_week_preview,
     _deterministic_long_run_progression,
     _derive_current_week_display_metrics,
@@ -588,6 +589,43 @@ def test_deterministic_future_week_preview_shows_medium_long_and_long_run_struct
     assert any(item["medium_long_session"] for item in preview)
     assert all(item["long_run_session"] for item in preview)
     assert any(item["quality_session"] for item in preview)
+
+
+def test_build_upcoming_long_runs_includes_current_week_long_run_if_still_ahead():
+    current_week_plan = [
+        {
+            "workout_type": "RUN",
+            "session": "Long Run",
+            "day_date": date(2026, 3, 29),
+            "status": "planned",
+            "display_planned_km": 18,
+            "notes": "",
+            "pace_guidance": "Easy conversational pace throughout.",
+        }
+    ]
+    future_progression = [
+        {
+            "week_date": "2026-04-05",
+            "week_date_display": "Sun 5 Apr",
+            "target_km": 20,
+            "is_recovery_week": False,
+            "is_peak_run": False,
+            "label": "Base building",
+            "week_type": "build",
+            "variant_name": "Easy Long Run",
+            "variant_short_label": "Easy long run",
+            "variant_note": "",
+            "variant_pace_guidance": "Easy conversational pace throughout.",
+            "variant_quality_type": "easy",
+            "quality_block_km": 0,
+        }
+    ]
+
+    upcoming = _build_upcoming_long_runs(current_week_plan, future_progression, date(2026, 3, 23), limit=4)
+
+    assert upcoming[0]["week_date"] == "2026-03-29"
+    assert upcoming[0]["target_km"] == 18
+    assert upcoming[1]["week_date"] == "2026-04-05"
 
 
 
