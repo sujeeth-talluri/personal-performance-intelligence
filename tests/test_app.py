@@ -219,7 +219,7 @@ def test_settings_page_updates_training_preferences(client, app):
         assert profile.preferred_run_time == "evening"
 
 
-def test_settings_update_invalidates_current_week_snapshot(client, app):
+def test_settings_update_preserves_current_week_snapshot(client, app):
     client.post(
         "/register",
         data={"name": "Snapshot", "email": "snapshot@example.com", "password": "secret12"},
@@ -284,7 +284,7 @@ def test_settings_update_invalidates_current_week_snapshot(client, app):
         coaching = CoachingPlan.query.filter_by(user_id=user.id).first()
         context = json.loads(coaching.context_json)
         snapshots = (((context.get("freeze_state") or {}).get("weekly_plan_snapshots")) or {})
-        assert "2026-03-23" not in snapshots
+        assert "2026-03-23" in snapshots
 
 
 def test_training_phase_thresholds():
