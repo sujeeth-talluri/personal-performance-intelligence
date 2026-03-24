@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 
@@ -216,6 +217,74 @@ def test_settings_page_updates_training_preferences(client, app):
         assert profile.long_run_day == "saturday"
         assert profile.strength_days_per_week == 1
         assert profile.preferred_run_time == "evening"
+
+
+def test_settings_update_invalidates_current_week_snapshot(client, app):
+    client.post(
+        "/register",
+        data={"name": "Snapshot", "email": "snapshot@example.com", "password": "secret12"},
+    )
+    with app.app_context():
+        user = User.query.filter_by(email="snapshot@example.com").first()
+        goal = Goal(
+            user_id=user.id,
+            race_name="Hyd Marathon",
+            race_distance=42.2,
+            race_date=date(2026, 8, 30),
+            goal_time="03:59:00",
+            elevation_type="flat",
+        )
+        coaching = CoachingPlan(
+            user_id=user.id,
+            generated_at=datetime(2026, 3, 24, 10, 0, 0),
+            plan_json="{}",
+            context_json=json.dumps(
+                {
+                    "freeze_state": {
+                        "weekly_plan_snapshots": {
+                            "2026-03-23": {
+                                "version": 2,
+                                "week_start": "2026-03-23",
+                                "weekly_target_km": 40.0,
+                                "days": {},
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        app.extensions["sqlalchemy"].session.add(goal)
+        app.extensions["sqlalchemy"].session.add(coaching)
+        app.extensions["sqlalchemy"].session.commit()
+
+    response = client.post(
+        "/settings",
+        data={
+            "race_name": "Hyd Marathon",
+            "race_date": "2026-08-30",
+            "race_distance": "42.2",
+            "goal_time": "03:59:00",
+            "elevation_type": "flat",
+            "current_pb": "",
+            "pb_hm": "",
+            "pb_10k": "",
+            "pb_5k": "",
+            "training_days_per_week": "6",
+            "long_run_day": "sunday",
+            "strength_days_per_week": "2",
+            "preferred_run_time": "morning",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+
+    with app.app_context():
+        user = User.query.filter_by(email="snapshot@example.com").first()
+        coaching = CoachingPlan.query.filter_by(user_id=user.id).first()
+        context = json.loads(coaching.context_json)
+        snapshots = (((context.get("freeze_state") or {}).get("weekly_plan_snapshots")) or {})
+        assert "2026-03-23" not in snapshots
 
 
 def test_training_phase_thresholds():

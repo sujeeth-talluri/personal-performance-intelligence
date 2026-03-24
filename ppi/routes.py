@@ -153,6 +153,21 @@ def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
     return snapshot
 
 
+def _invalidate_current_week_snapshot(user_id, today_local=None):
+    plan_row = _get_coaching_plan_row(user_id)
+    if not plan_row:
+        return
+    local_day = today_local or _today_local_date(_user_timezone_name())
+    week_start, _ = _week_bounds(local_day)
+    freeze_state = _load_coaching_freeze_state(plan_row)
+    snapshots = freeze_state.get("weekly_plan_snapshots") or {}
+    if week_start.isoformat() not in snapshots:
+        return
+    snapshots.pop(week_start.isoformat(), None)
+    freeze_state["weekly_plan_snapshots"] = snapshots
+    _save_coaching_freeze_state(plan_row, freeze_state)
+
+
 def _session_type_from_template_session(session_name):
     mapping = {
         "Race Day": "race",
@@ -2709,6 +2724,7 @@ def settings():
                 profile.preferred_run_time = preferred_run_time
                 db.session.add(profile)
                 db.session.commit()
+                _invalidate_current_week_snapshot(user.id)
                 return redirect(url_for("web.dashboard"))
             except Exception:
                 db.session.rollback()

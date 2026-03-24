@@ -721,7 +721,7 @@ def _load_week_position(week_index):
 
 def _schedule_preferences(weekly_goal):
     training_days = int(weekly_goal.get("training_days_per_week") or 5)
-    training_days = max(3, min(5, training_days))
+    training_days = max(3, min(6, training_days))
     long_run_day = str(weekly_goal.get("long_run_day") or "sunday").lower()
     if long_run_day not in {"saturday", "sunday"}:
         long_run_day = "sunday"
@@ -765,7 +765,25 @@ def _planned_week_layout(weekly_goal, quality_session, can_medium_long):
         quality_session = "Steady Run" if phase in {"base", "build"} else "Tempo Run"
 
     if long_day == 6:
-        if training_days >= 5:
+        if training_days >= 6:
+            run_slots = [0, 1, 2, 3, 5, 6]
+            role_sessions = [
+                "Easy Run",
+                quality_session,
+                "Aerobic Run",
+                "Medium Long Run" if can_medium_long else "Easy Run",
+                "Recovery Run",
+                "Long Run",
+            ]
+            role_weights = [0.14, 0.18, 0.16, 0.28 if can_medium_long else 0.22, 0.24 if can_medium_long else 0.30]
+            role_min_km = [
+                5.0,
+                6.0 if quality_session in {"Tempo Run", "Marathon Pace Run"} else 5.0,
+                5.0,
+                8.0 if can_medium_long else 6.0,
+                4.0,
+            ]
+        elif training_days >= 5:
             run_slots = [0, 1, 3, 5, 6]
             role_sessions = ["Easy Run", quality_session, "Medium Long Run" if can_medium_long else "Easy Run", "Recovery Run", "Long Run"]
             role_weights = [0.18, 0.22, 0.36 if can_medium_long else 0.32, 0.24 if can_medium_long else 0.28]
@@ -781,7 +799,25 @@ def _planned_week_layout(weekly_goal, quality_session, can_medium_long):
             role_weights = [0.46, 0.54]
             role_min_km = [6.0 if quality_session in {"Tempo Run", "Marathon Pace Run"} else 5.0, 6.0]
     else:
-        if training_days >= 5:
+        if training_days >= 6:
+            run_slots = [0, 1, 2, 3, 4, 5]
+            role_sessions = [
+                "Easy Run",
+                quality_session,
+                "Aerobic Run",
+                "Medium Long Run" if can_medium_long else "Easy Run",
+                "Recovery Run",
+                "Long Run",
+            ]
+            role_weights = [0.14, 0.18, 0.16, 0.28 if can_medium_long else 0.22, 0.24 if can_medium_long else 0.30]
+            role_min_km = [
+                5.0,
+                6.0 if quality_session in {"Tempo Run", "Marathon Pace Run"} else 5.0,
+                5.0,
+                8.0 if can_medium_long else 6.0,
+                4.0,
+            ]
+        elif training_days >= 5:
             run_slots = [0, 1, 3, 4, 5]
             role_sessions = ["Easy Run", quality_session, "Medium Long Run" if can_medium_long else "Easy Run", "Recovery Run", "Long Run"]
             role_weights = [0.18, 0.22, 0.36 if can_medium_long else 0.32, 0.24 if can_medium_long else 0.28]

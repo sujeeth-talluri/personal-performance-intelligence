@@ -280,6 +280,32 @@ def test_build_plan_degrades_cleanly_for_three_day_runner():
     assert plan[6]["session"] == "Long Run"
 
 
+def test_build_plan_supports_six_day_runner_with_sunday_long_run():
+    weekly_goal = {
+        "weekly_goal_km": 58.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 12.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 50.0,
+        "training_consistency_ratio": 0.82,
+        "training_days_per_week": 6,
+        "long_run_day": "sunday",
+        "strength_days_per_week": 2,
+        "progression_week_index": 1,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 23.0, "next_milestone_km": 26.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    run_days = [idx for idx, day in plan.items() if day["workout_type"] == "RUN"]
+    assert run_days == [0, 1, 2, 3, 5, 6]
+    assert plan[6]["session"] == "Long Run"
+    assert plan[3]["session"] == "Medium Long Run"
+    assert plan[2]["session"] == "Aerobic Run"
+
+
 def test_cutback_week_removes_medium_long_and_quality_session():
     weekly_goal = {
         "weekly_goal_km": 48.0,
