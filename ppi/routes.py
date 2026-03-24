@@ -203,20 +203,26 @@ def _apply_confirmed_current_week_repair(user_id, plan_row, week_start, snapshot
         return snapshot, False
     try:
         days = snapshot.get("days") or {}
-        monday = days.get("2026-03-23", {})
-        tuesday = days.get("2026-03-24", {})
-        thursday = days.get("2026-03-26", {})
-        sunday = days.get("2026-03-29", {})
-        signature_matches = (
-            int(round(float(snapshot.get("weekly_target_km") or 0.0))) == 42
-            and int(round(float(monday.get("planned_distance_km") or 0.0))) == 6
-            and int(round(float(tuesday.get("planned_distance_km") or 0.0))) == 6
-            and int(round(float(thursday.get("planned_distance_km") or 0.0))) == 8
-            and int(round(float(sunday.get("planned_distance_km") or 0.0))) == 15
-        )
+        current_signature = {
+            "weekly_target_km": int(round(float(snapshot.get("weekly_target_km") or 0.0))),
+            "monday": int(round(float((days.get("2026-03-23", {}) or {}).get("planned_distance_km") or 0.0))),
+            "tuesday": int(round(float((days.get("2026-03-24", {}) or {}).get("planned_distance_km") or 0.0))),
+            "thursday": int(round(float((days.get("2026-03-26", {}) or {}).get("planned_distance_km") or 0.0))),
+            "saturday": int(round(float((days.get("2026-03-28", {}) or {}).get("planned_distance_km") or 0.0))),
+            "sunday": int(round(float((days.get("2026-03-29", {}) or {}).get("planned_distance_km") or 0.0))),
+        }
     except Exception:
         return snapshot, False
-    if not signature_matches:
+
+    confirmed_signature = {
+        "weekly_target_km": 43,
+        "monday": 7,
+        "tuesday": 5,
+        "thursday": 9,
+        "saturday": 7,
+        "sunday": 15,
+    }
+    if current_signature == confirmed_signature:
         return snapshot, False
 
     repaired_daily_plan = {
