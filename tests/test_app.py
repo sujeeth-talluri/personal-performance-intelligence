@@ -9,6 +9,7 @@ from ppi import create_app
 from ppi.extensions import db
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
+    _apply_confirmed_current_week_repair,
     _build_current_week_coaching_message,
     _build_upcoming_long_runs,
     _deterministic_future_week_preview,
@@ -285,6 +286,46 @@ def test_settings_update_preserves_current_week_snapshot(client, app):
         context = json.loads(coaching.context_json)
         snapshots = (((context.get("freeze_state") or {}).get("weekly_plan_snapshots")) or {})
         assert "2026-03-23" in snapshots
+
+
+def test_confirmed_current_week_repair_restores_expected_plan(app):
+    with app.app_context():
+        user = User(name="Repair", email="repair-live@example.com", password_hash="x")
+        db.session.add(user)
+        db.session.commit()
+
+        plan_row = CoachingPlan(
+            user_id=user.id,
+            generated_at=datetime(2026, 3, 24, 10, 0, 0),
+            plan_json="{}",
+            context_json=json.dumps({"freeze_state": {"weekly_plan_snapshots": {}}}),
+        )
+        db.session.add(plan_row)
+        db.session.commit()
+
+        broken_snapshot = {
+            "version": 2,
+            "week_start": "2026-03-23",
+            "weekly_target_km": 42.0,
+            "schedule_locked": True,
+            "days": {
+                "2026-03-23": {"planned_distance_km": 6.0, "workout_type": "RUN", "session_name": "Easy Run"},
+                "2026-03-24": {"planned_distance_km": 6.0, "workout_type": "RUN", "session_name": "Aerobic Run"},
+                "2026-03-25": {"planned_distance_km": 0.0, "workout_type": "STRENGTH", "session_name": "Strength & Conditioning"},
+                "2026-03-26": {"planned_distance_km": 8.0, "workout_type": "RUN", "session_name": "Easy Run"},
+                "2026-03-27": {"planned_distance_km": 0.0, "workout_type": "STRENGTH", "session_name": "Strength & Conditioning"},
+                "2026-03-28": {"planned_distance_km": 7.0, "workout_type": "RUN", "session_name": "Recovery Run"},
+                "2026-03-29": {"planned_distance_km": 15.0, "workout_type": "RUN", "session_name": "Long Run"},
+            },
+        }
+
+        repaired, changed = _apply_confirmed_current_week_repair(user.id, plan_row, date(2026, 3, 23), broken_snapshot)
+        assert changed is True
+        assert repaired["manual_repair_applied"] is True
+        assert repaired["weekly_target_km"] == 43.0
+        assert repaired["days"]["2026-03-23"]["planned_distance_km"] == 7.0
+        assert repaired["days"]["2026-03-24"]["planned_distance_km"] == 5.0
+        assert repaired["days"]["2026-03-26"]["planned_distance_km"] == 9.0
 
 
 def test_training_phase_thresholds():

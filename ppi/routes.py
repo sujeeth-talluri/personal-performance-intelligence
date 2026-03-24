@@ -194,6 +194,72 @@ def _replace_weekly_snapshot(plan_row, week_start, daily_plan):
     return snapshot
 
 
+def _apply_confirmed_current_week_repair(user_id, plan_row, week_start, snapshot):
+    if not plan_row or not snapshot:
+        return snapshot, False
+    if week_start != date(2026, 3, 23):
+        return snapshot, False
+    if snapshot.get("manual_repair_applied"):
+        return snapshot, False
+    try:
+        days = snapshot.get("days") or {}
+        monday = days.get("2026-03-23", {})
+        tuesday = days.get("2026-03-24", {})
+        thursday = days.get("2026-03-26", {})
+        sunday = days.get("2026-03-29", {})
+        signature_matches = (
+            int(round(float(snapshot.get("weekly_target_km") or 0.0))) == 42
+            and int(round(float(monday.get("planned_distance_km") or 0.0))) == 6
+            and int(round(float(tuesday.get("planned_distance_km") or 0.0))) == 6
+            and int(round(float(thursday.get("planned_distance_km") or 0.0))) == 8
+            and int(round(float(sunday.get("planned_distance_km") or 0.0))) == 15
+        )
+    except Exception:
+        return snapshot, False
+    if not signature_matches:
+        return snapshot, False
+
+    repaired_daily_plan = {
+        "monday": {"type": "easy", "km": 7, "notes": ""},
+        "tuesday": {"type": "aerobic", "km": 5, "notes": ""},
+        "wednesday": {"type": "strength", "km": 0, "notes": ""},
+        "thursday": {"type": "easy", "km": 9, "notes": ""},
+        "friday": {"type": "strength", "km": 0, "notes": ""},
+        "saturday": {"type": "recovery", "km": 7, "notes": ""},
+        "sunday": {"type": "long", "km": 15, "notes": ""},
+    }
+    repaired_snapshot = _replace_weekly_snapshot(plan_row, week_start, repaired_daily_plan)
+    repaired_snapshot["manual_repair_applied"] = True
+
+    freeze_state = _load_coaching_freeze_state(plan_row)
+    snapshots = freeze_state.setdefault("weekly_plan_snapshots", {})
+    snapshots[week_start.isoformat()] = repaired_snapshot
+    _save_coaching_freeze_state(plan_row, freeze_state)
+
+    existing_logs = {log.workout_date: log for log in fetch_workout_logs(user_id, week_start, week_start + timedelta(days=6))}
+    for day_key, planned in repaired_snapshot.get("days", {}).items():
+        day_date = date.fromisoformat(day_key)
+        existing = existing_logs.get(day_date)
+        status = existing.status if existing else "planned"
+        actual_distance_km = existing.actual_distance_km if existing else None
+        notes = existing.notes if existing else planned.get("notes", "")
+        source = existing.source if existing else "engine"
+        upsert_workout_log(
+            user_id=user_id,
+            workout_date=day_date,
+            workout_type=planned["workout_type"],
+            session_name=planned["session_name"],
+            target_distance_km=planned["planned_distance_km"] if planned["planned_distance_km"] > 0 else None,
+            status=status,
+            actual_distance_km=actual_distance_km,
+            notes=notes,
+            source=source,
+            auto_commit=False,
+        )
+    commit_all()
+    return repaired_snapshot, True
+
+
 def _pace_guidance_for_session(session_name):
     guidance = {
         "Long Run": "Easy conversational pace",
@@ -1677,6 +1743,7 @@ def dashboard():
     weekly_snapshot = _load_or_create_weekly_snapshot(_plan_row, week_start, _daily_plan)
     if _snapshot_needs_schedule_repair(weekly_snapshot, _profile, week_start) and _plan_row:
         weekly_snapshot = _replace_weekly_snapshot(_plan_row, week_start, _daily_plan)
+    weekly_snapshot, _ = _apply_confirmed_current_week_repair(user.id, _plan_row, week_start, weekly_snapshot)
     _persist_snapshot_workout_logs(user.id, weekly_snapshot)
     canonical_weekly_target_km = round(float(weekly_snapshot.get("weekly_target_km") or 0.0), 1)
     canonical_long_run_km = round(
