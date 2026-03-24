@@ -167,6 +167,57 @@ def test_settings_page(client):
     assert b"Settings" in settings.data
 
 
+def test_settings_page_updates_training_preferences(client, app):
+    client.post(
+        "/register",
+        data={"name": "Prefs", "email": "prefs@example.com", "password": "secret12"},
+    )
+    with app.app_context():
+        user = User.query.filter_by(email="prefs@example.com").first()
+        goal = Goal(
+            user_id=user.id,
+            race_name="Hyd Marathon",
+            race_distance=42.2,
+            race_date=date(2026, 8, 30),
+            goal_time="03:59:00",
+            elevation_type="flat",
+        )
+        app.extensions["sqlalchemy"].session.add(goal)
+        app.extensions["sqlalchemy"].session.commit()
+
+    response = client.post(
+        "/settings",
+        data={
+            "race_name": "Hyd Marathon",
+            "race_date": "2026-08-30",
+            "race_distance": "42.2",
+            "goal_time": "03:59:00",
+            "elevation_type": "flat",
+            "current_pb": "",
+            "pb_hm": "",
+            "pb_10k": "",
+            "pb_5k": "",
+            "training_days_per_week": "4",
+            "long_run_day": "saturday",
+            "strength_days_per_week": "1",
+            "preferred_run_time": "evening",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+    with app.app_context():
+        user = User.query.filter_by(email="prefs@example.com").first()
+        profile = RunnerProfile.query.filter_by(user_id=user.id).first()
+        assert profile is not None
+        assert profile.training_days_per_week == 4
+        assert profile.long_run_day == "saturday"
+        assert profile.strength_days_per_week == 1
+        assert profile.preferred_run_time == "evening"
+
+
 def test_training_phase_thresholds():
     assert _training_phase(7 * 20) == "base"
     assert _training_phase(7 * 15) == "build"

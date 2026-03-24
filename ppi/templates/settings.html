@@ -112,6 +112,21 @@
       box-shadow: var(--shadow-glow);
       transform: translateY(-1px);
     }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      margin: 30px 0 14px;
+    }
+    .error-msg {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      color: #be123c;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
   </style>
 </head>
 <body>
@@ -125,7 +140,11 @@
         <a class="action-link action-link-strava" href="/connect/strava">Reconnect Strava</a>
         <a class="action-link action-link-back" href="/">Back to Dashboard</a>
       </div>
+      {% if error %}
+      <div class="error-msg">{{ error }}</div>
+      {% endif %}
       <form method="post">
+        <div class="section-title">Race Goal</div>
         <div class="grid2">
           <div class="form-row"><label>Race name</label><input name="race_name" value="{{ goal.race_name if goal else '' }}" required></div>
           <div class="form-row"><label>Race date</label><input type="date" name="race_date" value="{{ goal.race_date if goal else '' }}" required></div>
@@ -148,6 +167,51 @@
           <div class="form-row"><label>Half Marathon PB (H:MM:SS)</label><input name="pb_hm" placeholder="e.g. 1:40:40" value="{{ goal.pb_hm if goal else '' }}"></div>
           <div class="form-row"><label>10K PB (MM:SS)</label><input name="pb_10k" placeholder="e.g. 47:13" value="{{ goal.pb_10k if goal else '' }}"></div>
           <div class="form-row"><label>5K PB (MM:SS)</label><input name="pb_5k" placeholder="e.g. 23:20" value="{{ goal.pb_5k if goal else '' }}"></div>
+        </div>
+        <div class="section-title">Training Preferences</div>
+        <div class="grid2">
+          <div class="form-row">
+            <label>Run days per week</label>
+            <select name="training_days_per_week">
+              {% set run_days = profile.training_days_per_week if profile and profile.training_days_per_week else 5 %}
+              <option value="3" {% if run_days == 3 %}selected{% endif %}>3 days</option>
+              <option value="4" {% if run_days == 4 %}selected{% endif %}>4 days</option>
+              <option value="5" {% if run_days == 5 %}selected{% endif %}>5 days</option>
+              <option value="6" {% if run_days == 6 %}selected{% endif %}>6 days</option>
+            </select>
+            <div class="form-hint">The planner will reshape the week to fit this run frequency.</div>
+          </div>
+          <div class="form-row">
+            <label>Preferred long run day</label>
+            {% set long_day = profile.long_run_day if profile and profile.long_run_day else 'sunday' %}
+            <select name="long_run_day">
+              <option value="saturday" {% if long_day == 'saturday' %}selected{% endif %}>Saturday</option>
+              <option value="sunday" {% if long_day == 'sunday' %}selected{% endif %}>Sunday</option>
+              <option value="flexible" {% if long_day == 'flexible' %}selected{% endif %}>Flexible</option>
+            </select>
+            <div class="form-hint">Used by the future week engine and long-run progression planner.</div>
+          </div>
+          <div class="form-row">
+            <label>Strength sessions per week</label>
+            {% set strength_days = profile.strength_days_per_week if profile and profile.strength_days_per_week is not none else 2 %}
+            <select name="strength_days_per_week">
+              <option value="0" {% if strength_days == 0 %}selected{% endif %}>0</option>
+              <option value="1" {% if strength_days == 1 %}selected{% endif %}>1</option>
+              <option value="2" {% if strength_days == 2 %}selected{% endif %}>2</option>
+            </select>
+            <div class="form-hint">Strength is placed around key run sessions where possible.</div>
+          </div>
+          <div class="form-row">
+            <label>Preferred run time</label>
+            {% set run_time = profile.preferred_run_time if profile and profile.preferred_run_time else 'flexible' %}
+            <select name="preferred_run_time">
+              <option value="early_morning" {% if run_time == 'early_morning' %}selected{% endif %}>Early morning</option>
+              <option value="morning" {% if run_time == 'morning' %}selected{% endif %}>Morning</option>
+              <option value="evening" {% if run_time == 'evening' %}selected{% endif %}>Evening</option>
+              <option value="flexible" {% if run_time == 'flexible' %}selected{% endif %}>Flexible</option>
+            </select>
+            <div class="form-hint">Saved now for personalization; more timing logic will build on this later.</div>
+          </div>
         </div>
         <datalist id="race-distance-options">
           <option value="5">5K</option>

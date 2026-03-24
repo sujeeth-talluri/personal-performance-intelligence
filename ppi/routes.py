@@ -2649,6 +2649,7 @@ def onboarding():
 def settings():
     user = _current_user()
     goal = get_goal(user.id)
+    profile = RunnerProfile.query.filter_by(user_id=user.id).first()
     error = request.args.get("error")
 
     if request.method == "POST":
@@ -2660,11 +2661,31 @@ def settings():
         pb_5k  = request.form.get("pb_5k",  "").strip()
         pb_10k = request.form.get("pb_10k", "").strip()
         pb_hm  = request.form.get("pb_hm",  "").strip()
+        training_days_per_week = request.form.get("training_days_per_week", "").strip()
+        long_run_day = request.form.get("long_run_day", "").strip().lower()
+        strength_days_per_week = request.form.get("strength_days_per_week", "").strip()
+        preferred_run_time = request.form.get("preferred_run_time", "").strip().lower()
 
         try:
             race_distance = float(request.form.get("race_distance", "0"))
         except ValueError:
             race_distance = 0
+
+        try:
+            training_days_per_week = int(training_days_per_week or 5)
+        except ValueError:
+            training_days_per_week = 5
+        try:
+            strength_days_per_week = int(strength_days_per_week or 2)
+        except ValueError:
+            strength_days_per_week = 2
+
+        training_days_per_week = max(3, min(6, training_days_per_week))
+        strength_days_per_week = max(0, min(2, strength_days_per_week))
+        if long_run_day not in {"saturday", "sunday", "flexible"}:
+            long_run_day = "sunday"
+        if preferred_run_time not in {"early_morning", "morning", "evening", "flexible"}:
+            preferred_run_time = "flexible"
 
         if race_name and race_date and goal_time and race_distance > 0:
             try:
@@ -2680,11 +2701,20 @@ def settings():
                     pb_10k=pb_10k,
                     pb_hm=pb_hm,
                 )
+                if not profile:
+                    profile = RunnerProfile(user_id=user.id)
+                profile.training_days_per_week = training_days_per_week
+                profile.long_run_day = long_run_day
+                profile.strength_days_per_week = strength_days_per_week
+                profile.preferred_run_time = preferred_run_time
+                db.session.add(profile)
+                db.session.commit()
                 return redirect(url_for("web.dashboard"))
             except Exception:
+                db.session.rollback()
                 error = "Unable to update settings right now. Please try again."
 
-    return render_template("settings.html", user=user, goal=goal, error=error)
+    return render_template("settings.html", user=user, goal=goal, profile=profile, error=error)
 
 
 @web.route("/connect/strava")
