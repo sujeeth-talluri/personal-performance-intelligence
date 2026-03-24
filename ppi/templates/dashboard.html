@@ -433,6 +433,19 @@
       flex: 1;
       min-width: 0;
     }
+    .week-preview-row .label-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .week-preview-row .meta {
+      color: var(--text-muted);
+      font-size: .64rem;
+      line-height: 1.25;
+      white-space: normal;
+    }
     .week-preview-row .value {
       color: var(--text);
       font-weight: 600;
@@ -769,19 +782,32 @@
             </div>
             <div class="week-preview-list">
               <div class="week-preview-row primary">
-                <span class="label">Long run</span>
+                <span class="label-stack">
+                  <span class="label">Long run</span>
+                  {% if fw.long_run_session.detail %}
+                  <span class="meta">{{ fw.long_run_session.detail }}</span>
+                  {% endif %}
+                </span>
                 <span class="value">{{ fw.long_run_session.km }} km</span>
               </div>
               {% if fw.medium_long_session %}
               <div class="week-preview-row">
-                <span class="label">Medium-long</span>
+                <span class="label-stack">
+                  <span class="label">Medium-long</span>
+                  {% if fw.medium_long_session.detail %}
+                  <span class="meta">{{ fw.medium_long_session.detail }}</span>
+                  {% endif %}
+                </span>
                 <span class="value">{{ fw.medium_long_session.km }} km</span>
               </div>
               {% endif %}
               {% if fw.quality_session %}
               <div class="week-preview-row">
-                <span class="label">Quality</span>
-                <span class="value">{{ fw.quality_session.name }} · {{ fw.quality_session.km }} km</span>
+                <span class="label-stack">
+                  <span class="label">Quality</span>
+                  <span class="meta">{{ fw.quality_session.name }}</span>
+                </span>
+                <span class="value">{{ fw.quality_session.km }} km</span>
               </div>
               {% endif %}
             </div>

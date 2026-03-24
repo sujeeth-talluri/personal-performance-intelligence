@@ -751,6 +751,8 @@ def test_deterministic_future_week_preview_shows_medium_long_and_long_run_struct
     assert any(item["medium_long_session"] for item in preview)
     assert all(item["long_run_session"] for item in preview)
     assert any(item["quality_session"] for item in preview)
+    assert all("detail" in item["long_run_session"] for item in preview if item["long_run_session"])
+    assert any("detail" in item["quality_session"] for item in preview if item["quality_session"])
 
 
 def test_build_upcoming_long_runs_includes_current_week_long_run_if_still_ahead():

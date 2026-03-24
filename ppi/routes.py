@@ -647,14 +647,17 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
                 "quality_session": {
                     "name": quality_day.get("session"),
                     "km": _display_planned_km(quality_day.get("target_km") or 0.0),
+                    "detail": quality_day.get("purpose") or quality_day.get("intensity"),
                 } if quality_day else None,
                 "medium_long_session": {
                     "name": medium_long_day.get("session"),
                     "km": _display_planned_km(medium_long_day.get("target_km") or 0.0),
+                    "detail": medium_long_day.get("purpose") or medium_long_day.get("intensity"),
                 } if medium_long_day else None,
                 "long_run_session": {
                     "name": long_day.get("session"),
                     "km": snapped_long_run_km,
+                    "detail": ((week.get("long_run_variant") or {}).get("short_label") or "Long run"),
                 } if long_day else None,
             }
         )
