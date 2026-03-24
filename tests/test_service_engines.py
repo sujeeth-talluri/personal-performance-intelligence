@@ -326,61 +326,18 @@ def test_cutback_week_removes_medium_long_and_quality_session():
     assert plan[3]["session"] == "Easy Run"
 
 
-def test_snapshot_can_be_repaired_from_existing_workout_logs():
-    log_one = MagicMock()
-    log_one.workout_date = date(2026, 3, 23)
-    log_one.workout_type = "RUN"
-    log_one.session_name = "Easy Run"
-    log_one.target_distance_km = 7.0
+def test_snapshot_needs_schedule_repair_when_profile_changed_this_week_and_not_locked():
+    snapshot = {"version": 2, "week_start": "2026-03-23"}
+    profile = MagicMock()
+    profile.updated_at = datetime(2026, 3, 24, 10, 0, 0)
+    assert routes._snapshot_needs_schedule_repair(snapshot, profile, date(2026, 3, 23)) is True
 
-    log_two = MagicMock()
-    log_two.workout_date = date(2026, 3, 24)
-    log_two.workout_type = "RUN"
-    log_two.session_name = "Aerobic Run"
-    log_two.target_distance_km = 5.0
 
-    mock_query = MagicMock()
-    mock_query.filter.return_value = mock_query
-    mock_query.order_by.return_value = mock_query
-    mock_query.all.return_value = [log_one, log_two]
-    mock_workout_log = MagicMock()
-    mock_workout_log.query = mock_query
-    mock_workout_log.user_id = _Col()
-    mock_workout_log.workout_date = _Col()
-
-    snapshot = {
-        "version": 2,
-        "week_start": "2026-03-23",
-        "weekly_target_km": 15.0,
-        "days": {
-            "2026-03-23": {
-                "date": "2026-03-23",
-                "day_name": "monday",
-                "session_type": "easy",
-                "workout_type": "RUN",
-                "session_name": "Easy Run",
-                "planned_distance_km": 10.0,
-                "pace_guidance": "Relaxed conversational pace",
-                "notes": "",
-            },
-            "2026-03-24": {
-                "date": "2026-03-24",
-                "day_name": "tuesday",
-                "session_type": "aerobic",
-                "workout_type": "RUN",
-                "session_name": "Aerobic Run",
-                "planned_distance_km": 5.0,
-                "pace_guidance": "Comfortable aerobic effort",
-                "notes": "",
-            },
-        },
-    }
-
-    with patch.object(routes, "WorkoutLog", mock_workout_log):
-        repaired, changed = routes._repair_snapshot_from_workout_logs(123, snapshot)
-    assert changed is True
-    assert repaired["days"]["2026-03-23"]["planned_distance_km"] == 7.0
-    assert repaired["weekly_target_km"] == 12.0
+def test_snapshot_does_not_need_schedule_repair_once_locked():
+    snapshot = {"version": 2, "week_start": "2026-03-23", "schedule_locked": True}
+    profile = MagicMock()
+    profile.updated_at = datetime(2026, 3, 24, 10, 0, 0)
+    assert routes._snapshot_needs_schedule_repair(snapshot, profile, date(2026, 3, 23)) is False
 
 
 def test_training_consistency_score_uses_last_planned_runs():

@@ -148,6 +148,7 @@ def _load_or_create_weekly_snapshot(plan_row, week_start, daily_plan):
         snapshot = None
     if not snapshot:
         snapshot = build_weekly_plan_snapshot(week_start, daily_plan)
+        snapshot["schedule_locked"] = True
         snapshots[key] = snapshot
         _save_coaching_freeze_state(plan_row, freeze_state)
     return snapshot
@@ -171,77 +172,26 @@ def _session_type_from_template_session(session_name):
     return mapping.get(session_name, "easy")
 
 
-def _session_type_from_workout_log(workout_type, session_name):
-    if workout_type == "STRENGTH":
-        return "strength"
-    if workout_type == "REST":
-        return "rest"
-    normalized = (session_name or "").strip().lower()
-    mapping = {
-        "race day": "race",
-        "long run": "long",
-        "medium long run": "steady",
-        "tempo run": "tempo",
-        "speed session": "intervals",
-        "marathon pace run": "marathon_pace",
-        "aerobic run": "aerobic",
-        "steady run": "steady",
-        "easy run": "easy",
-        "recovery run": "recovery",
-    }
-    return mapping.get(normalized, "easy")
-
-
-def _repair_snapshot_from_workout_logs(user_id, snapshot):
-    if not snapshot or not snapshot.get("week_start"):
-        return snapshot, False
+def _snapshot_needs_schedule_repair(snapshot, profile, week_start):
+    if not snapshot or snapshot.get("schedule_locked"):
+        return False
+    if not profile or not getattr(profile, "updated_at", None):
+        return False
     try:
-        week_start = date.fromisoformat(snapshot["week_start"])
+        updated_local = profile.updated_at.date()
     except Exception:
-        return snapshot, False
-    week_end = week_start + timedelta(days=6)
-    logs = WorkoutLog.query.filter(
-        WorkoutLog.user_id == user_id,
-        WorkoutLog.workout_date >= week_start,
-        WorkoutLog.workout_date <= week_end,
-    ).order_by(WorkoutLog.workout_date.asc()).all()
-    if not logs:
-        return snapshot, False
+        return False
+    return updated_local >= week_start
 
-    days = dict(snapshot.get("days") or {})
-    changed = False
-    for log in logs:
-        key = log.workout_date.isoformat()
-        existing = days.get(key) or {}
-        planned_km = round(float(log.target_distance_km or 0.0), 1)
-        repaired = {
-            "date": key,
-            "day_name": log.workout_date.strftime("%A").lower(),
-            "session_type": _session_type_from_workout_log(log.workout_type, log.session_name),
-            "workout_type": log.workout_type,
-            "session_name": log.session_name,
-            "planned_distance_km": planned_km,
-            "pace_guidance": existing.get("pace_guidance") or _pace_guidance_for_session(log.session_name),
-            "notes": existing.get("notes", ""),
-        }
-        if existing != repaired:
-            days[key] = repaired
-            changed = True
 
-    if not changed:
-        return snapshot, False
-
-    repaired_snapshot = dict(snapshot)
-    repaired_snapshot["days"] = days
-    repaired_snapshot["weekly_target_km"] = round(
-        sum(
-            float(day.get("planned_distance_km") or 0.0)
-            for day in days.values()
-            if day.get("workout_type") == RUN
-        ),
-        1,
-    )
-    return repaired_snapshot, True
+def _replace_weekly_snapshot(plan_row, week_start, daily_plan):
+    freeze_state = _load_coaching_freeze_state(plan_row)
+    snapshots = freeze_state.setdefault("weekly_plan_snapshots", {})
+    snapshot = build_weekly_plan_snapshot(week_start, daily_plan)
+    snapshot["schedule_locked"] = True
+    snapshots[week_start.isoformat()] = snapshot
+    _save_coaching_freeze_state(plan_row, freeze_state)
+    return snapshot
 
 
 def _pace_guidance_for_session(session_name):
@@ -940,7 +890,7 @@ def _apply_adaptive_plan(plan_items, today_local, weekly_goal):
     return service_apply_adaptive_plan(plan_items, today_local, weekly_goal)
 
 
-def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_run, week_start=None):
+def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_run, week_start=None, persist=True):
     week_start = week_start or _week_bounds(today_local)[0]
     week_end = week_start + timedelta(days=6)
     template = _weekly_plan_template(weekly_goal, long_run)
@@ -1090,22 +1040,23 @@ def _build_weekly_plan(user_id, today_local, user_timezone, weekly_goal, long_ru
 
         computed[log.workout_date] = (new_status, new_actual, new_notes)
 
-    for log in logs:
-        new_status, new_actual, new_notes = computed.get(log.workout_date, (log.status, log.actual_distance_km, log.notes))
-        if new_status != log.status or new_actual != log.actual_distance_km or new_notes != log.notes:
-            upsert_workout_log(
-                user_id=user_id,
-                workout_date=log.workout_date,
-                workout_type=log.workout_type,
-                session_name=log.session_name,
-                target_distance_km=log.target_distance_km,
-                status=new_status,
-                actual_distance_km=new_actual,
-                notes=new_notes,
-                source=log.source,
-                auto_commit=False,
-            )
-    commit_all()
+    if persist:
+        for log in logs:
+            new_status, new_actual, new_notes = computed.get(log.workout_date, (log.status, log.actual_distance_km, log.notes))
+            if new_status != log.status or new_actual != log.actual_distance_km or new_notes != log.notes:
+                upsert_workout_log(
+                    user_id=user_id,
+                    workout_date=log.workout_date,
+                    workout_type=log.workout_type,
+                    session_name=log.session_name,
+                    target_distance_km=log.target_distance_km,
+                    status=new_status,
+                    actual_distance_km=new_actual,
+                    notes=new_notes,
+                    source=log.source,
+                    auto_commit=False,
+                )
+        commit_all()
 
     out = []
     for log in fetch_workout_logs(user_id, week_start, week_end):
@@ -1408,6 +1359,7 @@ def api_dashboard():
         user.id, today_local, user_tz,
         intel["weekly"], intel["long_run"],
         week_start=week_start,
+        persist=False,
     )
     coaching = generate_coaching_output(intel, weekly_plan)
 
@@ -1723,13 +1675,9 @@ def dashboard():
     _WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     _plan_row = _get_coaching_plan_row(user.id)
     weekly_snapshot = _load_or_create_weekly_snapshot(_plan_row, week_start, _daily_plan)
+    if _snapshot_needs_schedule_repair(weekly_snapshot, _profile, week_start) and _plan_row:
+        weekly_snapshot = _replace_weekly_snapshot(_plan_row, week_start, _daily_plan)
     _persist_snapshot_workout_logs(user.id, weekly_snapshot)
-    weekly_snapshot, repaired_from_logs = _repair_snapshot_from_workout_logs(user.id, weekly_snapshot)
-    if repaired_from_logs and _plan_row:
-        freeze_state = _load_coaching_freeze_state(_plan_row)
-        snapshots = freeze_state.setdefault("weekly_plan_snapshots", {})
-        snapshots[week_start.isoformat()] = weekly_snapshot
-        _save_coaching_freeze_state(_plan_row, freeze_state)
     canonical_weekly_target_km = round(float(weekly_snapshot.get("weekly_target_km") or 0.0), 1)
     canonical_long_run_km = round(
         max(
