@@ -747,6 +747,70 @@ def _assign_strength_days(sessions, strength_days, long_run_day):
     return sessions
 
 
+def _can_medium_long_run(weekly_goal, weekly_target, long_target, week_type):
+    training_days, long_run_day, _strength_days = _schedule_preferences(weekly_goal)
+    if week_type in {"cutback", "rebuild", "recovery", "taper"}:
+        return False
+    if training_days <= 3:
+        return False
+    if weekly_target < 42.0 or long_target < 20.0:
+        return False
+    if training_days == 4 and long_run_day == "saturday":
+        return weekly_target >= 46.0 and long_target >= 20.0
+    return True
+
+
+def _quality_session_for_week(weekly_goal, weekly_target, can_medium_long):
+    phase = str(weekly_goal.get("phase") or "build").lower()
+    goal_band = _goal_band(weekly_goal)
+    week_type = str(weekly_goal.get("progression_week_type") or ("build" if phase not in {"rebuild", "recovery", "taper"} else phase)).lower()
+    week_index = int(weekly_goal.get("progression_week_index") or 0)
+    weeks_to_race = float(weekly_goal.get("weeks_to_race") or 0.0)
+    load_position = _load_week_position(week_index)
+    strong_goal_band = goal_band in {"advanced", "performance", "sub4"}
+    training_days, long_run_day, _strength_days = _schedule_preferences(weekly_goal)
+    constrained = training_days <= 3
+    dense_four_day_week = training_days == 4 and can_medium_long
+    dense_six_day_week = training_days >= 6 and can_medium_long
+
+    if phase in {"recovery", "rebuild"} or week_type in {"cutback", "recovery", "rebuild"}:
+        return "Aerobic Run"
+
+    if phase == "taper":
+        return "Marathon Pace Run"
+
+    if phase == "base":
+        if strong_goal_band and weekly_target >= 42.0 and load_position == 1 and weeks_to_race <= 20.0:
+            return "Steady Run"
+        return "Aerobic Run"
+
+    if phase == "build":
+        if constrained:
+            return "Steady Run" if weekly_target >= 40.0 else "Aerobic Run"
+        if dense_four_day_week:
+            if strong_goal_band and weekly_target >= 50.0:
+                return "Marathon Pace Run" if load_position == 1 else "Steady Run"
+            return "Steady Run" if weekly_target >= 40.0 else "Aerobic Run"
+        if dense_six_day_week and strong_goal_band and weekly_target >= 50.0:
+            return "Marathon Pace Run" if load_position == 1 else "Steady Run"
+        if strong_goal_band and weekly_target >= 50.0:
+            return "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
+        if strong_goal_band and weekly_target >= 44.0:
+            return "Steady Run" if load_position == 0 else "Tempo Run"
+        return "Steady Run" if weekly_target >= 40.0 else "Aerobic Run"
+
+    if phase == "peak":
+        if constrained or dense_four_day_week:
+            return "Marathon Pace Run" if strong_goal_band and weekly_target >= 52.0 else "Steady Run"
+        if dense_six_day_week:
+            return "Marathon Pace Run" if strong_goal_band and weekly_target >= 54.0 else "Steady Run"
+        if strong_goal_band and weekly_target >= 54.0:
+            return "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
+        return "Steady Run"
+
+    return "Tempo Run"
+
+
 def _planned_week_layout(weekly_goal, quality_session, can_medium_long):
     training_days, long_run_day, strength_days = _schedule_preferences(weekly_goal)
     long_day = 5 if long_run_day == "saturday" else 6
@@ -843,50 +907,10 @@ def _planned_week_layout(weekly_goal, quality_session, can_medium_long):
 
 def _weekly_session_structure(weekly_goal, weekly_target, long_target):
     phase = str(weekly_goal.get("phase") or "build").lower()
-    goal_band = _goal_band(weekly_goal)
     week_type = str(weekly_goal.get("progression_week_type") or ("build" if phase not in {"rebuild", "recovery", "taper"} else phase)).lower()
-    week_index = int(weekly_goal.get("progression_week_index") or 0)
-    weeks_to_race = float(weekly_goal.get("weeks_to_race") or 0.0)
-    load_position = _load_week_position(week_index)
-    strong_goal_band = goal_band in {"advanced", "performance", "sub4"}
-    can_medium_long = (
-        week_type not in {"cutback", "rebuild", "recovery", "taper"}
-        and weekly_target >= 42.0
-        and long_target >= 20.0
-    )
-
-    if phase in {"recovery", "rebuild"} or week_type in {"cutback", "recovery", "rebuild"}:
-        sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, "Aerobic Run", False)
-        return sessions, run_slots, weights, min_km
-
-    if phase == "taper":
-        sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, "Marathon Pace Run", False)
-        return sessions, run_slots, weights, min_km
-
-    if phase == "base":
-        tuesday = "Steady Run" if strong_goal_band and weekly_target >= 42.0 and load_position == 1 and weeks_to_race <= 20.0 else "Aerobic Run"
-        sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, tuesday, can_medium_long)
-        return sessions, run_slots, weights, min_km
-
-    if phase == "build":
-        if strong_goal_band and weekly_target >= 50.0:
-            tuesday = "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
-        elif strong_goal_band and weekly_target >= 44.0:
-            tuesday = "Steady Run" if load_position == 0 else "Tempo Run"
-        else:
-            tuesday = "Steady Run" if weekly_target >= 40.0 else "Aerobic Run"
-        sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, tuesday, can_medium_long)
-        return sessions, run_slots, weights, min_km
-
-    if phase == "peak":
-        if strong_goal_band and weekly_target >= 54.0:
-            tuesday = "Tempo Run" if load_position in {0, 2} else "Marathon Pace Run"
-        else:
-            tuesday = "Steady Run"
-        sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, tuesday, weekly_target >= 48.0)
-        return sessions, run_slots, weights, min_km
-
-    sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, "Tempo Run", can_medium_long)
+    can_medium_long = _can_medium_long_run(weekly_goal, weekly_target, long_target, week_type)
+    quality_session = _quality_session_for_week(weekly_goal, weekly_target, can_medium_long)
+    sessions, run_slots, weights, min_km = _planned_week_layout(weekly_goal, quality_session, can_medium_long)
     return sessions, run_slots, weights, min_km
 
 

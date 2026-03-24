@@ -307,6 +307,55 @@ def test_build_plan_supports_six_day_runner_with_sunday_long_run():
     assert plan[2]["session"] == "Aerobic Run"
 
 
+def test_build_plan_uses_friday_recovery_for_five_day_saturday_long_run():
+    weekly_goal = {
+        "weekly_goal_km": 50.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 12.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 44.0,
+        "training_consistency_ratio": 0.8,
+        "training_days_per_week": 5,
+        "long_run_day": "saturday",
+        "strength_days_per_week": 1,
+        "progression_week_index": 1,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 21.0, "next_milestone_km": 24.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    run_days = [idx for idx, day in plan.items() if day["workout_type"] == "RUN"]
+    assert run_days == [0, 1, 3, 4, 5]
+    assert plan[4]["session"] == "Recovery Run"
+    assert plan[5]["session"] == "Long Run"
+    assert plan[6]["workout_type"] != "RUN"
+
+
+def test_four_day_build_week_uses_steadier_quality_when_medium_long_present():
+    weekly_goal = {
+        "weekly_goal_km": 50.0,
+        "phase": "build",
+        "rebuild_mode": False,
+        "weeks_to_race": 12.0,
+        "race_distance_km": 42.195,
+        "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+        "prior_avg_km": 42.0,
+        "training_consistency_ratio": 0.78,
+        "training_days_per_week": 4,
+        "long_run_day": "sunday",
+        "strength_days_per_week": 1,
+        "progression_week_index": 0,
+        "progression_week_type": "build",
+    }
+    long_run = {"longest_km": 21.0, "next_milestone_km": 24.0}
+    plan = build_weekly_plan_template(weekly_goal, long_run)
+
+    assert plan[1]["session"] == "Steady Run"
+    assert plan[3]["session"] == "Medium Long Run"
+
+
 def test_cutback_week_removes_medium_long_and_quality_session():
     weekly_goal = {
         "weekly_goal_km": 48.0,

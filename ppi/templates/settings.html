@@ -127,6 +127,15 @@
       font-size: 13px;
       margin-bottom: 18px;
     }
+    .info-msg {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      font-size: 13px;
+      margin: 4px 0 22px;
+    }
   </style>
 </head>
 <body>
@@ -169,6 +178,7 @@
           <div class="form-row"><label>5K PB (MM:SS)</label><input name="pb_5k" placeholder="e.g. 23:20" value="{{ goal.pb_5k if goal else '' }}"></div>
         </div>
         <div class="section-title">Training Preferences</div>
+        <div class="info-msg">Preference changes shape upcoming weeks and future projections. The current week stays frozen once it has started.</div>
         <div class="grid2">
           <div class="form-row">
             <label>Run days per week</label>

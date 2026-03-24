@@ -167,6 +167,7 @@ def test_settings_page(client):
     settings = client.get("/settings", follow_redirects=False)
     assert settings.status_code == 200
     assert b"Settings" in settings.data
+    assert b"Preference changes shape upcoming weeks and future projections" in settings.data
 
 
 def test_settings_page_updates_training_preferences(client, app):
