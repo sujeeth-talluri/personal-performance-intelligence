@@ -6,6 +6,7 @@
     autoDeploy: true
     healthCheckPath: /healthz
     buildCommand: pip install -r requirements.txt
+    preDeployCommand: python scripts/migrate.py
     startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --graceful-timeout 30
     envVars:
       - key: SECRET_KEY

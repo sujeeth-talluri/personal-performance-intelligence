@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from ppi import create_app
 from ppi.extensions import db
+from ppi.migrations import run_migrations
 from ppi.models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, User, WorkoutLog
 from ppi.routes import (
     _apply_confirmed_current_week_repair,
@@ -54,6 +55,14 @@ def test_dashboard_requires_login(client):
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/login")
+
+
+def test_run_migrations_is_idempotent(app):
+    with app.app_context():
+        first = run_migrations()
+        second = run_migrations()
+        assert first == ["001_baseline", "002_goal_pb_columns"] or first == []
+        assert second == []
 
 
 def test_register_and_login_flow(client):

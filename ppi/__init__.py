@@ -1,5 +1,4 @@
-from flask import Flask, request
-from sqlalchemy import text
+from flask import Flask
 
 from .config import Config
 from .extensions import db
@@ -25,34 +24,9 @@ def create_app(config_object=Config):
     with app.app_context():
         from . import models  # noqa: F401
 
-    app.extensions["schema_ready"] = False
-
-    def _ensure_schema():
-        if app.extensions.get("schema_ready"):
-            return
+    if app.config.get("TESTING"):
         with app.app_context():
             db.create_all()
-            # Migrate: add per-distance PB columns (no-op if they already exist)
-            for col in ("pb_5k", "pb_10k", "pb_hm"):
-                try:
-                    with db.engine.connect() as conn:
-                        conn.execute(text(
-                            f"ALTER TABLE goals ADD COLUMN IF NOT EXISTS {col} VARCHAR(16)"
-                        ))
-                        conn.commit()
-                except Exception:
-                    pass
-        app.extensions["schema_ready"] = True
-
-    if app.config.get("TESTING"):
-        _ensure_schema()
-
-    @app.before_request
-    def _lazy_init_schema():
-        if request.endpoint == "web.healthz" or request.path.startswith("/static/"):
-            return None
-        _ensure_schema()
-        return None
 
     app.register_blueprint(web)
 
