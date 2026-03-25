@@ -2117,11 +2117,7 @@ def dashboard():
     weekly_strength_goal_met = current_week_model["strength_goal_met"]
     week_actual_km = current_week_model["actual_km"]
     progress_pct = current_week_model["progress_pct"]
-    display_weekly_target_km = sum(
-        int(item.get("display_planned_km") or 0)
-        for item in weekly_plan
-        if item.get("workout_type") == "RUN"
-    )
+    display_weekly_target_km = int(round(float(canonical_weekly_target_km or 0.0)))
     display_weekly_remaining_km = max(0, round(display_weekly_target_km - week_actual_km, 1))
     display_long_run_target_km = max(
         [

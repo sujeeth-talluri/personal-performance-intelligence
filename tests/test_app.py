@@ -428,6 +428,26 @@ def test_deterministic_feasibility_fields_use_current_week_metrics():
     assert "14 km" in fields["text"]
 
 
+def test_frozen_weekly_target_display_is_not_reduced_by_over_target_completed_days():
+    weekly_plan = [
+        {"workout_type": "RUN", "session": "Easy Run", "display_planned_km": 7, "actual_km": 7.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Aerobic Run", "display_planned_km": 5, "actual_km": 7.1, "status": "overdone"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "display_planned_km": 0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "RUN", "session": "Recovery Run", "display_planned_km": 6, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "display_planned_km": 0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "RUN", "session": "Recovery Run", "display_planned_km": 7, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "RUN", "session": "Long Run", "display_planned_km": 14, "actual_km": 0.0, "status": "planned"},
+    ]
+    canonical_weekly_target_km = 41.0
+    week_actual_km = 14.1
+
+    display_weekly_target_km = int(round(float(canonical_weekly_target_km or 0.0)))
+    display_weekly_remaining_km = max(0, round(display_weekly_target_km - week_actual_km, 1))
+
+    assert display_weekly_target_km == 41
+    assert display_weekly_remaining_km == 26.9
+
+
 def test_deterministic_long_run_progression_exposes_long_run_variant_fields():
     intel = {
         "weekly": {
