@@ -2070,37 +2070,6 @@ def dashboard():
     weekly_quality_goal_met = week_metrics["quality_goal_met"]
     weekly_strength_goal_met = week_metrics["strength_goal_met"]
 
-    try:
-        adaptive_weekly_goal = {
-            "weekly_goal_km": canonical_weekly_target_km,
-            "phase": str((intel.get("goal") or {}).get("phase", "") or canonical_phase_label).lower(),
-            "rebuild_mode": bool((intel.get("goal") or {}).get("rebuild_mode")),
-            "max_safe_run": max(10.0, float(canonical_weekly_target_km or 0.0) * 0.35),
-            "long_run_failed_recent": bool(
-                (not weekly_long_run_goal_met)
-                and float(weekly_planned_long_run_km or 0.0) >= 16.0
-                and today_local.weekday() >= 5
-            ),
-            "high_fatigue": any(
-                item.get("workout_type") == "RUN"
-                and item.get("date") < today_local
-                and item.get("status") == "overdone"
-                and float(item.get("actual_km") or 0.0) >= max(10.0, float(item.get("planned_km") or 0.0) * 1.5 if item.get("planned_km") else 10.0)
-                for item in weekly_plan
-            ),
-            "moderate_fatigue": any(
-                item.get("workout_type") == "RUN"
-                and item.get("date") < today_local
-                and item.get("status") in {"overdone", "partial"}
-                for item in weekly_plan
-            ),
-            "atl_spike": bool((intel.get("fatigue_flags") or {}).get("atl_spike")),
-            "allow_progression": bool((intel.get("fatigue_flags") or {}).get("allow_progression")),
-        }
-        weekly_plan = _apply_adaptive_plan(copy.deepcopy(weekly_plan), today_local, adaptive_weekly_goal)
-    except Exception:
-        current_app.logger.exception("adaptive weekly plan fallback")
-
     for item in weekly_plan:
         item["display_planned_km"] = _display_planned_km(item.get("planned_km") or 0.0)
 
