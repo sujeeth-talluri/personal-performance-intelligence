@@ -755,6 +755,48 @@ def test_deterministic_future_week_preview_shows_medium_long_and_long_run_struct
     assert any("detail" in item["quality_session"] for item in preview if item["quality_session"])
 
 
+def test_deterministic_future_week_preview_quality_session_includes_workout_structure():
+    intel = {
+        "goal": {"days_remaining": 120, "distance_km": 42.195, "race_date": "2026-08-30"},
+        "weekly": {
+            "weekly_goal_km": 50.0,
+            "phase": "build",
+            "rebuild_mode": False,
+            "weeks_to_race": 17.0,
+            "race_distance_km": 42.195,
+            "race_date": "2026-08-30",
+            "goal_marathon_pace_sec_per_km": (3 * 3600 + 59 * 60) / 42.195,
+            "prior_avg_km": 46.0,
+            "recent_avg_km": 44.0,
+            "training_consistency_ratio": 0.84,
+        },
+        "long_run": {
+            "longest_km": 24.0,
+            "longest_date": "2026-03-22",
+            "latest_km": 24.0,
+            "latest_date": "2026-03-22",
+            "next_milestone_km": 26.0,
+        },
+    }
+
+    preview = _deterministic_future_week_preview(
+        intel,
+        date(2026, 3, 23),
+        current_week_weekly_target_km=47,
+        current_week_long_run_km=18,
+        limit=3,
+    )
+
+    quality_items = [item["quality_session"] for item in preview if item["quality_session"]]
+    assert quality_items
+    assert any(" km easy + " in item["detail"] for item in quality_items)
+    assert any(
+        marker in item["detail"]
+        for item in quality_items
+        for marker in [" steady + ", " tempo + ", " at MP + "]
+    )
+
+
 def test_build_upcoming_long_runs_includes_current_week_long_run_if_still_ahead():
     current_week_plan = [
         {

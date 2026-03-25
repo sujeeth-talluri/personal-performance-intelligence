@@ -806,6 +806,9 @@
                 <span class="label-stack">
                   <span class="label">Quality</span>
                   <span class="meta">{{ fw.quality_session.name }}</span>
+                  {% if fw.quality_session.detail %}
+                  <span class="meta">{{ fw.quality_session.detail }}</span>
+                  {% endif %}
                 </span>
                 <span class="value">{{ fw.quality_session.km }} km</span>
               </div>

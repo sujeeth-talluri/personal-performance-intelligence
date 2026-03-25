@@ -44,6 +44,7 @@ from .services.plan_engine import (
     goal_marathon_pace as service_goal_marathon_pace,
     plan_meta_for_session as service_plan_meta_for_session,
     prescribed_long_run_km as service_prescribed_long_run_km,
+    quality_session_prescription as service_quality_session_prescription,
     select_best_run_for_session as service_select_best_run_for_session,
     training_consistency_score as service_training_consistency_score,
 )
@@ -628,6 +629,19 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
         if long_day:
             weekly_target = weekly_target - _display_planned_km(long_day.get("target_km") or 0.0) + snapped_long_run_km
         week_label = f"{week['week_start'].strftime('%d %b')} - {week_end.strftime('%d %b')}"
+        quality_prescription = (
+            service_quality_session_prescription(
+                quality_day.get("session"),
+                _display_planned_km(quality_day.get("target_km") or 0.0),
+                {
+                    **weekly_goal,
+                    "phase": week["phase"],
+                    "progression_week_type": week["week_type"],
+                },
+            )
+            if quality_day
+            else None
+        )
         preview.append(
             {
                 "week_label": week_label,
@@ -647,7 +661,8 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
                 "quality_session": {
                     "name": quality_day.get("session"),
                     "km": _display_planned_km(quality_day.get("target_km") or 0.0),
-                    "detail": quality_day.get("purpose") or quality_day.get("intensity"),
+                    "detail": quality_prescription.get("structure_summary"),
+                    "pace_guidance": quality_prescription.get("pace_guidance"),
                 } if quality_day else None,
                 "medium_long_session": {
                     "name": medium_long_day.get("session"),

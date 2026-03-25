@@ -257,6 +257,80 @@ def plan_meta_for_session(session_name):
     return catalog.get(session_name, {"intensity": "easy", "importance": "Low", "purpose": "Support the weekly training cycle."})
 
 
+def quality_session_prescription(session_name, target_km, weekly_goal):
+    target_km = int(round(float(target_km or 0.0)))
+    if target_km <= 0:
+        return None
+
+    phase = str(weekly_goal.get("phase") or "build").lower()
+    week_type = str(weekly_goal.get("progression_week_type") or "").lower()
+    cutback_like = phase in {"recovery", "rebuild"} or week_type in {"cutback", "recovery", "rebuild"}
+    meta = plan_meta_for_session(session_name)
+
+    if cutback_like or session_name not in {"Steady Run", "Tempo Run", "Marathon Pace Run", "Speed Session", "Aerobic Run"}:
+        return {
+            "structure_summary": f"{target_km} km aerobic running.",
+            "pace_guidance": meta.get("purpose") or "Keep the effort controlled.",
+            "purpose": meta.get("purpose"),
+        }
+
+    if session_name == "Aerobic Run":
+        return {
+            "structure_summary": f"{target_km} km continuous aerobic running.",
+            "pace_guidance": "Comfortable aerobic effort throughout.",
+            "purpose": meta.get("purpose"),
+        }
+
+    if session_name == "Speed Session":
+        warm_km = 2
+        cool_km = 2 if target_km >= 8 else 1
+        rep_count = max(4, min(8, target_km - warm_km - cool_km + 1))
+        return {
+            "structure_summary": f"{warm_km} km easy + {rep_count} x 1 min quick / 1 min easy + {cool_km} km easy",
+            "pace_guidance": "Run the quick reps fast but controlled, then recover fully between reps.",
+            "purpose": meta.get("purpose"),
+        }
+
+    if session_name == "Steady Run":
+        warm_km = 2
+        cool_km = 1
+        steady_km = max(3, target_km - warm_km - cool_km)
+        return {
+            "structure_summary": f"{warm_km} km easy + {steady_km} km steady + {cool_km} km easy",
+            "pace_guidance": "Settle into a controlled steady effort, stronger than easy but below tempo.",
+            "purpose": meta.get("purpose"),
+        }
+
+    if session_name == "Tempo Run":
+        warm_km = 2
+        cool_km = 1
+        tempo_km = max(3, target_km - warm_km - cool_km)
+        return {
+            "structure_summary": f"{warm_km} km easy + {tempo_km} km tempo + {cool_km} km easy",
+            "pace_guidance": "Run the tempo block at a comfortably hard effort that stays controlled.",
+            "purpose": meta.get("purpose"),
+        }
+
+    if session_name == "Marathon Pace Run":
+        if target_km <= 7:
+            warm_km, mp_km, cool_km = 2, max(3, target_km - 3), 1
+        elif target_km <= 9:
+            warm_km, mp_km, cool_km = 2, target_km - 3, 1
+        else:
+            warm_km, mp_km, cool_km = 2, target_km - 4, 2
+        return {
+            "structure_summary": f"{warm_km} km easy + {mp_km} km at MP + {cool_km} km easy",
+            "pace_guidance": "Lock into goal marathon pace calmly and keep the rhythm controlled.",
+            "purpose": meta.get("purpose"),
+        }
+
+    return {
+        "structure_summary": f"{target_km} km quality running.",
+        "pace_guidance": meta.get("purpose") or "Keep the work controlled.",
+        "purpose": meta.get("purpose"),
+    }
+
+
 def classify_run_completion(actual_km, target_km):
     if not target_km or target_km <= 0:
         return "completed", 100, round(max(0.0, actual_km or 0.0), 1)
