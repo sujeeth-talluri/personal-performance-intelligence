@@ -494,7 +494,7 @@ def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
 
 
-def _format_alternate_activity_text(item):
+def _format_alternate_activity_text(item, is_today=False):
     walk_km = round(float(item.get("actual_walk_km") or 0.0), 1)
     cross_km = round(float(item.get("actual_cross_train_km") or 0.0), 1)
     run_km = round(float(item.get("actual_km") or 0.0), 1)
@@ -503,6 +503,14 @@ def _format_alternate_activity_text(item):
     session_type = item.get("session_type")
 
     if workout_type == "RUN":
+        if is_today:
+            if walk_km > 0:
+                return f"{walk_km:.1f}km walk done - run still open"
+            if cross_km > 0:
+                return "Cross-training done - run still open"
+            if strength_count > 0:
+                return "Gym done - run still open"
+            return "Other activity done - run still open"
         if walk_km > 0:
             return f"Run missed - {walk_km:.1f}km walk done"
         if cross_km > 0:
@@ -512,6 +520,14 @@ def _format_alternate_activity_text(item):
         return "Run missed - other activity done"
 
     if workout_type == "STRENGTH":
+        if is_today:
+            if run_km > 0:
+                return f"{run_km:.1f}km run done - gym still open"
+            if walk_km > 0:
+                return f"{walk_km:.1f}km walk done - gym still open"
+            if cross_km > 0:
+                return "Cross-training done - gym still open"
+            return "Other activity done - gym still open"
         if run_km > 0:
             return f"{run_km:.1f}km run done instead of gym"
         if walk_km > 0:
@@ -533,11 +549,11 @@ def _format_alternate_activity_text(item):
     return "Other activity done"
 
 
-def _different_activity_status_label(item):
+def _different_activity_status_label(item, is_today=False):
     if item.get("workout_type") == "RUN":
-        return "run missed"
+        return "run open" if is_today else "run missed"
     if item.get("workout_type") == "STRENGTH":
-        return "gym missed"
+        return "gym open" if is_today else "gym missed"
     return "other activity"
 
 
@@ -2078,6 +2094,7 @@ def dashboard():
     for item in week_plan_state:
         day_date = date.fromisoformat(item["date"])
         ui_status = _state_to_status[item["state"]]
+        is_current_day = day_date == today_local
         weekly_plan.append({
             "day": item["day_name"].capitalize(),
             "day_date": day_date,
@@ -2091,7 +2108,7 @@ def dashboard():
             "done": item["state"] == DONE,
             "status": _state_to_status[item["state"]],
             "state": item["state"],
-            "is_today": item["state"] == TODAY,
+            "is_today": item["state"] == TODAY or is_current_day,
             "pace_guidance": item.get("pace_guidance", ""),
             "notes": item.get("notes", ""),
             "actual_strength_count": item["actual_strength_count"],
@@ -2101,10 +2118,10 @@ def dashboard():
             "status_label": "",
         })
         weekly_plan[-1]["alternate_activity_text"] = (
-            _format_alternate_activity_text(weekly_plan[-1]) if ui_status == "different_activity" else ""
+            _format_alternate_activity_text(weekly_plan[-1], is_today=is_current_day) if ui_status == "different_activity" else ""
         )
         weekly_plan[-1]["status_label"] = (
-            _different_activity_status_label(weekly_plan[-1]) if ui_status == "different_activity" else ui_status
+            _different_activity_status_label(weekly_plan[-1], is_today=is_current_day) if ui_status == "different_activity" else ui_status
         )
         persisted_status = _persisted_status_map[ui_status]
         upsert_workout_log(
@@ -2265,9 +2282,9 @@ def dashboard():
     }
     if today_item and today_item["status"] == "different_activity":
         if today_item.get("workout_type") == "RUN":
-            _status_label["different_activity"] = "Run missed"
+            _status_label["different_activity"] = "Run open"
         elif today_item.get("workout_type") == "STRENGTH":
-            _status_label["different_activity"] = "Gym missed"
+            _status_label["different_activity"] = "Gym open"
     completed_summary = ""
     if today_item and today_item["done"]:
         if today_item.get("session_type") == "strength":
@@ -2297,7 +2314,7 @@ def dashboard():
         "pace_guidance":   today_item["pace_guidance"] if today_item else "",
         "notes":           today_item["notes"] if today_item else "",
         "alternate_activity_text": (
-            _format_alternate_activity_text(today_item) if today_item and today_item["status"] == "different_activity" else ""
+            _format_alternate_activity_text(today_item, is_today=True) if today_item and today_item["status"] == "different_activity" else ""
         ),
         "completed_summary": completed_summary,
     }

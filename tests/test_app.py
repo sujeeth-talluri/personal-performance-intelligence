@@ -93,6 +93,19 @@ def test_alternate_activity_text_for_strength_day_with_run_only():
     assert _different_activity_status_label(item) == "gym missed"
 
 
+def test_alternate_activity_text_for_today_strength_day_with_run_only():
+    item = {
+        "workout_type": "STRENGTH",
+        "session_type": "strength",
+        "actual_km": 9.0,
+        "actual_walk_km": 0.0,
+        "actual_cross_train_km": 0.0,
+        "actual_strength_count": 0,
+    }
+    assert _format_alternate_activity_text(item, is_today=True) == "9.0km run done - gym still open"
+    assert _different_activity_status_label(item, is_today=True) == "gym open"
+
+
 def test_register_and_login_flow(client):
     register = client.post(
         "/register",
