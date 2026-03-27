@@ -58,6 +58,12 @@ def _database_engine_options(url):
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
 
+    # Token encryption key for Strava OAuth tokens stored at rest.
+    # Must be a URL-safe base64-encoded 32-byte Fernet key.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # If not set, the key is derived from SECRET_KEY (acceptable but rotation is harder).
+    TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
+
     DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
     _ENGINE_OPTIONS = _database_engine_options(DATABASE_URL)
     SQLALCHEMY_DATABASE_URI = _ENGINE_OPTIONS.pop("_normalized_url", DATABASE_URL)
