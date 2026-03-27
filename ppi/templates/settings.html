@@ -153,6 +153,7 @@
       <div class="error-msg">{{ error }}</div>
       {% endif %}
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="section-title">Race Goal</div>
         <div class="grid2">
           <div class="form-row"><label>Race name</label><input name="race_name" value="{{ goal.race_name if goal else '' }}" required></div>

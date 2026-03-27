@@ -123,6 +123,7 @@
       <a class="strava-link" href="/connect/strava">Connect Strava</a>
       {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="grid2">
           <div class="form-row"><label>Runner name</label><input name="runner_name" value="{{ user.name if user else '' }}" required></div>
           <div class="form-row"><label>Race name</label><input name="race_name" value="{{ goal.race_name if goal else '' }}" required></div>

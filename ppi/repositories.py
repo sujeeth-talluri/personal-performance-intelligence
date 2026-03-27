@@ -240,9 +240,15 @@ def upsert_workout_log(
     source="engine",
     auto_commit=True,
 ):
-    row = WorkoutLog.query.filter_by(user_id=user_id, workout_date=workout_date).first()
+    # Match on (user_id, workout_date, workout_type) so double-days are
+    # supported — e.g. a morning run and an evening strength session on the
+    # same date are treated as two distinct log entries.
+    row = WorkoutLog.query.filter_by(
+        user_id=user_id,
+        workout_date=workout_date,
+        workout_type=workout_type,
+    ).first()
     if row:
-        row.workout_type = workout_type
         row.session_name = session_name
         row.target_distance_km = target_distance_km
         row.status = status

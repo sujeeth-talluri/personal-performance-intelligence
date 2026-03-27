@@ -108,7 +108,13 @@ class WorkoutLog(db.Model):
     notes = db.Column(db.String(255), nullable=True)
     source = db.Column(db.String(24), nullable=False, default="engine")
 
-    __table_args__ = (db.UniqueConstraint("user_id", "workout_date", name="uq_user_workout_date"),)
+    __table_args__ = (
+        # Composite index for fast per-user date-range lookups.
+        # Note: the old uq_user_workout_date unique constraint has been removed
+        # (see migration 004) to support double-day sessions (e.g. morning run
+        # + evening strength on the same date).
+        db.Index("ix_workout_logs_user_date", "user_id", "workout_date"),
+    )
 
 
 class RunnerProfile(db.Model):

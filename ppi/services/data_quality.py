@@ -6,7 +6,6 @@ Uses Activity.date (DateTime) and Activity.activity_type (lowercase 'run').
 """
 from datetime import date, datetime, timedelta
 
-from ..extensions import db
 from ..models import Activity, Goal
 
 
@@ -28,12 +27,14 @@ class DataQualityReport:
     def _evaluate(self) -> dict:
         goal = Goal.query.filter_by(user_id=self.user_id).order_by(Goal.id.desc()).first()
 
-        # All run activities, ordered by date ascending
+        # All run activities, ordered by date ascending.
+        # activity_type is normalised to lowercase at write time in strava_service,
+        # so a direct equality filter is both correct and index-friendly.
         all_runs = (
             Activity.query
             .filter(
                 Activity.user_id == self.user_id,
-                db.func.lower(Activity.activity_type) == "run",
+                Activity.activity_type == "run",
             )
             .order_by(Activity.date.asc())
             .all()

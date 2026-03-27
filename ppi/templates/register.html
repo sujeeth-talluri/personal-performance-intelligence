@@ -103,6 +103,7 @@
       <div class="login-sub">One account. One Strava connection. Your goal stays saved.</div>
       {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-row">
           <label>Name</label>
           <input name="name" required placeholder="Your name">
