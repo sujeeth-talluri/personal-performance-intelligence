@@ -82,11 +82,40 @@ def _migration_004_workout_logs_drop_unique_date() -> None:
         )
 
 
+def _migration_005_encrypt_strava_tokens() -> None:
+    """Encrypt all existing plaintext Strava access and refresh tokens at rest.
+
+    Uses the same encrypt_token() / decrypt_token() helpers as the repository
+    layer so the result is immediately readable by the running application.
+    decrypt_token() is idempotent — if a token is already encrypted (e.g. this
+    migration is re-run accidentally) it returns the ciphertext unchanged.
+    """
+    from .crypto import decrypt_token, encrypt_token
+
+    with db.engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, access_token, refresh_token FROM strava_tokens")).fetchall()
+        for row in rows:
+            token_id, raw_access, raw_refresh = row
+            # Decrypt first (no-op if already plaintext) then re-encrypt.
+            # This makes the migration safe to run multiple times.
+            enc_access  = encrypt_token(decrypt_token(raw_access  or ""))
+            enc_refresh = encrypt_token(decrypt_token(raw_refresh or ""))
+            conn.execute(
+                text(
+                    "UPDATE strava_tokens "
+                    "SET access_token = :a, refresh_token = :r "
+                    "WHERE id = :id"
+                ),
+                {"a": enc_access, "r": enc_refresh, "id": token_id},
+            )
+
+
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("001_baseline", _migration_001_baseline),
     ("002_goal_pb_columns", _migration_002_goal_pb_columns),
     ("003_runner_profiles_coaching_plans", _migration_003_runner_profiles_coaching_plans),
     ("004_workout_logs_drop_unique_date", _migration_004_workout_logs_drop_unique_date),
+    ("005_encrypt_strava_tokens", _migration_005_encrypt_strava_tokens),
 ]
 
 

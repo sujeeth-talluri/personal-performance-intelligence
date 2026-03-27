@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+from .crypto import decrypt_token, encrypt_token
 from .extensions import db
 from .models import Activity, Goal, Metric, PasswordReset, PredictionHistory, StravaToken, User, WorkoutLog
 
@@ -72,18 +73,21 @@ def get_goal(user_id):
 
 
 def save_strava_tokens(user_id, athlete_id, access_token, refresh_token, expires_at):
+    """Persist Strava OAuth tokens. Tokens are encrypted at rest."""
+    enc_access  = encrypt_token(access_token)
+    enc_refresh = encrypt_token(refresh_token)
     token = StravaToken.query.filter_by(user_id=user_id).first()
     if token:
-        token.athlete_id = athlete_id
-        token.access_token = access_token
-        token.refresh_token = refresh_token
-        token.expires_at = int(expires_at)
+        token.athlete_id    = athlete_id
+        token.access_token  = enc_access
+        token.refresh_token = enc_refresh
+        token.expires_at    = int(expires_at)
     else:
         token = StravaToken(
             user_id=user_id,
             athlete_id=athlete_id,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=enc_access,
+            refresh_token=enc_refresh,
             expires_at=int(expires_at),
         )
         db.session.add(token)
@@ -91,7 +95,18 @@ def save_strava_tokens(user_id, athlete_id, access_token, refresh_token, expires
 
 
 def get_strava_token(user_id):
-    return StravaToken.query.filter_by(user_id=user_id).first()
+    """Fetch Strava tokens and decrypt them in-memory before returning.
+
+    Callers receive a StravaToken ORM object whose access_token and
+    refresh_token attributes hold the raw plaintext values — no changes
+    required in calling code. The decrypted values are never flushed back
+    to the DB (no commit is called here).
+    """
+    token = StravaToken.query.filter_by(user_id=user_id).first()
+    if token:
+        token.access_token  = decrypt_token(token.access_token)
+        token.refresh_token = decrypt_token(token.refresh_token)
+    return token
 
 
 def upsert_activity(
