@@ -634,7 +634,7 @@
         <h2>Weekly Plan</h2>
         <div>
           {% for p in weekly_plan %}
-            <div class="plan-row {{ 'done-row' if p.status in ['completed','done','overdone'] else '' }} {{ 'skip-row' if p.status in ['skipped','different_activity'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
+            <div class="plan-row {{ 'done-row' if p.status in ['completed','done','overdone'] else '' }} {{ 'skip-row' if p.status in ['skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
               <div class="plan-main">
                 <div class="plan-meta">{{ p.day }} | {{ p.session }}</div>
                 <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
@@ -651,7 +651,7 @@
                   {% elif p.status == 'skipped' %}
                     skipped ({{ p.display_planned_km }}km planned)
                   {% elif p.status == 'different_activity' %}
-                    Other activity done
+                    {{ p.alternate_activity_text or 'Other activity done' }}
                   {% elif p.session_type == 'active_recovery' %}
                     {{ p.display_planned_km }}km - easy run or walk
                   {% elif p.status == 'bonus' %}
@@ -670,7 +670,7 @@
                 {% elif p.status == 'partial' %}<span class="status-orange">partial</span>
                 {% elif p.status == 'missed' %}<span class="status-orange">missed</span>
                 {% elif p.status == 'skipped' %}<span class="status-orange">skipped</span>
-                {% elif p.status == 'different_activity' %}<span class="status-orange">other activity</span>
+                {% elif p.status == 'different_activity' %}<span class="status-orange">{{ p.status_label or 'other activity' }}</span>
                 {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">today</span>
                 {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">gym</span>
                 {% elif p.status == 'bonus' %}<span class="status-green">bonus</span>
@@ -710,9 +710,12 @@
           </strong>
         </div>
         {% if today_workout.completed %}
-          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.distance_actual }} (target {{ today_workout.distance_target }})</strong></div>
+          <div class="metric-row"><span>Completed</span><strong>{{ today_workout.completed_summary }}</strong></div>
         {% else %}
           <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
+        {% endif %}
+        {% if today_workout.alternate_activity_text %}
+          <div class="metric-row"><span>Activity logged</span><strong>{{ today_workout.alternate_activity_text }}</strong></div>
         {% endif %}
         <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 

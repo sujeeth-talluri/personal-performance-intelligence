@@ -18,6 +18,8 @@ from ppi.routes import (
     _derive_current_week_display_metrics,
     _deterministic_current_week_daily_plan,
     _deterministic_feasibility_fields,
+    _different_activity_status_label,
+    _format_alternate_activity_text,
     _deterministic_phase_label,
     _today_date_label,
     _weekly_plan_template,
@@ -63,6 +65,32 @@ def test_run_migrations_is_idempotent(app):
         second = run_migrations()
         assert first == ["001_baseline", "002_goal_pb_columns"] or first == []
         assert second == []
+
+
+def test_alternate_activity_text_for_missed_run_with_walk():
+    item = {
+        "workout_type": "RUN",
+        "session_type": "easy",
+        "actual_km": 0.0,
+        "actual_walk_km": 0.5,
+        "actual_cross_train_km": 0.0,
+        "actual_strength_count": 0,
+    }
+    assert _format_alternate_activity_text(item) == "Run missed - 0.5km walk done"
+    assert _different_activity_status_label(item) == "run missed"
+
+
+def test_alternate_activity_text_for_strength_day_with_run_only():
+    item = {
+        "workout_type": "STRENGTH",
+        "session_type": "strength",
+        "actual_km": 9.0,
+        "actual_walk_km": 0.0,
+        "actual_cross_train_km": 0.0,
+        "actual_strength_count": 0,
+    }
+    assert _format_alternate_activity_text(item) == "9.0km run done instead of gym"
+    assert _different_activity_status_label(item) == "gym missed"
 
 
 def test_register_and_login_flow(client):

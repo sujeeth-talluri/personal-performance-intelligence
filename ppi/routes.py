@@ -404,7 +404,12 @@ def _build_current_week_coaching_message(
     today_text = ""
     if today_item:
         if today_item["status"] == "different_activity":
-            today_text = " You did other activity today, but the planned run still remains open."
+            if today_item.get("workout_type") == "RUN":
+                today_text = " You did other activity today, but the planned run still remains open."
+            elif today_item.get("workout_type") == "STRENGTH":
+                today_text = " You did a run today, but the planned strength session still remains open."
+            else:
+                today_text = " You did other activity today, but the planned session still remains open."
         elif today_item["status"] == "partial":
             today_text = " Today's planned session was only partially completed, so keep the next run controlled."
         elif today_item["status"] == "overdone":
@@ -487,6 +492,53 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
 
 def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
+
+
+def _format_alternate_activity_text(item):
+    walk_km = round(float(item.get("actual_walk_km") or 0.0), 1)
+    cross_km = round(float(item.get("actual_cross_train_km") or 0.0), 1)
+    run_km = round(float(item.get("actual_km") or 0.0), 1)
+    strength_count = int(item.get("actual_strength_count") or 0)
+    workout_type = item.get("workout_type")
+    session_type = item.get("session_type")
+
+    if workout_type == "RUN":
+        if walk_km > 0:
+            return f"Run missed - {walk_km:.1f}km walk done"
+        if cross_km > 0:
+            return "Run missed - cross-training done"
+        if strength_count > 0:
+            return "Run missed - gym done"
+        return "Run missed - other activity done"
+
+    if workout_type == "STRENGTH":
+        if run_km > 0:
+            return f"{run_km:.1f}km run done instead of gym"
+        if walk_km > 0:
+            return f"Gym missed - {walk_km:.1f}km walk done"
+        if cross_km > 0:
+            return "Gym missed - cross-training done"
+        return "Gym missed - other activity done"
+
+    if session_type == "active_recovery" and walk_km > 0:
+        return f"Walk done - {walk_km:.1f}km"
+    if cross_km > 0:
+        return "Cross-training done"
+    if walk_km > 0:
+        return f"{walk_km:.1f}km walk done"
+    if run_km > 0:
+        return f"{run_km:.1f}km run done"
+    if strength_count > 0:
+        return "Gym done"
+    return "Other activity done"
+
+
+def _different_activity_status_label(item):
+    if item.get("workout_type") == "RUN":
+        return "run missed"
+    if item.get("workout_type") == "STRENGTH":
+        return "gym missed"
+    return "other activity"
 
 
 def _deterministic_progression_weeks(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, weeks=18, schedule_prefs=None):
@@ -2025,6 +2077,7 @@ def dashboard():
     weekly_plan = []
     for item in week_plan_state:
         day_date = date.fromisoformat(item["date"])
+        ui_status = _state_to_status[item["state"]]
         weekly_plan.append({
             "day": item["day_name"].capitalize(),
             "day_date": day_date,
@@ -2044,8 +2097,15 @@ def dashboard():
             "actual_strength_count": item["actual_strength_count"],
             "actual_walk_km": item["actual_walk_km"],
             "actual_cross_train_km": item["actual_cross_train_km"],
+            "alternate_activity_text": "",
+            "status_label": "",
         })
-        ui_status = _state_to_status[item["state"]]
+        weekly_plan[-1]["alternate_activity_text"] = (
+            _format_alternate_activity_text(weekly_plan[-1]) if ui_status == "different_activity" else ""
+        )
+        weekly_plan[-1]["status_label"] = (
+            _different_activity_status_label(weekly_plan[-1]) if ui_status == "different_activity" else ui_status
+        )
         persisted_status = _persisted_status_map[ui_status]
         upsert_workout_log(
             user_id=user.id,
@@ -2203,6 +2263,21 @@ def dashboard():
         "planned": "Planned",
         "rest": "Rest",
     }
+    if today_item and today_item["status"] == "different_activity":
+        if today_item.get("workout_type") == "RUN":
+            _status_label["different_activity"] = "Run missed"
+        elif today_item.get("workout_type") == "STRENGTH":
+            _status_label["different_activity"] = "Gym missed"
+    completed_summary = ""
+    if today_item and today_item["done"]:
+        if today_item.get("session_type") == "strength":
+            completed_summary = (
+                f"Gym completed - plus {today_item['actual_km']:.1f} km run"
+                if (today_item.get("actual_km") or 0.0) > 0
+                else "Gym completed"
+            )
+        else:
+            completed_summary = f"{_fmt_actual_km(today_item['actual_km'])} (target {_fmt_target_km(today_item['planned_km'])})"
     today_workout = {
         "date":            today_local.strftime("%A, %d %b"),
         "workout":         today_item["session"] if today_item else (today_plan_state["session_name"] if today_plan_state else "Rest Day"),
@@ -2221,6 +2296,10 @@ def dashboard():
         "actual_km":       today_item["actual_km"] if today_item else 0,
         "pace_guidance":   today_item["pace_guidance"] if today_item else "",
         "notes":           today_item["notes"] if today_item else "",
+        "alternate_activity_text": (
+            _format_alternate_activity_text(today_item) if today_item and today_item["status"] == "different_activity" else ""
+        ),
+        "completed_summary": completed_summary,
     }
     current_week_coaching_message = _build_current_week_coaching_message(
         float(display_weekly_target_km),
