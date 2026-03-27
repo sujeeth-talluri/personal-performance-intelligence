@@ -10,6 +10,15 @@ def _normalize_database_url(url):
     return url
 
 
+def _is_supabase_url(url: str) -> bool:
+    """Detect Supabase-hosted PostgreSQL by hostname pattern."""
+    try:
+        host = urlsplit(url).hostname or ""
+        return "supabase.co" in host or "supabase.com" in host
+    except Exception:
+        return False
+
+
 def _database_engine_options(url):
     if not url:
         return {}
@@ -20,12 +29,28 @@ def _database_engine_options(url):
 
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query.setdefault("connect_timeout", "5")
+    query.setdefault("connect_timeout", "10")
+
+    # Supabase requires SSL and has tighter connection limits on free tier.
+    # Pool: 5 persistent + 2 overflow = 7 max per worker process.
+    # With 2 Gunicorn workers that is 14 connections — safely under the ~20 limit.
+    pool_size = 5
+    max_overflow = 2
+    pool_timeout = 10
+
+    connect_args = {"connect_timeout": int(query["connect_timeout"])}
+    if _is_supabase_url(url):
+        # Force SSL — Supabase rejects or downgrades unencrypted connections.
+        connect_args["sslmode"] = "require"
+
     normalized_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
     return {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        "connect_args": {"connect_timeout": int(query["connect_timeout"])},
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+        "pool_timeout": pool_timeout,
+        "connect_args": connect_args,
         "_normalized_url": normalized_url,
     }
 
@@ -54,6 +79,11 @@ class Config:
 
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
     SESSION_COOKIE_HTTPONLY = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+    SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+
+    # CSRF — Flask-WTF
+    WTF_CSRF_TIME_LIMIT = 3600  # 1 hour token expiry
+    WTF_CSRF_SSL_STRICT = False  # allow http in local dev; tightened by SESSION_COOKIE_SECURE in prod
     ALLOW_ADMIN_RESET = os.getenv("ALLOW_ADMIN_RESET", "0").lower() in {"1", "true", "yes", "on"}
     ADMIN_RESET_EMAIL = os.getenv("ADMIN_RESET_EMAIL")
 

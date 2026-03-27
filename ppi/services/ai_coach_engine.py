@@ -22,7 +22,7 @@ import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-import requests
+import anthropic
 from flask import current_app
 
 from ..extensions import db
@@ -720,7 +720,7 @@ Generate for ALL weeks until race day inclusive."""
 
     def _call_api(self, prompt: str, max_tokens: int = 1500) -> dict | list:
         """
-        Call Claude API with robust error handling.
+        Call Claude API via the official Anthropic SDK.
         Tries JSON extraction multiple ways before failing.
         """
         api_key = current_app.config.get("ANTHROPIC_API_KEY")
@@ -729,28 +729,15 @@ Generate for ALL weeks until race day inclusive."""
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not configured")
 
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key":          api_key,
-                "anthropic-version":  "2023-06-01",
-                "content-type":       "application/json",
-            },
-            json={
-                "model":      model,
-                "max_tokens": max_tokens,
-                "messages":   [{"role": "user", "content": prompt}],
-            },
-            timeout=(5, 20),  # (connect, read) — 2 calls max ~50s, within gunicorn 120s
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30.0,  # 30s per call; 2 calls max ~60s, within gunicorn 120s
         )
 
-        if response.status_code != 200:
-            raise ValueError(
-                f"API error {response.status_code}: {response.text[:200]}"
-            )
-
-        data = response.json()
-        text = data["content"][0]["text"].strip()
+        text = message.content[0].text.strip()
 
         # Robust JSON extraction — try 3 strategies
         # Try 1: direct parse

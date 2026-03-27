@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests as http_requests
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
+from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .repositories import (
@@ -82,7 +83,7 @@ from .services.training_state_engine import (
     weekly_snapshot_is_valid,
 )
 from .models import Activity, CoachingPlan, Goal, Metric, PredictionHistory, RunnerProfile, StravaToken, WorkoutLog
-from .extensions import db
+from .extensions import csrf, db, limiter
 
 web = Blueprint("web", __name__)
 
@@ -1470,6 +1471,7 @@ def login_required(fn):
 # ---------------------------------------------------------------------------
 
 @web.route("/api/dashboard")
+@csrf.exempt  # JSON endpoint called by JS fetch — session auth enforces identity
 @login_required
 def api_dashboard():
     user = _current_user()
@@ -1583,6 +1585,7 @@ def _predict_confidence(source_km: float, target_km: float, weekly_km: float, vd
 
 
 @web.route("/api/predict", methods=["POST"])
+@csrf.exempt  # JSON endpoint called by JS fetch — session auth enforces identity
 def api_predict():
     data = request.get_json(silent=True) or {}
 
@@ -1670,6 +1673,7 @@ def _send_reset_email(email, link):
 
 
 @web.route("/register", methods=["GET", "POST"])
+@limiter.limit("10 per hour; 3 per minute")
 def register():
     error = None
     if request.method == "POST":
@@ -1693,6 +1697,7 @@ def register():
 
 
 @web.route("/login", methods=["GET", "POST"])
+@limiter.limit("20 per hour; 5 per minute")
 def login():
     error = None
     if request.method == "POST":
@@ -1710,6 +1715,7 @@ def login():
 
 
 @web.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5 per hour")
 def forgot_password():
     message = None
     if request.method == "POST":
@@ -1754,6 +1760,7 @@ def logout():
 
 @web.route("/")
 @login_required
+@limiter.limit("4 per minute", key_func=lambda: f"{get_remote_address()}-sync", exempt_when=lambda: request.args.get("sync") != "1")
 def dashboard():
     user = _current_user()
     user_tz = _user_timezone_name()
@@ -2741,6 +2748,7 @@ def coach_intro():
 
 
 @web.route("/api/coach-intro/message", methods=["POST"])
+@csrf.exempt  # JSON endpoint called by JS fetch — session auth enforces identity
 @login_required
 def coach_intro_message():
     """Handle one turn of the conversational onboarding chat."""
@@ -2942,6 +2950,7 @@ def debug_weekly_target():
 
 
 @web.route("/auth/strava/callback")
+@limiter.limit("10 per hour")
 def strava_callback():
     expected = session.get("strava_state")
     received = request.args.get("state")

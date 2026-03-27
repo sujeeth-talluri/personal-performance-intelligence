@@ -75,6 +75,7 @@
     <p>Select athlete and configure race goal.</p>
 
     <form method="post" action="/setup?athlete_id={{ athlete_id }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="athlete_id">Athlete</label>
         <select id="athlete_id" onchange="window.location='/setup?athlete_id=' + this.value">

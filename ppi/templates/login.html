@@ -103,6 +103,7 @@
       <div class="login-sub">Sign in to view your training dashboard.</div>
       {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-row">
           <label>Email</label>
           <input name="email" type="email" required placeholder="you@example.com">
