@@ -31,13 +31,8 @@ from cryptography.fernet import Fernet, InvalidToken
 _DERIVE_SALT = b"strideiq-token-encryption-v1"
 
 
-def _build_fernet() -> Fernet:
-    """Return a Fernet instance using TOKEN_ENCRYPTION_KEY or derive one."""
-    raw_key = os.environ.get("TOKEN_ENCRYPTION_KEY", "").strip()
-    if raw_key:
-        return Fernet(raw_key.encode())
-
-    # Derive a 32-byte key from SECRET_KEY using PBKDF2.
+def _derive_fernet_from_secret() -> Fernet:
+    """Derive a valid Fernet key from SECRET_KEY using PBKDF2."""
     secret = os.environ.get("SECRET_KEY", "")
     if not secret:
         raise RuntimeError(
@@ -51,8 +46,35 @@ def _build_fernet() -> Fernet:
         iterations=100_000,
         dklen=32,
     )
-    fernet_key = base64.urlsafe_b64encode(derived)
-    return Fernet(fernet_key)
+    return Fernet(base64.urlsafe_b64encode(derived))
+
+
+def _build_fernet() -> Fernet:
+    """Return a Fernet instance.
+
+    Resolution order:
+    1. TOKEN_ENCRYPTION_KEY env var if it is a valid Fernet key.
+    2. Derived from SECRET_KEY via PBKDF2 (fallback — works out of the box,
+       but key rotation requires a re-encryption step).
+
+    If TOKEN_ENCRYPTION_KEY is set but is not a valid Fernet key (e.g. Render
+    generated a random string instead of a proper base64 key), we log a warning
+    and fall back to derivation so the app never crashes due to a bad key value.
+    """
+    import logging
+    raw_key = os.environ.get("TOKEN_ENCRYPTION_KEY", "").strip()
+    if raw_key:
+        try:
+            return Fernet(raw_key.encode())
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "TOKEN_ENCRYPTION_KEY is set but is not a valid Fernet key "
+                "(must be 32 url-safe base64-encoded bytes). "
+                "Falling back to SECRET_KEY derivation. "
+                "Regenerate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            )
+
+    return _derive_fernet_from_secret()
 
 
 def encrypt_token(plaintext: str) -> str:
