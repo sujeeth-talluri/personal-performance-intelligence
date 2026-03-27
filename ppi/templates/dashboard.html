@@ -638,7 +638,9 @@
               <div class="plan-main">
                 <div class="plan-meta">{{ p.day }} | {{ p.session }}</div>
                 <div class="plan-distance" style="font-size:.78rem;color:var(--muted);margin-top:2px">
-                  {% if p.session_type == 'strength' %}
+                  {% if p.status == 'different_activity' %}
+                    {{ p.alternate_activity_text or 'Other activity done' }}
+                  {% elif p.session_type == 'strength' %}
                     Gym
                   {% elif p.status in ['completed', 'done'] %}
                     {{ '%.1f'|format(p.actual_km) }}km vs {{ p.display_planned_km }}km planned
@@ -650,8 +652,6 @@
                     missed ({{ p.display_planned_km }}km planned)
                   {% elif p.status == 'skipped' %}
                     skipped ({{ p.display_planned_km }}km planned)
-                  {% elif p.status == 'different_activity' %}
-                    {{ p.alternate_activity_text or 'Other activity done' }}
                   {% elif p.session_type == 'active_recovery' %}
                     {{ p.display_planned_km }}km - easy run or walk
                   {% elif p.status == 'bonus' %}

@@ -503,6 +503,22 @@ def test_current_week_display_uses_one_frozen_weekly_contract():
     assert display_weekly_remaining_km == 27.9
 
 
+def test_current_week_metrics_count_run_done_on_strength_day():
+    weekly_plan = [
+        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 7.0, "actual_km": 7.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Aerobic Run", "planned_km": 5.0, "actual_km": 7.1, "status": "overdone"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 0.0, "status": "completed"},
+        {"workout_type": "RUN", "session": "Easy Run", "planned_km": 9.0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "STRENGTH", "session": "Strength & Conditioning", "planned_km": 0.0, "actual_km": 9.0, "status": "different_activity"},
+        {"workout_type": "RUN", "session": "Recovery Run", "planned_km": 7.0, "actual_km": 0.0, "status": "planned"},
+        {"workout_type": "RUN", "session": "Long Run", "planned_km": 15.0, "actual_km": 0.0, "status": "planned"},
+    ]
+    metrics = _derive_current_week_display_metrics(weekly_plan, 43.0)
+    assert metrics["actual_km"] == 23.1
+    assert metrics["remaining_km"] == 19.9
+    assert metrics["longest_run_km"] == 9.0
+
+
 def test_deterministic_long_run_progression_exposes_long_run_variant_fields():
     intel = {
         "weekly": {

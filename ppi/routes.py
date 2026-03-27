@@ -423,7 +423,6 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
         sum(
             float(item.get("actual_km") or 0.0)
             for item in weekly_plan
-            if item.get("workout_type") == "RUN"
         ),
         1,
     )
@@ -432,7 +431,6 @@ def _derive_current_week_display_metrics(weekly_plan, frozen_weekly_target_km):
             [
                 float(item.get("actual_km") or 0.0)
                 for item in weekly_plan
-                if item.get("workout_type") == "RUN"
             ]
             or [0.0]
         ),
