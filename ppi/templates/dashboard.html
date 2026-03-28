@@ -801,6 +801,12 @@
         {% else %}
           <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
         {% endif %}
+        {% if today_workout.pace_guidance and today_workout.workout_type == 'RUN' %}
+          <div class="metric-row">
+            <span>Target pace</span>
+            <strong style="color:#7c3aed;font-size:.88rem">{{ today_workout.pace_guidance }}</strong>
+          </div>
+        {% endif %}
         {% if today_workout.alternate_activity_text %}
           <div class="metric-row"><span>Activity logged</span><strong>{{ today_workout.alternate_activity_text }}</strong></div>
         {% endif %}
