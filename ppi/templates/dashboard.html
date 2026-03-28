@@ -358,6 +358,14 @@
     .tomorrow-row strong { color: #1e293b; font-size: .9rem; }
     /* Pace trend badge */
     .pace-trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+    /* 7-day streak dots */
+    .streak-row { display: flex; gap: 8px; align-items: flex-end; margin: 8px 0 12px; }
+    .streak-dot-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .streak-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--bg); transition: transform .15s; }
+    .streak-dot.dot-run  { background: #16a34a; border-color: #16a34a; }
+    .streak-dot.dot-any  { background: #60a5fa; border-color: #3b82f6; }
+    .streak-dot.dot-today{ box-shadow: 0 0 0 2px #3b82f6; }
+    .streak-abbr { font-size: .6rem; color: var(--muted); font-weight: 600; text-transform: uppercase; }
     .pace-trend-improving { background: #dcfce7; color: #16a34a; }
     .pace-trend-slowing   { background: #fee2e2; color: #dc2626; }
     .pace-trend-steady    { background: #f1f5f9; color: #64748b; }
@@ -1184,6 +1192,16 @@
           {% endif %}
         {% endif %}
       </div>
+      {% if streak_dots %}
+      <div class="streak-row">
+        {% for sd in streak_dots %}
+        <div class="streak-dot-wrap">
+          <div class="streak-dot {{ 'dot-run' if sd.has_run else ('dot-any' if sd.has_any else '') }} {{ 'dot-today' if sd.is_today else '' }}"></div>
+          <span class="streak-abbr">{{ sd.abbr }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if recent_activities %}
         {% for act in recent_activities %}
           <div class="activity-row">

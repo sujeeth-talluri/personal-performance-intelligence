@@ -2756,6 +2756,33 @@ def _dashboard_inner():
         else:
             _pace_trend = "steady"
 
+    # ── 7-day streak dots ─────────────────────────────────────────────────────
+    _today_date = _utcnow_naive().date()
+    _seven_ago  = _today_date - timedelta(days=6)
+    _streak_raw = (
+        Activity.query
+        .filter(Activity.user_id == user.id,
+                Activity.date >= datetime(_seven_ago.year, _seven_ago.month, _seven_ago.day))
+        .all()
+    )
+    _streak_run_dates = set()
+    _streak_any_dates = set()
+    for _sa in _streak_raw:
+        _sd = _sa.date.date() if hasattr(_sa.date, 'date') else _sa.date
+        _streak_any_dates.add(_sd)
+        if (_sa.activity_type or "").lower() in _RUN_TYPES:
+            _streak_run_dates.add(_sd)
+    _DAY_ABBRS7 = ["M", "T", "W", "T", "F", "S", "S"]
+    streak_dots = []
+    for _si in range(6, -1, -1):
+        _sd = _today_date - timedelta(days=_si)
+        streak_dots.append({
+            "abbr":     _DAY_ABBRS7[_sd.weekday()],
+            "has_run":  _sd in _streak_run_dates,
+            "has_any":  _sd in _streak_any_dates,
+            "is_today": _si == 0,
+        })
+
     runs = recent_runs(user.id, limit=5, user_timezone=user_tz)
     weekly_summary = weekly_training_summary(user.id)
 
@@ -2943,6 +2970,7 @@ def _dashboard_inner():
         target_ctl=62 if float((intel.get("goal") or {}).get("distance_km") or 42.195) >= 40 else 55,
         projected_tsb=_proj_tsb,
         pace_trend=_pace_trend,
+        streak_dots=streak_dots,
         limiting_factor=limiting_factor,
         limiting_factor_pct=limiting_factor_pct,
         weeks_to_taper=weeks_to_taper,
