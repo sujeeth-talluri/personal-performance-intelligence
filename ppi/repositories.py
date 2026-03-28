@@ -83,20 +83,20 @@ def save_strava_tokens(user_id, athlete_id, access_token, refresh_token, expires
     """Persist Strava OAuth tokens. Tokens are encrypted at rest."""
     enc_access  = encrypt_token(access_token)
     enc_refresh = encrypt_token(refresh_token)
-    expires_dt  = _unix_to_datetime(expires_at)
+    expires_int = int(expires_at)  # keep as Unix timestamp — DB column is INTEGER
     token = StravaToken.query.filter_by(user_id=user_id).first()
     if token:
         token.athlete_id    = athlete_id
         token.access_token  = enc_access
         token.refresh_token = enc_refresh
-        token.expires_at    = expires_dt
+        token.expires_at    = expires_int
     else:
         token = StravaToken(
             user_id=user_id,
             athlete_id=athlete_id,
             access_token=enc_access,
             refresh_token=enc_refresh,
-            expires_at=expires_dt,
+            expires_at=expires_int,
         )
         db.session.add(token)
     _commit()

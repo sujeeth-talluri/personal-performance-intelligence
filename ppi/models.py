@@ -43,7 +43,7 @@ class StravaToken(db.Model):
     athlete_id = db.Column(db.BigInteger, nullable=True, index=True)
     access_token = db.Column(db.Text, nullable=False)
     refresh_token = db.Column(db.Text, nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.Integer, nullable=False)
 
 
 class Activity(db.Model):

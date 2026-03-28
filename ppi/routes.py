@@ -1750,23 +1750,6 @@ def register():
 @web.route("/login", methods=["GET", "POST"])
 @limiter.limit("20 per hour; 5 per minute")
 def login():
-    try:
-        return _login_inner()
-    except Exception as _login_exc:
-        import traceback as _tb
-        _trace = _tb.format_exc()
-        current_app.logger.error("Login 500: %s\n%s", _login_exc, _trace)
-        _safe = _trace.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        from flask import Response as _Resp
-        return _Resp(
-            "<pre style='background:#0d1117;color:#f87171;padding:24px;"
-            "font-family:monospace;font-size:13px;white-space:pre-wrap'>"
-            "<b style='color:#fbbf24'>StrideIQ debug (login)</b>\n\n" + _safe + "</pre>",
-            status=500, mimetype="text/html"
-        )
-
-
-def _login_inner():
     error = None
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -1830,20 +1813,7 @@ def logout():
 @login_required
 @limiter.limit("4 per minute", key_func=lambda: f"{get_remote_address()}-sync", exempt_when=lambda: request.args.get("sync") != "1")
 def dashboard():
-    try:
-        return _dashboard_inner()
-    except Exception as _dash_exc:
-        import traceback as _tb
-        _trace = _tb.format_exc()
-        current_app.logger.error("Dashboard 500: %s\n%s", _dash_exc, _trace)
-        _safe = _trace.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        from flask import Response as _Resp
-        return _Resp(
-            "<pre style='background:#0d1117;color:#f87171;padding:24px;"
-            "font-family:monospace;font-size:13px;white-space:pre-wrap'>"
-            "<b style='color:#fbbf24'>StrideIQ debug</b>\n\n" + _safe + "</pre>",
-            status=500, mimetype="text/html"
-        )
+    return _dashboard_inner()
 
 
 def _dashboard_inner():
