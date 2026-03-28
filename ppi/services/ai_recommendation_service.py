@@ -126,10 +126,42 @@ def _pace_strategy_for_distance(key: str, pred_secs: float, dist_km: float) -> d
     red_line_pace = avg_pace - _RED_LINE_BUFFER[key]
     red_line_pace = max(red_line_pace, avg_pace * 0.90)  # cap: never faster than 90% of avg pace
 
+    # Half-way km marker (used to switch from first-half to second-half pace)
+    half_km = dist_km / 2.0
+
+    # Build cumulative splits using differentiated pacing so elapsed times are
+    # consistent with first_half_pace / second_half_pace guidance:
+    #   • markers ≤ half_km use first_half_pace
+    #   • markers > half_km blend first + second half
     splits = []
+    prev_km = 0.0
+    elapsed_acc = 0.0
     for km in _SPLIT_MARKERS[key]:
-        elapsed = km * avg_pace
-        splits.append({"km": km, "target_elapsed": _fmt_hms(elapsed)})
+        # Determine the pace for this segment based on whether it crosses the half
+        seg_start = prev_km
+        seg_end = km
+        seg_dist = seg_end - seg_start
+
+        if seg_end <= half_km:
+            # Entire segment in first half
+            seg_pace = first_half_pace
+        elif seg_start >= half_km:
+            # Entire segment in second half
+            seg_pace = second_half_pace
+        else:
+            # Segment straddles the half-way point — blend proportionally
+            first_portion = half_km - seg_start
+            second_portion = seg_end - half_km
+            seg_pace = (first_portion * first_half_pace + second_portion * second_half_pace) / seg_dist
+
+        seg_time = seg_dist * seg_pace
+        elapsed_acc += seg_time
+        splits.append({
+            "km": km,
+            "segment_time": _fmt_hms(seg_time),
+            "target_elapsed": _fmt_hms(elapsed_acc),
+        })
+        prev_km = km
 
     return {
         "predicted_time": _fmt_hms(pred_secs),

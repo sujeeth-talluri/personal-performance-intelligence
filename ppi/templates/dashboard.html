@@ -1276,12 +1276,13 @@
       const s = Math.round(secPerKm);
       return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '/km';
     }
-    function fmtMmss(totalSec) {
-      const h = Math.floor(totalSec / 3600);
-      const m = Math.floor((totalSec % 3600) / 60);
-      const s = totalSec % 60;
-      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-      return `${m}:${String(s).padStart(2,'0')}`;
+    // Always format as H:MM:SS (consistent with Python _fmt_hms)
+    function fmtHms(totalSec) {
+      const sec = Math.round(Math.max(0, totalSec));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
 
     if (tbody && wallSegs && wallSegs.length) {
@@ -1302,35 +1303,51 @@
         tbody.appendChild(tr_el);
       });
     } else if (tbody) {
-      // FALLBACK: compute differentiated segments from predicted_seconds
+      // FALLBACK: compute differentiated segments from predicted_seconds.
+      // Uses the same 4-segment offsets as fm_wall_prevention_pace_strategy so
+      // segment paces mirror the primary path.  The last segment uses remaining
+      // time to guarantee the 4-segment total = predSec exactly.
       const predSec = fmPs.predicted_seconds || 0;
-      const avgPaceSec = predSec > 0 ? predSec / 42.195 : 0;
-      const segments = [
-        { a: 0,  b: 10, offset: +20, note: 'Conservative start' },
-        { a: 10, b: 21, offset: +10, note: 'Settle into pace' },
-        { a: 21, b: 32, offset:   0, note: 'Race pace' },
-        { a: 32, b: 42, offset:  -5, note: 'Push if able' },
-      ];
-      let elapsed = 0;
-      segments.forEach(({ a, b, offset, note }) => {
-        const paceSec = avgPaceSec > 0 ? avgPaceSec + offset : 0;
-        const distKm = b - a;
-        const segSec = Math.round(paceSec * distKm);
-        elapsed += segSec;
-        const tr_el = document.createElement('tr');
-        if (a === 32) tr_el.className = 'km32';
-        const paceStr = avgPaceSec > 0 ? fmtPaceSec(paceSec) : '—';
-        const segStr  = avgPaceSec > 0 ? fmtMmss(segSec) : '—';
-        const elStr   = avgPaceSec > 0 ? fmtMmss(elapsed) : '—';
-        tr_el.innerHTML = `
-          <td class="seg-label">km ${a}–${b}${a===32?' ⚠️':''}</td>
-          <td class="seg-pace">${paceStr}</td>
-          <td>${segStr}</td>
-          <td>${elStr}</td>
-          <td style="font-size:.75rem;color:var(--muted)">${note}</td>
+      if (predSec > 0) {
+        const avgPaceSec = predSec / 42.195;
+        // First 3 fixed segments
+        const fixedSegs = [
+          { a: 0,  b: 10, offset: +20, note: 'Conservative start' },
+          { a: 10, b: 21, offset: +10, note: 'Settle into pace' },
+          { a: 21, b: 32, offset:   0, note: 'Race pace' },
+        ];
+        let elapsed = 0;
+        fixedSegs.forEach(({ a, b, offset, note }) => {
+          const paceSec = avgPaceSec + offset;
+          const distKm = b - a;
+          const segSec = Math.round(paceSec * distKm);
+          elapsed += segSec;
+          const tr_el = document.createElement('tr');
+          tr_el.innerHTML = `
+            <td class="seg-label">km ${a}–${b}</td>
+            <td class="seg-pace">${fmtPaceSec(paceSec)}</td>
+            <td>${fmtHms(segSec)}</td>
+            <td>${fmtHms(elapsed)}</td>
+            <td style="font-size:.75rem;color:var(--muted)">${note}</td>
+          `;
+          tbody.appendChild(tr_el);
+        });
+        // Last segment (km 32–42): use remaining time so total = predSec exactly
+        const lastDist = 42.195 - 32.0;
+        const lastSec = predSec - elapsed;
+        const lastPace = lastSec / lastDist;
+        elapsed += lastSec;
+        const tr32 = document.createElement('tr');
+        tr32.className = 'km32';
+        tr32.innerHTML = `
+          <td class="seg-label">km 32–42 ⚠️</td>
+          <td class="seg-pace">${fmtPaceSec(lastPace)}</td>
+          <td>${fmtHms(lastSec)}</td>
+          <td>${fmtHms(elapsed)}</td>
+          <td style="font-size:.75rem;color:var(--muted)">Negative split. Only attempt if strong at km 32.</td>
         `;
-        tbody.appendChild(tr_el);
-      });
+        tbody.appendChild(tr32);
+      }
     }
 
     // km 32 checkpoint advisory
