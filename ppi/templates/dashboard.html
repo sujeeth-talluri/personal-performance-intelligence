@@ -339,6 +339,18 @@
     .skip-row   .plan-distance { color: var(--muted); text-decoration: line-through; }
     .partial-row .plan-distance { color: #d97706; }
     .plan-pace { font-size: 11px; color: #888; margin-top: 2px; }
+    /* Today row highlight in weekly plan */
+    .today-row { background: #eff6ff; border-radius: 6px; padding-left: 6px; margin: 0 -6px; }
+    .today-row .plan-meta { color: #1d4ed8; font-weight: 600; }
+    /* Tomorrow row in Today's Session card */
+    .tomorrow-row { background: #f8fafc; border-radius: 6px; padding: 10px 12px !important; margin: 8px -12px 4px !important; border: 1px solid #e2e8f0; }
+    .tomorrow-row span:first-child { color: #64748b; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .tomorrow-row strong { color: #1e293b; font-size: .9rem; }
+    /* Pace trend badge */
+    .pace-trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+    .pace-trend-improving { background: #dcfce7; color: #16a34a; }
+    .pace-trend-slowing   { background: #fee2e2; color: #dc2626; }
+    .pace-trend-steady    { background: #f1f5f9; color: #64748b; }
     .status-green  { color: #16a34a; }
     .status-orange { color: #d97706; }
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
@@ -792,7 +804,7 @@
         {% if today_workout.alternate_activity_text %}
           <div class="metric-row"><span>Activity logged</span><strong>{{ today_workout.alternate_activity_text }}</strong></div>
         {% endif %}
-        <div class="metric-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
+        <div class="metric-row tomorrow-row"><span>Tomorrow</span><strong>{{ today_workout.tomorrow }}</strong></div>
 
         <div class="divider"></div>
         <h2 style="margin-bottom:12px">Upcoming Long Runs</h2>
@@ -859,37 +871,50 @@
               {% else %}{{ fw.phase_label }}{% endif %}
             </div>
             <div class="week-preview-list">
-              <div class="week-preview-row primary">
-                <span class="label-stack">
-                  <span class="label">Long run</span>
-                  {% if fw.long_run_session.detail %}
-                  <span class="meta">{{ fw.long_run_session.detail }}</span>
-                  {% endif %}
-                </span>
-                <span class="value">{{ fw.long_run_session.km }} km</span>
-              </div>
-              {% if fw.medium_long_session %}
-              <div class="week-preview-row">
-                <span class="label-stack">
-                  <span class="label">Medium-long</span>
-                  {% if fw.medium_long_session.detail %}
-                  <span class="meta">{{ fw.medium_long_session.detail }}</span>
-                  {% endif %}
-                </span>
-                <span class="value">{{ fw.medium_long_session.km }} km</span>
-              </div>
-              {% endif %}
-              {% if fw.quality_session %}
-              <div class="week-preview-row">
-                <span class="label-stack">
-                  <span class="label">Quality</span>
-                  <span class="meta">{{ fw.quality_session.name }}</span>
-                  {% if fw.quality_session.detail %}
-                  <span class="meta">{{ fw.quality_session.detail }}</span>
-                  {% endif %}
-                </span>
-                <span class="value">{{ fw.quality_session.km }} km</span>
-              </div>
+              {% if fw.all_run_days %}
+                {% for rd in fw.all_run_days %}
+                <div class="week-preview-row {{ 'primary' if rd.is_long else '' }}">
+                  <span class="label-stack">
+                    <span class="label" style="{{ 'font-weight:600;color:var(--text)' if rd.is_long else ('color:#7c3aed' if rd.is_quality else '') }}">{{ rd.session }}</span>
+                    {% if rd.is_long and fw.long_run_session and fw.long_run_session.detail %}
+                    <span class="meta">{{ fw.long_run_session.detail }}</span>
+                    {% endif %}
+                    {% if rd.is_quality and fw.quality_session and fw.quality_session.detail %}
+                    <span class="meta">{{ fw.quality_session.detail }}</span>
+                    {% endif %}
+                  </span>
+                  <span class="value">{{ rd.km }} km</span>
+                </div>
+                {% endfor %}
+              {% else %}
+                {% if fw.long_run_session %}
+                <div class="week-preview-row primary">
+                  <span class="label-stack">
+                    <span class="label">Long run</span>
+                    {% if fw.long_run_session.detail %}<span class="meta">{{ fw.long_run_session.detail }}</span>{% endif %}
+                  </span>
+                  <span class="value">{{ fw.long_run_session.km }} km</span>
+                </div>
+                {% endif %}
+                {% if fw.medium_long_session %}
+                <div class="week-preview-row">
+                  <span class="label-stack">
+                    <span class="label">Medium-long</span>
+                    {% if fw.medium_long_session.detail %}<span class="meta">{{ fw.medium_long_session.detail }}</span>{% endif %}
+                  </span>
+                  <span class="value">{{ fw.medium_long_session.km }} km</span>
+                </div>
+                {% endif %}
+                {% if fw.quality_session %}
+                <div class="week-preview-row">
+                  <span class="label-stack">
+                    <span class="label">Quality</span>
+                    <span class="meta">{{ fw.quality_session.name }}</span>
+                    {% if fw.quality_session.detail %}<span class="meta">{{ fw.quality_session.detail }}</span>{% endif %}
+                  </span>
+                  <span class="value">{{ fw.quality_session.km }} km</span>
+                </div>
+                {% endif %}
               {% endif %}
             </div>
           </div>
@@ -940,7 +965,18 @@
     <!-- ── 8. Recent Activities ──────────────────────────────────────────── -->
     <div class="section-label">Recent Activities</div>
     <div class="card">
-      <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Last 7 activities</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:.72rem;color:var(--muted)">Last 7 activities</span>
+        {% if pace_trend %}
+          {% if pace_trend == 'improving' %}
+            <span class="pace-trend-badge pace-trend-improving">↑ Getting faster</span>
+          {% elif pace_trend == 'slowing' %}
+            <span class="pace-trend-badge pace-trend-slowing">↓ Slowing down</span>
+          {% else %}
+            <span class="pace-trend-badge pace-trend-steady">→ Steady pace</span>
+          {% endif %}
+        {% endif %}
+      </div>
       {% if recent_activities %}
         {% for act in recent_activities %}
           <div class="activity-row">
@@ -1125,6 +1161,8 @@
     costMinutes:     {{ canonical_wall_cost_minutes }},
     risk:            {{ canonical_wall_risk | tojson }},
   };
+  window._goalTime = {{ intel.goal.goal_time | tojson }};
+  window._goalSec  = {{ (intel.goal.goal_seconds | default(0)) | int }};
 </script>
 <script>
 (function () {
@@ -1201,6 +1239,11 @@
           <div class="sub-time">${subPace}</div>
           <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
         `;
+        if (fm && window._goalTime && window._goalTime !== '--') {
+          const gSec = window._goalSec || 0;
+          const gPace = gSec > 0 ? fmtPace(gSec / 42.195) + '/km' : '';
+          inner += `<div style="font-size:.7rem;color:var(--muted);margin-top:5px;border-top:1px solid var(--border);padding-top:5px">🎯 Goal: <strong style="color:var(--text)">${window._goalTime}</strong>${gPace ? `<span style="margin-left:5px;color:var(--muted)">${gPace} avg</span>` : ''}</div>`;
+        }
         if (fm && wall && wall.optimal_fm_potential_display) {
           const apPace = window._aerobicPaceDisplay || '';
           inner += `<div class="potential">${wall.optimal_fm_potential_display}${apPace ? `<span style="font-size:.68rem;color:var(--muted)">${apPace}</span>` : ''}<span class="tooltip-wrap">Aerobic Potential<span class="tooltip-icon">?</span><span class="tooltip-text">The marathon time your aerobic engine is capable of — if pacing and fueling are perfect. Your current gap to this time is due to hitting the wall, not lack of fitness.</span></span></div>`;
