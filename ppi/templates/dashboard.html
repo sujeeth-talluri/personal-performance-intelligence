@@ -141,6 +141,17 @@
     .legend-title { color: #aaa; font-weight: 500; }
     .legend-item { display: flex; align-items: center; gap: 6px; }
 
+    /* ─── Prediction trend sparkline ────────────────────────────── */
+    .pred-trend-wrap { margin-top: 14px; }
+    .pred-trend-title { font-size: .75rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .pred-trend-svg { width: 100%; overflow: visible; }
+    .pred-trend-svg .pt-area { fill: rgba(99,102,241,.12); }
+    .pred-trend-svg .pt-path { fill: none; stroke: #6366f1; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .pred-trend-svg .pt-dot  { fill: #6366f1; }
+    .pred-trend-svg .pt-label { font-size: 9px; fill: var(--muted); text-anchor: middle; }
+    .pred-trend-svg .pt-val  { font-size: 9px; fill: #6366f1; text-anchor: middle; font-weight: 600; }
+    #pred-trend-empty { font-size: .8rem; color: var(--muted); padding: 8px 0; }
+
     /* ─── Wall analysis ──────────────────────────────────────────── */
     .wall-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .wall-risk-badge {
@@ -897,6 +908,19 @@
   <div class="card" id="card-predictions">
     <div class="card-title">Race Predictions — All Distances</div>
     <div class="dist-grid" id="dist-tiles"></div>
+    <!-- Projection history sparkline — rendered from server-side PredictionHistory rows -->
+    <div class="pred-trend-wrap" id="pred-trend-wrap" style="display:none">
+      <div class="pred-trend-title">Marathon Projection — History</div>
+      <svg class="pred-trend-svg" viewBox="0 0 300 70" preserveAspectRatio="xMidYMid meet" id="pred-trend-svg">
+        <path class="pt-area" id="pt-area" d=""/>
+        <path class="pt-path" id="pt-path" d=""/>
+        <g id="pt-dots"></g>
+        <g id="pt-labels"></g>
+        <g id="pt-vals"></g>
+      </svg>
+    </div>
+    <div id="pred-trend-empty" style="display:none">Not enough history yet — projection trend will appear after a few syncs.</div>
+
     <div class="prediction-legend">
       <span class="legend-title">Confidence:</span>
       <span class="legend-item"><span class="confidence-high">HIGH</span> Recent race result (last 60 days)</span>
@@ -1010,6 +1034,7 @@
 
 <script>
   window._weeklyCTL = {{ weekly_ctl_json | safe }};
+  window._predTrend = {{ prediction_trend_json | safe }};
   window._aerobicPaceDisplay = {{ aerobic_pace_display | tojson }};
   window._wallMath = {
     showEstimate:    {{ 'true' if show_wall_estimate else 'false' }},
@@ -1418,6 +1443,58 @@
         }).join('');
       }
     }
+
+    // ── Prediction history sparkline ────────────────────────────────────
+    (function renderPredTrend() {
+      const trend = window._predTrend || [];
+      const wrapEl = el('pred-trend-wrap');
+      const emptyEl = el('pred-trend-empty');
+      if (!wrapEl || !emptyEl) return;
+      if (trend.length < 2) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+      wrapEl.style.display = 'block';
+      function fmtSec(s) {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
+        return `${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;
+      }
+      const vals  = trend.map(p => p.seconds);
+      const labels = trend.map(p => p.label);
+      // For time, lower = better, so invert Y axis (lower value = higher on chart)
+      const minV  = Math.min(...vals) - 60;
+      const maxV  = Math.max(...vals) + 60;
+      const rng   = Math.max(1, maxV - minV);
+      const W = 290, CHART_H = 50, PAD_X = 8, PAD_Y = 4, LABEL_Y = 65, VAL_Y_OFFSET = -6;
+      const pts = vals.map((v, i) => {
+        const x = PAD_X + i * ((W - PAD_X) / Math.max(1, vals.length - 1));
+        const y = PAD_Y + (1 - (maxV - v) / rng) * (CHART_H - PAD_Y * 2);  // invert: lower seconds = higher dot
+        return [+x.toFixed(1), +y.toFixed(1)];
+      });
+      const pathD = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+      const areaD = `${pathD} L${pts[pts.length-1][0]},${CHART_H} L${pts[0][0]},${CHART_H} Z`;
+      const ptPath = el('pt-path'), ptArea = el('pt-area');
+      if (ptPath) ptPath.setAttribute('d', pathD);
+      if (ptArea) ptArea.setAttribute('d', areaD);
+      const dotsEl = el('pt-dots');
+      if (dotsEl) {
+        dotsEl.innerHTML = pts.map((p, i) => {
+          const isLast = i === pts.length - 1;
+          const r = isLast ? 4 : 3;
+          const fill = isLast ? '#6366f1' : 'rgba(99,102,241,.5)';
+          let s = `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}"/>`;
+          if (isLast) s += `<text x="${p[0]}" y="${p[1] + VAL_Y_OFFSET}" class="pt-val">${fmtSec(vals[i])}</text>`;
+          return s;
+        }).join('');
+      }
+      const labelsEl = el('pt-labels');
+      if (labelsEl) {
+        labelsEl.innerHTML = pts.map((p, i) => {
+          if (i % 2 !== 0 && i !== pts.length - 1) return '';
+          return `<text x="${p[0]}" y="${LABEL_Y}" class="pt-label">${labels[i]}</text>`;
+        }).join('');
+      }
+    })();
 
     // ── 6. AI Coaching Summary ───────────────────────────────────────────
     const coachText = el('coaching-text');

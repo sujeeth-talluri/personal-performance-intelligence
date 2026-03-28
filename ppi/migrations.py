@@ -110,12 +110,31 @@ def _migration_005_encrypt_strava_tokens() -> None:
             )
 
 
+def _migration_006_strava_expires_at_to_datetime() -> None:
+    """Convert strava_tokens.expires_at from INTEGER (Unix timestamp) to TIMESTAMP.
+
+    Uses PostgreSQL's to_timestamp() to convert existing integer values in-place,
+    so no data is lost. Safe to run on deployments that already have the column
+    as TIMESTAMP (the USING clause is a no-op in that case because the cast is
+    compatible).
+    """
+    with db.engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE strava_tokens "
+                "ALTER COLUMN expires_at TYPE TIMESTAMP "
+                "USING to_timestamp(expires_at)"
+            )
+        )
+
+
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("001_baseline", _migration_001_baseline),
     ("002_goal_pb_columns", _migration_002_goal_pb_columns),
     ("003_runner_profiles_coaching_plans", _migration_003_runner_profiles_coaching_plans),
     ("004_workout_logs_drop_unique_date", _migration_004_workout_logs_drop_unique_date),
     ("005_encrypt_strava_tokens", _migration_005_encrypt_strava_tokens),
+    ("006_strava_expires_at_to_datetime", _migration_006_strava_expires_at_to_datetime),
 ]
 
 
