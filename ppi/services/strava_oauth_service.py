@@ -71,7 +71,8 @@ def refresh_access_token(user_id):
     if not token:
         return None
 
-    if token.access_token and token.expires_at and token.expires_at > datetime.utcnow() + timedelta(seconds=60):
+    import time as _time
+    if token.access_token and token.expires_at and int(token.expires_at) > _time.time() + 60:
         return token.access_token
 
     _validate_strava_config(require_secret=True)
