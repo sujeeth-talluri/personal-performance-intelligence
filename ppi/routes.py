@@ -2747,7 +2747,7 @@ def _get_next_coach_message(current_step, user_answer, collected, goal, user) ->
                 pass
 
     # Fallback: return hardcoded question for this step
-    fallback = _COACH_FALLBACKS.get(current_step, _COACH_FALLBACKS[7])
+    fallback = _COACH_FALLBACKS.get(current_step) or _COACH_FALLBACKS.get(len(_COACH_FALLBACKS) - 1, {})
     return {**fallback, "collected": collected}
 
 
