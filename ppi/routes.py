@@ -975,36 +975,65 @@ def _should_sync_now(last_sync_at, cooldown_min):
 def fix_coaching_numbers(msg, weekly_target, long_run):
     """Replace stale km numbers in coaching messages with canonical values.
 
-    Handles ranges like "25-28km" or "25 to 28km", single values with weekly
-    context, targeting phrases, and long-run mentions.
+    Handles the full range of patterns the AI coach produces:
+      - Weekly ranges/totals: "25-28km", "42.0 km this week", "targeting 42km"
+      - Long run: "long run of 14km", "14 km on the long run",
+                  "Long Run — 14 km", "14km long run"
     """
-    # Match ranges like "25-28km" or "25 to 28km" near weekly context
+    # ── Weekly target ────────────────────────────────────────────────────────
+    # Ranges: "25-28km" or "25 to 28km"
     msg = re.sub(
         r'\b\d+\.?\d*\s*(?:to|-)\s*\d+\.?\d*\s*km'
         r'(?:\s*(?:per week|weekly|target|a week))?',
         f'{weekly_target:.0f}km',
         msg, flags=re.IGNORECASE
     )
-    # Match single values like "25km target" or "25km per week"
+    # "42.0 km this week" / "42km per week" / "42km weekly" / "42km target"
     msg = re.sub(
-        r'\b\d+\.?\d*\s*km\s*'
-        r'(?:per week|weekly|target|a week|this week)',
+        r'\b\d+\.?\d*\s*km\s*(?:per week|weekly|target|a week|this week)',
         f'{weekly_target:.0f}km this week',
         msg, flags=re.IGNORECASE
     )
-    # Match "targeting Xkm" or "target of Xkm"
+    # "targeting 42km" / "Target 42.0 km" / "target of 42km"
     msg = re.sub(
         r'(?:target(?:ing)?(?:\s+of)?)\s+\d+\.?\d*\s*km',
         f'targeting {weekly_target:.0f}km',
         msg, flags=re.IGNORECASE
     )
-    # Match long run mentions (including ranges)
-    msg = re.sub(
-        r'(?:long run|long-run)\s+(?:of\s+)'
-        r'(?:\d+\.?\d*\s*(?:to|-)\s*)?\d+\.?\d*\s*km',
-        f'long run of {long_run:.0f}km',
-        msg, flags=re.IGNORECASE
-    )
+
+    # ── Long run (only when we have a valid canonical value) ─────────────────
+    if long_run and long_run > 0:
+        lr = f'{long_run:.0f}'
+        # "long run of 14km" / "long-run of 14 km" (mandatory "of")
+        msg = re.sub(
+            r'(?:long run|long-run)\s+of\s+(?:\d+\.?\d*\s*(?:to|-)\s*)?\d+\.?\d*\s*km',
+            f'long run of {lr}km',
+            msg, flags=re.IGNORECASE
+        )
+        # "14 km on the long run" / "14km on the long run"
+        msg = re.sub(
+            r'\b\d+\.?\d*\s*km\s+on\s+the\s+(?:long run|long-run)',
+            f'{lr}km on the long run',
+            msg, flags=re.IGNORECASE
+        )
+        # "Long Run — 14 km" / "Long Run - 14km" / "Long Run – 14 km"
+        msg = re.sub(
+            r'(?:long run|long-run)\s*[—–\-]+\s*\d+\.?\d*\s*km',
+            f'Long Run — {lr}km',
+            msg, flags=re.IGNORECASE
+        )
+        # "14km long run" (number precedes the label)
+        msg = re.sub(
+            r'\b\d+\.?\d*\s*km\s+(?:long run|long-run)',
+            f'{lr}km long run',
+            msg, flags=re.IGNORECASE
+        )
+        # "with 14 km on the long" (partial phrase variant)
+        msg = re.sub(
+            r'(?<=with\s)\d+\.?\d*\s*km\s+on\s+the\s+long',
+            f'{lr}km on the long',
+            msg, flags=re.IGNORECASE
+        )
     return msg
 
 
