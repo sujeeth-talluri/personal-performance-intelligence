@@ -4,16 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StrideIQ — Building Your Plan</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/css/strideiq.css">
   <style>
-    /* ── Banner ── */
+    /* ── Limited dashboard overrides ── */
     .dq-banner {
       display: flex; align-items: flex-start; gap: 12px;
-      padding: 14px 18px; border-radius: 8px; margin-bottom: 20px;
+      padding: 14px 18px; border-radius: 10px; margin-bottom: 20px;
       font-size: .88rem; line-height: 1.5;
     }
-    .dq-banner.warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
-    .dq-banner.info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
+    .dq-banner.warning {
+      background: rgba(245,158,11,.08);
+      border-left: 4px solid #f59e0b;
+      color: #fbbf24;
+    }
+    .dq-banner.info {
+      background: rgba(59,130,246,.08);
+      border-left: 4px solid #3b82f6;
+      color: #93c5fd;
+    }
     .dq-banner-body { flex: 1; }
     .dq-banner-action {
       flex-shrink: 0; padding: 6px 14px; border-radius: 6px;
@@ -21,76 +29,225 @@
       font-weight: 600; text-decoration: none; color: inherit;
       white-space: nowrap; transition: background .2s;
     }
-    .dq-banner-action:hover { background: rgba(255,255,255,.1); }
+    .dq-banner-action:hover { background: rgba(255,255,255,.08); }
 
-    /* ── Progress unlock card ── */
+    /* ── Unlock card ── */
     .unlock-card {
-      background: #161b27; border: 1px solid #1e2a3a;
-      border-radius: 12px; padding: 24px 26px; margin-bottom: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 28px 30px;
+      margin-bottom: 20px;
     }
-    .unlock-card h3 { font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
-    .unlock-card p  { font-size: .85rem; color: #64748b; margin-bottom: 18px; line-height: 1.6; }
 
+    .unlock-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .unlock-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .unlock-desc {
+      font-size: .84rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 460px;
+    }
+    .unlock-badge {
+      flex-shrink: 0;
+      background: rgba(16,185,129,.1);
+      border: 1px solid rgba(16,185,129,.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      text-align: center;
+    }
+    .unlock-badge-num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--green);
+      line-height: 1;
+    }
+    .unlock-badge-label {
+      font-size: .68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-top: 3px;
+    }
+
+    /* Week progress pips */
     .weeks-row {
       display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
     }
     .week-pip {
-      flex: 1; min-width: 56px; padding: 10px 6px; border-radius: 8px;
+      flex: 1; min-width: 60px; padding: 10px 6px; border-radius: 8px;
       text-align: center; font-size: .78rem; font-weight: 700;
       transition: background .3s;
     }
-    .week-pip.done    { background: #1a3a2a; color: #00C853; border: 1px solid #00C853; }
-    .week-pip.partial { background: #2a2a1a; color: #f59e0b; border: 1px solid #f59e0b; }
-    .week-pip.empty   { background: #1e2a3a; color: #3a4a5a; border: 1px dashed #2a3a4a; }
+    .week-pip.done    { background: rgba(16,185,129,.12); color: var(--green); border: 1px solid rgba(16,185,129,.35); }
+    .week-pip.partial { background: rgba(245,158,11,.08); color: #f59e0b; border: 1px solid rgba(245,158,11,.35); }
+    .week-pip.empty   { background: var(--bg-card); color: var(--text-muted); border: 1px dashed var(--border); }
 
     .progress-track {
-      height: 6px; background: #1e2a3a; border-radius: 3px; overflow: hidden; margin-bottom: 12px;
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 12px;
     }
-    .progress-fill { height: 100%; background: #00C853; border-radius: 3px; transition: width .6s ease; }
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 3px;
+      transition: width .6s ease;
+    }
 
-    .unlock-hint { font-size: .8rem; color: #64748b; text-align: center; }
-    .unlock-hint strong { color: #00C853; }
+    .unlock-hint {
+      font-size: .8rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.6;
+    }
+    .unlock-hint strong { color: var(--green); }
+
+    .unlock-cta-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
 
     .btn-sync {
-      display: inline-block; background: #00C853; color: #0d1117;
-      font-weight: 700; padding: 11px 26px; border-radius: 8px;
-      text-decoration: none; font-size: .9rem;
-      transition: background .2s, transform .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: #07090f;
+      font-weight: 700;
+      padding: 11px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: .9rem;
+      transition: background .2s, transform .15s, box-shadow .2s;
     }
-    .btn-sync:hover { background: #00e676; transform: translateY(-1px); }
+    .btn-sync:hover {
+      background: #34d399;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(16,185,129,.3);
+    }
+
+    /* ── Preview unlock teaser ── */
+    .preview-teaser {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .preview-teaser-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .preview-lock-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(245,158,11,.1);
+      color: #f59e0b;
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: 6px;
+      padding: 2px 9px;
+      font-size: .68rem;
+      font-weight: 700;
+    }
+    .preview-teaser-body {
+      padding: 20px;
+      filter: blur(3px);
+      opacity: .4;
+      pointer-events: none;
+      user-select: none;
+    }
+    .preview-metric-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .85rem;
+    }
+    .preview-metric-row:last-child { border-bottom: none; }
+
+    .preview-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-align: center;
+      padding: 20px;
+    }
+    .preview-overlay-icon { font-size: 24px; }
+    .preview-overlay-text {
+      font-size: .82rem;
+      color: var(--text-secondary);
+      max-width: 200px;
+      line-height: 1.5;
+    }
+    .preview-overlay-weeks {
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--green);
+    }
 
     /* ── Runs list ── */
     .runs-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
     .runs-table th {
-      text-align: left; padding: 8px 12px; font-size: .7rem;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: #64748b; border-bottom: 1px solid #1e2a3a;
+      text-align: left; padding: 8px 14px;
+      font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
     }
-    .runs-table td { padding: 10px 12px; border-bottom: 1px solid #1a2230; color: #d0d8e4; }
+    .runs-table td { padding: 10px 14px; border-bottom: 1px solid rgba(30,42,58,.6); color: var(--text-primary); }
     .runs-table tr:last-child td { border-bottom: none; }
-    .runs-table tr:hover td { background: #161b27; }
-    .dist-badge {
-      font-weight: 700; color: #00C853;
-    }
+    .runs-table tr:hover td { background: rgba(255,255,255,.02); }
+    .dist-badge { font-weight: 700; color: var(--green); }
   </style>
 </head>
 <body>
   <div class="app-layout">
 
-    <!-- Sidebar (reuse app.css sidebar if present, else minimal) -->
-    <aside class="sidebar">
-      <div class="brand">StrideIQ</div>
-      <nav class="sidenav">
-        <a class="nav-link active" href="/">Dashboard</a>
-        <a class="nav-link" href="/settings">Settings</a>
-        <a class="nav-link" href="/connect/strava">Connect Strava</a>
-        <a class="nav-link" href="/logout">Sign Out</a>
+    <!-- Minimal sidebar -->
+    <aside class="sidebar" style="width:64px;min-width:64px;align-items:center;padding:20px 0;gap:0;">
+      <div style="font-size:22px;font-weight:800;color:var(--green);margin-bottom:28px;writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:1px;padding:8px 0;">SIQ</div>
+      <nav style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
+        <a href="/" title="Dashboard" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:rgba(16,185,129,.12);color:var(--green);font-size:18px;text-decoration:none;">📊</a>
+        <a href="/settings" title="Settings" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;">⚙️</a>
+        <a href="/connect/strava" title="Connect Strava" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;">🔗</a>
       </nav>
+      <a href="/logout" title="Sign Out" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;margin-bottom:8px;">↩</a>
     </aside>
 
     <main class="main">
 
-      <!-- ── Banner ────────────────────────────────────────────── -->
+      <!-- ── Banner ─────────────────────────────────────────────── -->
       {% if banner and banner.message %}
       <div class="dq-banner {{ banner.type }}">
         <span style="font-size:1.2rem;flex-shrink:0">{{ banner.icon }}</span>
@@ -101,26 +258,45 @@
       </div>
       {% endif %}
 
-      <!-- ── Goal card ─────────────────────────────────────────── -->
+      <!-- ── Goal card ──────────────────────────────────────────── -->
       {% if goal %}
       <div class="section-label">Your Goal</div>
-      <div class="card" style="padding:18px 22px;">
-        <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:.88rem;">
-          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Race</div><strong>{{ goal.race_name }}</strong></div>
-          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Goal Time</div><strong>{{ goal.goal_time }}</strong></div>
-          <div><div style="color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Race Date</div><strong>{{ goal.race_date }}</strong></div>
+      <div class="card" style="padding:16px 20px;">
+        <div style="display:flex;gap:28px;flex-wrap:wrap;font-size:.85rem;">
+          <div>
+            <div style="color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Race</div>
+            <strong style="color:var(--text-primary)">{{ goal.race_name }}</strong>
+          </div>
+          <div>
+            <div style="color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Goal Time</div>
+            <strong style="color:var(--green)">{{ goal.goal_time }}</strong>
+          </div>
+          <div>
+            <div style="color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Race Date</div>
+            <strong style="color:var(--text-primary)">{{ goal.race_date }}</strong>
+          </div>
         </div>
       </div>
       {% endif %}
 
-      <!-- ── Coaching unlock progress ──────────────────────────── -->
+      <!-- ── Unlock progress ────────────────────────────────────── -->
       <div class="section-label">Coaching Plan</div>
       <div class="unlock-card">
-        <h3>Your personalized coaching plan is building</h3>
-        <p>
-          Coach Ike needs at least <strong style="color:#e0e0e0">4 weeks</strong> of training data
-          to generate accurate, personalized coaching. Keep logging your runs — the plan unlocks automatically.
-        </p>
+        <div class="unlock-header">
+          <div>
+            <div class="unlock-title">Coach Ike is learning your fitness</div>
+            <div class="unlock-desc">
+              Your personalised coaching plan unlocks as soon as you have
+              <strong style="color:var(--text-primary)">4 weeks</strong> of training data.
+              Keep running — the full dashboard activates automatically.
+            </div>
+          </div>
+          {% set span = dq.data_span_weeks | int %}
+          <div class="unlock-badge">
+            <div class="unlock-badge-num">{{ span }}<span style="font-size:.9rem;color:var(--text-muted)">/4</span></div>
+            <div class="unlock-badge-label">weeks</div>
+          </div>
+        </div>
 
         {% set span = dq.data_span_weeks | int %}
         {% set pct  = [(span / 4 * 100) | int, 100] | min %}
@@ -128,9 +304,9 @@
         <div class="weeks-row">
           {% for i in range(4) %}
             {% if i < span %}
-              <div class="week-pip done">Week {{ i + 1 }}<br>✓</div>
+              <div class="week-pip done">Week {{ i + 1 }}<br>✓ Done</div>
             {% elif i == span %}
-              <div class="week-pip partial">Week {{ i + 1 }}<br>…</div>
+              <div class="week-pip partial">Week {{ i + 1 }}<br>In progress</div>
             {% else %}
               <div class="week-pip empty">Week {{ i + 1 }}<br>–</div>
             {% endif %}
@@ -140,20 +316,62 @@
         <div class="progress-track">
           <div class="progress-fill" style="width: {{ pct }}%"></div>
         </div>
+
         <div class="unlock-hint">
           <strong>{{ dq.data_span_weeks }}</strong> of 4 weeks complete
           &nbsp;·&nbsp; {{ dq.total_runs }} run{{ 's' if dq.total_runs != 1 }} logged
-          &nbsp;·&nbsp; Syncs automatically when you train
+          &nbsp;·&nbsp; Syncs when you run
         </div>
 
-        <div style="text-align:center;margin-top:20px;">
+        <div class="unlock-cta-row">
           <a class="btn-sync" href="/?sync=1">🔄 Sync Latest Runs</a>
         </div>
       </div>
 
-      <!-- ── Recent Runs ───────────────────────────────────────── -->
-      {% if runs %}
+      <!-- ── Locked feature preview ─────────────────────────────── -->
+      <div class="section-label">What unlocks at 4 weeks</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+
+        <div class="preview-teaser">
+          <div class="preview-teaser-header">
+            Training Load (PMC)
+            <span class="preview-lock-badge">🔒 Unlocks soon</span>
+          </div>
+          <div class="preview-teaser-body">
+            <div class="preview-metric-row"><span>Fitness (CTL)</span><span>42</span></div>
+            <div class="preview-metric-row"><span>Fatigue (ATL)</span><span>38</span></div>
+            <div class="preview-metric-row"><span>Form (TSB)</span><span>+4</span></div>
+          </div>
+          <div class="preview-overlay">
+            <div class="preview-overlay-icon">📈</div>
+            <div class="preview-overlay-text">Your full performance management chart</div>
+            <div class="preview-overlay-weeks">{{ 4 - (dq.data_span_weeks | int) }} week{{ 's' if (4 - (dq.data_span_weeks | int)) != 1 }} to unlock</div>
+          </div>
+        </div>
+
+        <div class="preview-teaser">
+          <div class="preview-teaser-header">
+            Race Prediction
+            <span class="preview-lock-badge">🔒 Unlocks soon</span>
+          </div>
+          <div class="preview-teaser-body">
+            <div class="preview-metric-row"><span>Projected time</span><span>3:58:20</span></div>
+            <div class="preview-metric-row"><span>Goal alignment</span><span>On Track</span></div>
+            <div class="preview-metric-row"><span>Confidence</span><span>Building</span></div>
+          </div>
+          <div class="preview-overlay">
+            <div class="preview-overlay-icon">🎯</div>
+            <div class="preview-overlay-text">VDOT-powered race time prediction</div>
+            <div class="preview-overlay-weeks">{{ 4 - (dq.data_span_weeks | int) }} week{{ 's' if (4 - (dq.data_span_weeks | int)) != 1 }} to unlock</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Recent Runs ─────────────────────────────────────────── -->
       <div class="section-label">Recent Runs</div>
+      {% if runs %}
       <div class="card" style="padding:0;overflow:hidden;">
         <table class="runs-table">
           <thead>
@@ -177,10 +395,9 @@
         </table>
       </div>
       {% else %}
-      <div class="section-label">Recent Runs</div>
-      <div class="card" style="padding:24px;text-align:center;color:#64748b;">
-        No runs logged yet. Sync your Strava to import your training history.
-        <br><br>
+      <div class="card" style="padding:32px;text-align:center;color:var(--text-muted);">
+        <div style="font-size:2rem;margin-bottom:12px;">🏃</div>
+        <div style="font-size:.9rem;margin-bottom:16px;">No runs logged yet. Connect Strava to import your training history.</div>
         <a class="btn-sync" href="/?sync=1">🔄 Sync Strava Now</a>
       </div>
       {% endif %}

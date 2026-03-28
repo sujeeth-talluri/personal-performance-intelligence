@@ -1,5 +1,6 @@
 import json
 import copy
+import math
 import re
 import secrets
 import smtplib
@@ -269,8 +270,19 @@ def _apply_confirmed_current_week_repair(user_id, plan_row, week_start, snapshot
     return repaired_snapshot, True
 
 
-def _pace_guidance_for_session(session_name):
-    guidance = {
+def _secs_to_pace_str(secs):
+    """Convert seconds per km to 'M:SS/km' string."""
+    secs = max(0, int(round(secs)))
+    return f"{secs // 60}:{secs % 60:02d}/km"
+
+
+def _pace_guidance_for_session(session_name, goal_pace_sec_per_km=None):
+    """Return pace guidance for a session.
+
+    When goal_pace_sec_per_km is provided, returns actual pace ranges like
+    '5:30–6:00/km'. Falls back to descriptive text if pace is unavailable.
+    """
+    descriptive = {
         "Long Run": "Easy conversational pace",
         "Medium Long Run": "Controlled easy-to-steady aerobic effort",
         "Recovery Run": "Very easy recovery effort",
@@ -282,7 +294,27 @@ def _pace_guidance_for_session(session_name):
         "Marathon Pace Run": "Settle into goal marathon pace",
         "Race Day": "Race execution pace",
     }
-    return guidance.get(session_name, "")
+    if not goal_pace_sec_per_km or goal_pace_sec_per_km <= 0:
+        return descriptive.get(session_name, "")
+    gp = goal_pace_sec_per_km
+    # Offset ranges (seconds/km) relative to goal marathon pace.
+    # Negative = faster; Positive = slower.
+    zones = {
+        "Recovery Run":     (gp + 80,  gp + 100),
+        "Easy Run":         (gp + 55,  gp + 75),
+        "Aerobic Run":      (gp + 40,  gp + 65),
+        "Long Run":         (gp + 40,  gp + 70),
+        "Medium Long Run":  (gp + 25,  gp + 55),
+        "Steady Run":       (gp + 10,  gp + 30),
+        "Tempo Run":        (gp - 15,  gp + 5),
+        "Speed Session":    (gp - 30,  gp - 10),
+        "Marathon Pace Run":(gp -  5,  gp + 5),
+        "Race Day":         (gp -  5,  gp + 5),
+    }
+    if session_name in zones:
+        lo, hi = zones[session_name]
+        return f"{_secs_to_pace_str(lo)}–{_secs_to_pace_str(hi)}"
+    return descriptive.get(session_name, "")
 
 
 def _schedule_preferences_from_profile(profile):
@@ -332,7 +364,10 @@ def _deterministic_current_week_daily_plan(intel, week_start, schedule_prefs=Non
         daily_plan[day_name] = {
             "type": _session_type_from_template_session(session_name),
             "km": round(float(item.get("target_km") or 0.0), 1),
-            "pace_guidance": _pace_guidance_for_session(session_name),
+            "pace_guidance": _pace_guidance_for_session(
+                session_name,
+                weekly_goal.get("goal_marathon_pace_sec_per_km"),
+            ),
             "notes": item.get("purpose", ""),
         }
     return daily_plan
@@ -2489,6 +2524,22 @@ def dashboard():
         " but the strength session stays incomplete."
     )
 
+    # ── Projected race-day TSB ─────────────────────────────────────────────────
+    # Uses ATL/CTL exponential decay (assuming taper = minimal training) to
+    # estimate the athlete's form on race day.  Ideal race-day TSB: +5 to +15.
+    # ATL decay constant = 7 days; CTL decay constant = 42 days.
+    _proj_tsb = None
+    try:
+        _d2r = int((intel.get("goal") or {}).get("days_remaining") or 0)
+        _c_atl = float(intel.get("current_atl") or 0.0)
+        _c_ctl = float(intel.get("current_ctl") or 0.0)
+        if _d2r > 0 and _c_ctl > 0:
+            _p_atl = _c_atl * math.exp(-_d2r / 7.0)
+            _p_ctl = _c_ctl * math.exp(-_d2r / 42.0)
+            _proj_tsb = round(_p_ctl - _p_atl, 1)
+    except Exception:
+        pass  # Non-critical — never break the dashboard
+
     return render_template(
         "dashboard.html",
         user=user,
@@ -2580,6 +2631,7 @@ def dashboard():
         prediction_trend_json=prediction_trend_json,
         intensity_split=_intensity_split,
         target_ctl=62 if float((intel.get("goal") or {}).get("distance_km") or 42.195) >= 40 else 55,
+        projected_tsb=_proj_tsb,
     )
 
 # ---------------------------------------------------------------------------
@@ -2589,42 +2641,22 @@ def dashboard():
 # Hardcoded fallback messages per step when Claude API is unavailable.
 _COACH_FALLBACKS = {
     0: {
-        "text": "Welcome! I'm Coach Ike, your AI marathon coach. I have a few quick questions to personalise your training plan. First — how consistently have you been running recently?",
+        "text": "Welcome! I'm Coach Ike, your AI marathon coach. I have 4 quick questions to personalise your training plan. First — how consistently have you been running recently?",
         "options": ["Just getting started (< 1 month)", "Getting back into it (had a break)", "Training consistently (3+ months)", "Well trained (6+ months solid)"],
         "input_type": "options",
     },
     1: {
-        "text": "Great — good to know where you're starting from. Have you completed this race distance before?",
+        "text": "Good to know. Have you completed this race distance before?",
         "options": ["First time at this distance", "Done it once before", "Done it multiple times"],
         "input_type": "options",
     },
     2: {
-        "text": "Understood. Any injuries or niggles I should know about in the last 6 months?",
+        "text": "Got it. Any injuries or niggles I should factor in from the last 6 months?",
         "options": ["Fully healthy — no issues", "Minor issue, mostly recovered", "Managing an ongoing issue"],
         "input_type": "options",
     },
     3: {
-        "text": "Got it. How many days per week can you realistically commit to training?",
-        "options": ["3 days", "4 days", "5 days", "6 days"],
-        "input_type": "options",
-    },
-    4: {
-        "text": "Perfect. Which day works best for your weekly long run?",
-        "options": ["Saturday", "Sunday", "Flexible — no preference"],
-        "input_type": "options",
-    },
-    5: {
-        "text": "Good to know. How many strength or gym sessions per week do you usually do?",
-        "options": ["No strength training", "1 session per week", "2 sessions per week"],
-        "input_type": "options",
-    },
-    6: {
-        "text": "Almost done! When do you usually run?",
-        "options": ["Early morning (before 7am)", "Morning (7-10am)", "Evening (after 5pm)", "Flexible — it varies"],
-        "input_type": "options",
-    },
-    7: {
-        "text": "Last question — what matters most to you about this race?",
+        "text": "Last one — what matters most to you about this race?",
         "options": ["Just finish healthy and strong", "Beat my previous time", "Hit my specific time goal", "Qualify for a major race"],
         "input_type": "options",
     },
@@ -2635,10 +2667,6 @@ _STEP_KEYS = [
     "consistency_level",
     "race_experience",
     "injury_status",
-    "training_days_per_week",
-    "long_run_day",
-    "strength_days_per_week",
-    "preferred_run_time",
     "goal_priority",
 ]
 
@@ -2662,28 +2690,20 @@ def _get_next_coach_message(current_step, user_answer, collected, goal, user) ->
         f"Runner's goal: {goal.goal_time} {dist_label} on {goal.race_date} ({goal.race_name})\n"
         f"Runner's name: {user.name or 'there'}\n\n"
         f"Conversation so far:\n{json.dumps(collected, indent=2)}\n\n"
-        f"Current step: {current_step} of 7\n"
+        f"Current step: {current_step} of 3\n"
         f"Previous answer: \"{user_answer}\"\n\n"
         f"Generate the next conversational message for step {current_step}.\n\n"
-        f"STEP DEFINITIONS:\n"
-        f"Step 0: Warm welcome using runner's name and their specific goal. Ask how consistently they have been running recently.\n"
+        f"STEP DEFINITIONS (only 4 steps total — 0 through 3):\n"
+        f"Step 0: Warm welcome using runner's name and their specific goal. Mention this is just 4 quick questions. Ask how consistently they have been running recently.\n"
         f"  Options: [\"Just getting started (< 1 month)\", \"Getting back into it (had a break)\", \"Training consistently (3+ months)\", \"Well trained (6+ months solid)\"]\n"
         f"Step 1: Brief acknowledgment. Ask if they have completed this distance before.\n"
         f"  Options: [\"First time at this distance\", \"Done it once before\", \"Done it multiple times\"]\n"
-        f"Step 2: Brief acknowledgment. Ask about injuries in last 6 months.\n"
+        f"Step 2: Brief acknowledgment. Ask about injuries or niggles in last 6 months.\n"
         f"  Options: [\"Fully healthy — no issues\", \"Minor issue, mostly recovered\", \"Managing an ongoing issue\"]\n"
-        f"Step 3: Brief acknowledgment (if injury mentioned, show empathy). Ask training days per week.\n"
-        f"  Options: [\"3 days\", \"4 days\", \"5 days\", \"6 days\"]\n"
-        f"Step 4: Brief acknowledgment. Ask long run day preference.\n"
-        f"  Options: [\"Saturday\", \"Sunday\", \"Flexible — no preference\"]\n"
-        f"Step 5: Brief acknowledgment. Ask strength training sessions per week.\n"
-        f"  Options: [\"No strength training\", \"1 session per week\", \"2 sessions per week\"]\n"
-        f"Step 6: Brief acknowledgment. Ask when they usually run.\n"
-        f"  Options: [\"Early morning (before 7am)\", \"Morning (7-10am)\", \"Evening (after 5pm)\", \"Flexible — it varies\"]\n"
-        f"Step 7: Brief acknowledgment. Ask what matters most to them. After options, add a warm closing:\n"
+        f"Step 3: Brief acknowledgment (if injury mentioned, show empathy). Ask what matters most to them about this race. This is the LAST question — end warmly.\n"
         f"  Options: [\"Just finish healthy and strong\", \"Beat my previous time\", \"Hit my specific time goal\", \"Qualify for a major race\"]\n\n"
         f"RULES:\n"
-        f"- Keep each message SHORT — 2-3 sentences max before the question\n"
+        f"- Keep each message SHORT — 1-2 sentences max before the question\n"
         f"- Be warm, personal, specific to their goal and race name\n"
         f"- If injury mentioned, acknowledge with care\n"
         f"- Never be generic\n\n"
@@ -2851,8 +2871,8 @@ def coach_intro_message():
     if current_step > 0 and user_answer and current_step - 1 < len(_STEP_KEYS):
         collected[_STEP_KEYS[current_step - 1]] = user_answer
 
-    # All 8 steps answered → save and redirect
-    if current_step >= 8:
+    # All 4 steps answered → save and redirect
+    if current_step >= 4:
         _save_runner_profile(user.id, collected)
         return jsonify({"done": True, "redirect": url_for("web.dashboard")})
 

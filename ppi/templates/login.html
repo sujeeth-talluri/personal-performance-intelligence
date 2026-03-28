@@ -6,120 +6,271 @@
   <title>Sign In · StrideIQ</title>
   <link rel="stylesheet" href="/static/css/strideiq.css">
   <style>
-    .login-wrap {
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e0e0e0;
       min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Left brand panel ──────────────────────────────────────── */
+    .auth-left {
+      width: 42%;
+      min-width: 300px;
+      background: #10161f;
+      border-right: 1px solid #1e2a3a;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 48px;
+      gap: 40px;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
+      font-size: 22px;
+      box-shadow: 0 4px 16px rgba(16,185,129,.3);
     }
-    .login-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: 48px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: var(--shadow-lg);
-    }
-    .login-logo {
-      font-family: var(--font-display);
-      font-size: 26px;
+    .brand-name {
+      font-size: 22px;
       font-weight: 800;
-      color: var(--green);
-      letter-spacing: -0.5px;
-      margin-bottom: 2px;
+      color: #fff;
+      letter-spacing: -0.4px;
     }
-    .login-tagline {
-      font-family: var(--font-mono);
+    .brand-sub {
       font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 36px;
+      color: #64748b;
+      letter-spacing: .05em;
+      text-transform: uppercase;
     }
-    .login-title {
-      font-family: var(--font-display);
-      font-size: 20px;
-      font-weight: 700;
+
+    .brand-headline {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.25;
+      letter-spacing: -0.5px;
+    }
+    .brand-headline em {
+      font-style: normal;
+      color: #10b981;
+    }
+
+    .feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: .88rem;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .brand-quote {
+      font-size: .78rem;
+      color: #3d4f63;
+      font-style: italic;
+      border-left: 2px solid #1e2a3a;
+      padding-left: 12px;
+      line-height: 1.6;
+    }
+
+    /* ── Right form panel ──────────────────────────────────────── */
+    .auth-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 32px;
+    }
+
+    .auth-form-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .form-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
       margin-bottom: 6px;
+      letter-spacing: -0.3px;
     }
-    .login-sub {
-      color: var(--text-secondary);
-      font-size: 13px;
-      margin-bottom: 28px;
+    .form-sub {
+      color: #64748b;
+      font-size: .85rem;
+      margin-bottom: 32px;
     }
+
     .form-row {
       margin-bottom: 16px;
     }
     .form-row label {
       display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: .07em;
       margin-bottom: 6px;
     }
+    .form-row input {
+      width: 100%;
+      background: #161b27;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: #e0e0e0;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-row input:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.12);
+    }
+    .form-row input::placeholder { color: #3d4f63; }
+
     .submit-btn {
       width: 100%;
       padding: 12px;
-      background: var(--green);
+      background: #10b981;
       color: #07090f;
       border: none;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: .95rem;
       font-weight: 700;
       cursor: pointer;
       margin-top: 8px;
-      transition: var(--transition);
+      transition: background .2s, transform .15s, box-shadow .2s;
     }
     .submit-btn:hover {
-      box-shadow: var(--shadow-glow);
+      background: #34d399;
+      box-shadow: 0 4px 16px rgba(16,185,129,.3);
       transform: translateY(-1px);
     }
+    .submit-btn:active { transform: scale(.98); }
+
     .error-msg {
-      background: var(--red-dim);
-      border: 1px solid rgba(255,71,87,0.3);
-      border-radius: var(--radius-sm);
-      color: var(--red);
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      border-radius: 8px;
+      color: #f87171;
       padding: 10px 14px;
-      font-size: 13px;
+      font-size: .84rem;
       margin-bottom: 20px;
+      line-height: 1.5;
     }
-    .login-footer {
+
+    .form-footer {
       margin-top: 24px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      font-size: .82rem;
+      color: #64748b;
     }
-    .login-footer a { color: var(--green); }
+    .form-footer a { color: #10b981; text-decoration: none; }
+    .form-footer a:hover { color: #34d399; }
+
+    /* Responsive */
+    @media (max-width: 680px) {
+      .auth-left { display: none; }
+      .auth-right { padding: 32px 20px; }
+    }
   </style>
 </head>
 <body>
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-logo">StrideIQ</div>
-      <div class="login-tagline">AI Marathon Coach</div>
-      <div class="login-title">Welcome back</div>
-      <div class="login-sub">Sign in to view your training dashboard.</div>
-      {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
-      <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-row">
-          <label>Email</label>
-          <input name="email" type="email" required placeholder="you@example.com">
-        </div>
-        <div class="form-row">
-          <label>Password</label>
-          <input name="password" type="password" required placeholder="••••••••">
-        </div>
-        <button type="submit" class="submit-btn">Sign In</button>
-      </form>
-      <div class="login-footer">
-        <a href="/forgot-password">Forgot password?</a>
-        &nbsp;·&nbsp;
-        <a href="/register">Create account</a>
-      </div>
+
+<!-- ── Left brand panel ─────────────────────────────────────────────────── -->
+<div class="auth-left">
+  <div class="brand-mark">
+    <div class="brand-icon">🏃</div>
+    <div>
+      <div class="brand-name">StrideIQ</div>
+      <div class="brand-sub">AI Marathon Coach</div>
     </div>
   </div>
+
+  <div class="brand-headline">
+    Train smarter.<br>
+    Race <em>faster.</em>
+  </div>
+
+  <div class="feature-list">
+    <div class="feature-item">
+      <div class="feature-dot"></div>
+      <span>Personalized daily training plans powered by your Strava data</span>
+    </div>
+    <div class="feature-item">
+      <div class="feature-dot"></div>
+      <span>ATL/CTL training load tracking with race-day form projection</span>
+    </div>
+    <div class="feature-item">
+      <div class="feature-dot"></div>
+      <span>VDOT-based race time prediction with goal probability scoring</span>
+    </div>
+    <div class="feature-item">
+      <div class="feature-dot"></div>
+      <span>Coach Ike's weekly briefing with 80/20 intensity balance feedback</span>
+    </div>
+  </div>
+
+  <div class="brand-quote">
+    "The miracle isn't that I finished. The miracle is that I had the courage to start."<br>
+    — John Bingham
+  </div>
+</div>
+
+<!-- ── Right form panel ─────────────────────────────────────────────────── -->
+<div class="auth-right">
+  <div class="auth-form-wrap">
+    <div class="form-title">Welcome back</div>
+    <div class="form-sub">Sign in to view your training dashboard.</div>
+    {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-row">
+        <label>Email</label>
+        <input name="email" type="email" required placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input name="password" type="password" required placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" class="submit-btn">Sign In →</button>
+    </form>
+    <div class="form-footer">
+      <a href="/forgot-password">Forgot password?</a>
+      <a href="/register">Create account</a>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

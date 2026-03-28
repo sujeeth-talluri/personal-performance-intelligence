@@ -6,122 +6,279 @@
   <title>Create Account · StrideIQ</title>
   <link rel="stylesheet" href="/static/css/strideiq.css">
   <style>
-    .login-wrap {
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e0e0e0;
       min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Left brand panel ──────────────────────────────────────── */
+    .auth-left {
+      width: 42%;
+      min-width: 300px;
+      background: #10161f;
+      border-right: 1px solid #1e2a3a;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 48px;
+      gap: 36px;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
+      font-size: 22px;
+      box-shadow: 0 4px 16px rgba(16,185,129,.3);
     }
-    .login-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: 48px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: var(--shadow-lg);
-    }
-    .login-logo {
-      font-family: var(--font-display);
-      font-size: 26px;
+    .brand-name {
+      font-size: 22px;
       font-weight: 800;
-      color: var(--green);
-      letter-spacing: -0.5px;
-      margin-bottom: 2px;
+      color: #fff;
+      letter-spacing: -0.4px;
     }
-    .login-tagline {
-      font-family: var(--font-mono);
+    .brand-sub {
       font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 36px;
+      color: #64748b;
+      letter-spacing: .05em;
+      text-transform: uppercase;
     }
-    .login-title {
-      font-family: var(--font-display);
-      font-size: 20px;
+
+    .brand-headline {
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.25;
+      letter-spacing: -0.5px;
+    }
+    .brand-headline em {
+      font-style: normal;
+      color: #10b981;
+    }
+
+    .onboarding-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .onboard-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      font-size: .86rem;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(16,185,129,.15);
+      border: 1px solid rgba(16,185,129,.35);
+      color: #10b981;
+      font-size: .72rem;
       font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-quote {
+      font-size: .78rem;
+      color: #3d4f63;
+      font-style: italic;
+      border-left: 2px solid #1e2a3a;
+      padding-left: 12px;
+      line-height: 1.6;
+    }
+
+    /* ── Right form panel ──────────────────────────────────────── */
+    .auth-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 32px;
+    }
+
+    .auth-form-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .form-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
       margin-bottom: 6px;
+      letter-spacing: -0.3px;
     }
-    .login-sub {
-      color: var(--text-secondary);
-      font-size: 13px;
-      margin-bottom: 28px;
+    .form-sub {
+      color: #64748b;
+      font-size: .85rem;
+      margin-bottom: 32px;
     }
+
     .form-row {
       margin-bottom: 16px;
     }
     .form-row label {
       display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: .07em;
       margin-bottom: 6px;
     }
+    .form-row input {
+      width: 100%;
+      background: #161b27;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: #e0e0e0;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-row input:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.12);
+    }
+    .form-row input::placeholder { color: #3d4f63; }
+
     .submit-btn {
       width: 100%;
       padding: 12px;
-      background: var(--green);
+      background: #10b981;
       color: #07090f;
       border: none;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: .95rem;
       font-weight: 700;
       cursor: pointer;
       margin-top: 8px;
-      transition: var(--transition);
+      transition: background .2s, transform .15s, box-shadow .2s;
     }
     .submit-btn:hover {
-      box-shadow: var(--shadow-glow);
+      background: #34d399;
+      box-shadow: 0 4px 16px rgba(16,185,129,.3);
       transform: translateY(-1px);
     }
+    .submit-btn:active { transform: scale(.98); }
+
     .error-msg {
-      background: var(--red-dim);
-      border: 1px solid rgba(255,71,87,0.3);
-      border-radius: var(--radius-sm);
-      color: var(--red);
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      border-radius: 8px;
+      color: #f87171;
       padding: 10px 14px;
-      font-size: 13px;
+      font-size: .84rem;
       margin-bottom: 20px;
+      line-height: 1.5;
     }
-    .login-footer {
+
+    .form-footer {
       margin-top: 24px;
       text-align: center;
-      font-size: 13px;
-      color: var(--text-muted);
+      font-size: .82rem;
+      color: #64748b;
     }
-    .login-footer a { color: var(--green); }
+    .form-footer a { color: #10b981; text-decoration: none; }
+    .form-footer a:hover { color: #34d399; }
+
+    /* Responsive */
+    @media (max-width: 680px) {
+      .auth-left { display: none; }
+      .auth-right { padding: 32px 20px; }
+    }
   </style>
 </head>
 <body>
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-logo">StrideIQ</div>
-      <div class="login-tagline">AI Marathon Coach</div>
-      <div class="login-title">Create your account</div>
-      <div class="login-sub">One account. One Strava connection. Your goal stays saved.</div>
-      {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
-      <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-row">
-          <label>Name</label>
-          <input name="name" required placeholder="Your name">
-        </div>
-        <div class="form-row">
-          <label>Email</label>
-          <input name="email" type="email" required placeholder="you@example.com">
-        </div>
-        <div class="form-row">
-          <label>Password</label>
-          <input name="password" type="password" minlength="6" required placeholder="••••••••">
-        </div>
-        <button type="submit" class="submit-btn">Create Account</button>
-      </form>
-      <div class="login-footer">
-        Already have an account? <a href="/login">Sign in</a>
-      </div>
+
+<!-- ── Left brand panel ─────────────────────────────────────────────────── -->
+<div class="auth-left">
+  <div class="brand-mark">
+    <div class="brand-icon">🏃</div>
+    <div>
+      <div class="brand-name">StrideIQ</div>
+      <div class="brand-sub">AI Marathon Coach</div>
     </div>
   </div>
+
+  <div class="brand-headline">
+    Your marathon<br>
+    plan in <em>minutes.</em>
+  </div>
+
+  <div class="onboarding-steps">
+    <div class="onboard-step">
+      <div class="step-num">1</div>
+      <span>Create your account and set your race goal</span>
+    </div>
+    <div class="onboard-step">
+      <div class="step-num">2</div>
+      <span>Connect Strava — 2 clicks, no manual logging</span>
+    </div>
+    <div class="onboard-step">
+      <div class="step-num">3</div>
+      <span>4 quick questions with Coach Ike to personalise your plan</span>
+    </div>
+    <div class="onboard-step">
+      <div class="step-num">4</div>
+      <span>Wake up every morning to a plan built around your life</span>
+    </div>
+  </div>
+
+  <div class="brand-quote">
+    "Run when you can, walk if you have to, crawl if you must — just never give up."<br>
+    — Dean Karnazes
+  </div>
+</div>
+
+<!-- ── Right form panel ─────────────────────────────────────────────────── -->
+<div class="auth-right">
+  <div class="auth-form-wrap">
+    <div class="form-title">Create your account</div>
+    <div class="form-sub">One account. One Strava connection. Your goal stays saved.</div>
+    {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-row">
+        <label>Name</label>
+        <input name="name" required placeholder="Your name" autocomplete="name">
+      </div>
+      <div class="form-row">
+        <label>Email</label>
+        <input name="email" type="email" required placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input name="password" type="password" minlength="6" required placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <button type="submit" class="submit-btn">Create Account →</button>
+    </form>
+    <div class="form-footer">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

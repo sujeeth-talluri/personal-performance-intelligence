@@ -988,6 +988,17 @@
           </div>
         </div>
         <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
+        {% if projected_tsb is not none %}
+        <div class="metric-row">
+          <span>
+            <span class="tooltip-wrap">Race-Day Form (proj.)<span class="tooltip-icon">?</span><span class="tooltip-text">Projected Form (TSB) on race day assuming a full taper. Ideal range: +5 to +15. Calculated by decaying your current ATL and CTL forward to race day.</span></span>
+          </span>
+          <strong style="color:{% if projected_tsb >= 5 %}var(--green){% elif projected_tsb >= -5 %}var(--amber){% else %}var(--red){% endif %}">
+            {{ '+' if projected_tsb > 0 else '' }}{{ projected_tsb }}
+            &nbsp;<span style="font-size:.72rem;font-weight:400;color:var(--text-muted)">{% if projected_tsb >= 5 %}Fresh{% elif projected_tsb >= -5 %}Neutral{% else %}Tired{% endif %}</span>
+          </strong>
+        </div>
+        {% endif %}
         <div class="mini-chart-wrap">
           <div class="mini-chart-title">CTL — 8-week trend</div>
           <svg class="mini-chart" viewBox="0 0 300 80" preserveAspectRatio="xMidYMid meet" id="ctl-svg">
