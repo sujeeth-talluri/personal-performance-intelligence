@@ -768,14 +768,15 @@
     <div class="readiness-strip">
       <div class="rs-stat">
         <div class="rs-label">Marathon Projection</div>
+        {% set _proj_display = (canonical_wall_adjusted_display if show_wall_estimate and canonical_wall_adjusted_display else canonical_wall_base_display) or '' %}
         {% if fm_gap_display %}
           <div class="rs-value {{ 'rs-red' if fm_gap_color == 'red' else ('rs-amber' if fm_gap_color == 'amber' else 'rs-green') }}">
             {{ fm_gap_display }}
           </div>
-          <div class="rs-sub">
-            {% if show_wall_estimate and canonical_wall_adjusted_display %}{{ canonical_wall_adjusted_display }} projected{% elif canonical_wall_base_display %}{{ canonical_wall_base_display }} projected{% endif %}
-            vs {{ intel.goal.goal_time }} goal
-          </div>
+          <div class="rs-sub">{{ _proj_display }} projected vs {{ intel.goal.goal_time }} goal</div>
+        {% elif _proj_display %}
+          <div class="rs-value rs-amber">{{ _proj_display }}</div>
+          <div class="rs-sub">projected · goal {{ intel.goal.goal_time }}</div>
         {% else %}
           <div class="rs-value" style="color:var(--muted)">No data yet</div>
           <div class="rs-sub">Complete more runs to get a projection</div>
