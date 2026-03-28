@@ -2770,7 +2770,12 @@ def _dashboard_inner():
         canonical_honest_assessment=canonical_feasibility.get("text", ""),
         canonical_show_revised_goal=False,
         canonical_revised_goal=canonical_feasibility.get("revised_goal") or {},
-        canonical_feasibility_factor_scores={},
+        canonical_feasibility_factor_scores={
+            "long_run":    intel.get("readiness_long_run_pct", 0),
+            "volume":      intel.get("readiness_volume_pct", 0),
+            "consistency": intel.get("readiness_consistency_pct", 0),
+            "fitness":     intel.get("readiness_fitness_pct", 0),
+        },
         tsb_volume_cap=_coaching_plan.get("validation", {}).get("tsb_volume_cap", 1.0),
         tsb_quality_allowed=not _coaching_plan.get("validation", {}).get("quality_replaced", False),
         canonical_long_run_day=canonical_long_run_day,

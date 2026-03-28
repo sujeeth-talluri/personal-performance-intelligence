@@ -1388,6 +1388,11 @@ def performance_intelligence(user_id, user_timezone=None):
         "marathon_readiness_next_step": next_step,
         "marathon_specificity_pct": int(round(specificity_progress * 100)),
         "fatigue_control_pct": int(round(fatigue_control_progress * 100)),
+        # Individual readiness component scores (0–100) for Goal Score breakdown
+        "readiness_long_run_pct": int(round(long_run_progress * 100)),
+        "readiness_volume_pct": int(round(weekly_mileage_progress * 100)),
+        "readiness_consistency_pct": int(round(consistency_progress * 100)),
+        "readiness_fitness_pct": int(round(fitness_progress * 100)),
         "endurance_profile": {
             "long_run_depth": long_run_depth,
             "long_run_note": long_run_note,

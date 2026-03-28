@@ -524,6 +524,23 @@
     .fs-score-explain { font-size: 11px; color: #888; white-space: nowrap; }
     .fs-text  { font-size: 13px; color: #555; flex: 1; line-height: 1.4; }
     .fs-revised { font-size: 12px; color: #ef4444; font-weight: 500; white-space: nowrap; }
+    /* Goal Score sub-scores (#27) */
+    .fs-subscores { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .fs-sub {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: #f3f4f6; color: #374151; font-weight: 500; white-space: nowrap;
+    }
+    .fs-sub-bar {
+      display: inline-block; width: 32px; height: 4px; border-radius: 2px;
+      background: #e5e7eb; vertical-align: middle; margin-left: 4px; overflow: hidden;
+    }
+    .fs-sub-bar span { display: block; height: 100%; border-radius: 2px; background: #10b981; }
+    /* Intensity over-hard alert (#26) */
+    .intensity-alert {
+      margin-top: 10px; padding: 8px 12px; border-radius: 8px;
+      background: #fffbeb; border: 1px solid #fcd34d;
+      font-size: .78rem; color: #92400e; line-height: 1.4;
+    }
 
     /* ─── Collapsible sections ───────────────────────────────────── */
     .collapsible-header {
@@ -635,7 +652,28 @@
         <span class="fs-score">{{ canonical_feasibility_score|int }}<span style="font-size:13px;font-weight:400;color:#888">/100</span></span>
         <span class="fs-label">Goal Score · {{ canonical_feasibility_label }}</span>
         {% if canonical_feasibility_factor_scores %}
-        <div class="fs-score-explain" style="display:none">Fitness {{ canonical_feasibility_factor_scores.vdot|int }}% · Time {{ canonical_feasibility_factor_scores.time|int }}% · Volume {{ canonical_feasibility_factor_scores.volume|int }}% · Consistency {{ canonical_feasibility_factor_scores.consistency|int }}%</div>
+        <div class="fs-subscores">
+          {% set lr  = canonical_feasibility_factor_scores.long_run %}
+          {% set vol = canonical_feasibility_factor_scores.volume %}
+          {% set con = canonical_feasibility_factor_scores.consistency %}
+          {% set fit = canonical_feasibility_factor_scores.fitness %}
+          <span class="fs-sub">
+            Long Run {{ lr }}%
+            <span class="fs-sub-bar"><span style="width:{{ lr }}%"></span></span>
+          </span>
+          <span class="fs-sub">
+            Volume {{ vol }}%
+            <span class="fs-sub-bar"><span style="width:{{ vol }}%"></span></span>
+          </span>
+          <span class="fs-sub">
+            Consistency {{ con }}%
+            <span class="fs-sub-bar"><span style="width:{{ con }}%"></span></span>
+          </span>
+          <span class="fs-sub">
+            Fitness {{ fit }}%
+            <span class="fs-sub-bar"><span style="width:{{ fit }}%"></span></span>
+          </span>
+        </div>
         {% endif %}
       </div>
       {% if canonical_honest_assessment %}
@@ -724,12 +762,16 @@
           <strong>
             <span style="color:var(--green)">{{ intensity_split.easy_pct }}% easy</span>
             &nbsp;/&nbsp;
-            <span style="color:var(--amber)">{{ intensity_split.hard_pct }}% hard</span>
-            {% if intensity_split.easy_pct < 75 %}
+            <span style="color:{{ 'var(--red)' if intensity_split.hard_pct > 30 else 'var(--amber)' }}">{{ intensity_split.hard_pct }}% hard</span>
             <span style="font-size:.72rem;font-weight:400;color:var(--muted);margin-left:6px">· Target 80/20</span>
-            {% endif %}
           </strong>
         </div>
+        {% if intensity_split.hard_pct > 30 %}
+        <div class="intensity-alert">
+          ⚠️ <strong>Too much hard work this week</strong> — {{ intensity_split.hard_pct }}% hard vs the 20% target.
+          Swap a hard session for an easy run to reduce injury risk and improve adaptation.
+        </div>
+        {% endif %}
         {% endif %}
       </div>
 
