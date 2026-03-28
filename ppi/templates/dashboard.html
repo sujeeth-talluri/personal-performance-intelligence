@@ -370,6 +370,38 @@
     /* Plan note */
     .plan-note { font-size: .7rem; color: var(--muted); font-style: italic; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
 
+    /* ─── Race Readiness strip ───────────────────────────────────── */
+    .readiness-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .rs-stat {
+      background: var(--card);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .rs-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .rs-value { font-size: 1rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+    .rs-sub   { font-size: .68rem; color: var(--muted); margin-top: 2px; }
+    .rs-red   { color: #dc2626; }
+    .rs-amber { color: #d97706; }
+    .rs-green { color: #16a34a; }
+    @media (max-width: 600px) {
+      .readiness-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* ─── Activity intensity badge ───────────────────────────────── */
+    .int-badge { font-size: .62rem; font-weight: 700; padding: 1px 5px; border-radius: 8px; margin-left: 4px; vertical-align: middle; }
+    .int-hard  { background: #fee2e2; color: #dc2626; }
+    .int-easy  { background: #dcfce7; color: #16a34a; }
+
     /* ─── Activity rows (unified grid) ──────────────────────────── */
     .activity-row {
       display: grid;
@@ -711,6 +743,50 @@
     </div>
     {% endif %}
 
+    <!-- ── Race Readiness strip ─────────────────────────────────────────── -->
+    {% set _tsb = intel.current_tsb | float %}
+    <div class="readiness-strip">
+      <div class="rs-stat">
+        <div class="rs-label">Marathon Projection</div>
+        {% if fm_gap_display %}
+          <div class="rs-value {{ 'rs-red' if fm_gap_color == 'red' else ('rs-amber' if fm_gap_color == 'amber' else 'rs-green') }}">
+            {{ fm_gap_display }}
+          </div>
+          <div class="rs-sub">
+            {% if show_wall_estimate and canonical_wall_adjusted_display %}{{ canonical_wall_adjusted_display }} projected{% elif canonical_wall_base_display %}{{ canonical_wall_base_display }} projected{% endif %}
+            vs {{ intel.goal.goal_time }} goal
+          </div>
+        {% else %}
+          <div class="rs-value" style="color:var(--muted)">No data yet</div>
+          <div class="rs-sub">Complete more runs to get a projection</div>
+        {% endif %}
+      </div>
+      <div class="rs-stat">
+        <div class="rs-label">Form Today</div>
+        <div class="rs-value {{ 'rs-green' if _tsb > 5 else ('rs-red' if _tsb < -10 else 'rs-amber') }}">
+          {{ 'Fresh' if _tsb > 5 else ('Tired' if _tsb < -10 else 'Fatigued') }}
+        </div>
+        <div class="rs-sub">TSB {{ '%.1f'|format(_tsb) }} · {{ 'Good to train hard' if _tsb > 5 else ('Rest or easy runs today' if _tsb < -10 else 'Train but monitor effort') }}</div>
+      </div>
+      <div class="rs-stat">
+        <div class="rs-label">Taper Starts</div>
+        {% if intel.goal.days_remaining <= 21 %}
+          <div class="rs-value rs-amber">Race week!</div>
+          <div class="rs-sub">{{ intel.goal.days_remaining }} days to go · taper now</div>
+        {% else %}
+          <div class="rs-value">{% if weeks_to_taper < 1 %}This week{% else %}~{{ weeks_to_taper | int }} weeks{% endif %}</div>
+          <div class="rs-sub">{{ intel.goal.days_remaining }} days to race · 3-week taper</div>
+        {% endif %}
+      </div>
+      <div class="rs-stat">
+        <div class="rs-label">Focus Area</div>
+        <div class="rs-value {{ 'rs-red' if limiting_factor_pct < 50 else ('rs-amber' if limiting_factor_pct < 75 else 'rs-green') }}">
+          {{ limiting_factor }}
+        </div>
+        <div class="rs-sub">{{ limiting_factor_pct }}% readiness · your #1 constraint</div>
+      </div>
+    </div>
+
     <!-- ── 3. Today + This Week ─────────────────────────────────────────── -->
     <div class="section-label">This Week</div>
     {% if canonical_week_theme or canonical_focus_point %}
@@ -1024,6 +1100,7 @@
                 {% if act.is_run and act.pace %} at {{ act.pace }}/km{% endif %}
                 {{ act.type|title }}
                 {% if act.elevation %} (+{{ act.elevation }}m){% endif %}
+                {% if act.intensity_label == 'hard' %}<span class="int-badge int-hard">hard</span>{% elif act.intensity_label == 'easy' %}<span class="int-badge int-easy">easy</span>{% endif %}
               {% else %}
                 {{ act.type|title }}
               {% endif %}

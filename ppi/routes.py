@@ -2162,6 +2162,21 @@ def _dashboard_inner():
         fm_gap_display = ""
         fm_gap_color   = "green"
 
+    # ── Limiting factor (lowest readiness subscore) ───────────────────────────
+    _factor_scores_raw = {
+        "Long Run":    intel.get("readiness_long_run_pct", 0),
+        "Volume":      intel.get("readiness_volume_pct", 0),
+        "Consistency": intel.get("readiness_consistency_pct", 0),
+        "Fitness":     intel.get("readiness_fitness_pct", 0),
+    }
+    limiting_factor      = min(_factor_scores_raw, key=_factor_scores_raw.get)
+    limiting_factor_pct  = _factor_scores_raw[limiting_factor]
+
+    # ── Taper countdown ───────────────────────────────────────────────────────
+    _d2r          = int((intel.get("goal") or {}).get("days_remaining") or 0)
+    _taper_days   = max(0, _d2r - 21)           # typical 3-week taper
+    weeks_to_taper = round(_taper_days / 7, 1)
+
     # ── Feasibility label with emoji ──────────────────────────────────────────
     _feasibility_emoji_map = {
         'on_track':       '🔥',
@@ -2636,6 +2651,17 @@ def _dashboard_inner():
             "is_recovery": _typ in _RECOVERY_TYPES,
             "pace_sec": round(_a.moving_time / _a.distance_km) if (_a.distance_km and _a.distance_km > 0 and _a.moving_time) else None,
         })
+        # Tag easy vs hard based on goal pace threshold
+        _ps = recent_activities[-1]["pace_sec"]
+        _is_run = recent_activities[-1]["is_run"]
+        recent_activities[-1]["is_hard"] = bool(
+            _is_run and _ps and _canonical_goal_pace_sec > 0
+            and _ps <= _canonical_goal_pace_sec * 1.05
+        )
+        recent_activities[-1]["intensity_label"] = (
+            "hard" if recent_activities[-1]["is_hard"]
+            else ("easy" if _is_run and _ps else None)
+        )
 
     # Compute pace trend — dedicated run-only query so walks/strength don't eat
     # into the 7-activity window and starve us of run data.
@@ -2852,6 +2878,9 @@ def _dashboard_inner():
         target_ctl=62 if float((intel.get("goal") or {}).get("distance_km") or 42.195) >= 40 else 55,
         projected_tsb=_proj_tsb,
         pace_trend=_pace_trend,
+        limiting_factor=limiting_factor,
+        limiting_factor_pct=limiting_factor_pct,
+        weeks_to_taper=weeks_to_taper,
     )
 
 # ---------------------------------------------------------------------------
