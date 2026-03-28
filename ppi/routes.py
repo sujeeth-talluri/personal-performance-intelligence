@@ -812,6 +812,22 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
                     "km": snapped_long_run_km,
                     "detail": ((week.get("long_run_variant") or {}).get("short_label") or "Long run"),
                 } if long_day else None,
+                "all_run_days": [
+                    {
+                        "session": d.get("session"),
+                        "km": _display_planned_km(d.get("target_km") or 0.0),
+                        "is_long": d.get("session") == "Long Run",
+                        "is_quality": d.get("session") in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"},
+                    }
+                    for d in sorted(
+                        run_days,
+                        key=lambda d: (
+                            0 if d.get("session") == "Long Run"
+                            else 1 if d.get("session") in {"Tempo Run", "Speed Session", "Marathon Pace Run", "Steady Run"}
+                            else 2
+                        ),
+                    )
+                ],
             }
         )
         if len(preview) >= limit:
@@ -2368,6 +2384,13 @@ def _dashboard_inner():
     for item in weekly_plan:
         item["display_planned_km"] = _display_planned_km(item.get("planned_km") or 0.0)
 
+    # Refresh pace_guidance with canonical goal pace — snapshot value may be
+    # stale (created before goal_marathon_pace_sec_per_km was available).
+    _canonical_goal_pace_sec = float((intel.get("weekly") or {}).get("goal_marathon_pace_sec_per_km") or 0.0)
+    for item in weekly_plan:
+        if item.get("workout_type") == "RUN":
+            item["pace_guidance"] = _pace_guidance_for_session(item["session"], _canonical_goal_pace_sec)
+
     current_week_model = _derive_current_week_display_metrics(weekly_plan, canonical_weekly_target_km)
     weekly_plan_goal_km = current_week_model["weekly_target_km"]
     weekly_plan_completed_km = current_week_model["actual_km"]
@@ -2611,7 +2634,36 @@ def _dashboard_inner():
             "is_strength": _typ in _STRENGTH_TYPES,
             "is_cross":    _typ in _CROSS_TRAINING_TYPES,
             "is_recovery": _typ in _RECOVERY_TYPES,
+            "pace_sec": round(_a.moving_time / _a.distance_km) if (_a.distance_km and _a.distance_km > 0 and _a.moving_time) else None,
         })
+
+    # Compute pace trend — dedicated run-only query so walks/strength don't eat
+    # into the 7-activity window and starve us of run data.
+    _RUN_TYPE_VARIANTS = {"run", "virtualrun", "trail run", "trail_run", "treadmill", "track"}
+    _pace_trend_acts = (
+        Activity.query
+        .filter(Activity.user_id == user.id)
+        .order_by(Activity.date.desc())
+        .limit(30)
+        .all()
+    )
+    _run_paces = [
+        round(a.moving_time / a.distance_km)
+        for a in _pace_trend_acts
+        if (a.activity_type or "").lower() in _RUN_TYPE_VARIANTS
+        and a.moving_time and a.distance_km and float(a.distance_km) > 0
+    ][:5]  # use the 5 most recent qualifying runs
+    _pace_trend = None  # "improving", "steady", "slowing"
+    if len(_run_paces) >= 2:
+        _latest = _run_paces[0]
+        _prior_avg = sum(_run_paces[1:]) / len(_run_paces[1:])
+        _diff_pct = (_latest - _prior_avg) / _prior_avg
+        if _diff_pct < -0.02:
+            _pace_trend = "improving"  # faster (lower sec/km)
+        elif _diff_pct > 0.02:
+            _pace_trend = "slowing"
+        else:
+            _pace_trend = "steady"
 
     runs = recent_runs(user.id, limit=5, user_timezone=user_tz)
     weekly_summary = weekly_training_summary(user.id)
@@ -2799,6 +2851,7 @@ def _dashboard_inner():
         intensity_split=_intensity_split,
         target_ctl=62 if float((intel.get("goal") or {}).get("distance_km") or 42.195) >= 40 else 55,
         projected_tsb=_proj_tsb,
+        pace_trend=_pace_trend,
     )
 
 # ---------------------------------------------------------------------------
