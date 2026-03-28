@@ -613,6 +613,37 @@
       background: #e5e7eb; vertical-align: middle; margin-left: 4px; overflow: hidden;
     }
     .fs-sub-bar span { display: block; height: 100%; border-radius: 2px; background: #10b981; }
+
+    /* Goal gap callout (A) */
+    .fs-gap-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,.04);
+      font-size: .78rem; flex-wrap: wrap;
+    }
+    .fs-gap-now  { font-weight: 700; color: #d97706; }
+    .fs-gap-sep  { color: #94a3b8; font-size: .9rem; }
+    .fs-gap-goal { font-weight: 700; color: #10b981; }
+    .fs-gap-badge {
+      margin-left: auto; font-size: .72rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .fs-gap-badge-red    { background: #fee2e2; color: #dc2626; }
+    .fs-gap-badge-amber  { background: #fff7ed; color: #d97706; }
+    .fs-gap-badge-green  { background: #dcfce7; color: #16a34a; }
+
+    /* Weekly plan dot-strip (B) */
+    .plan-dot-strip { display: flex; gap: 5px; margin-bottom: 14px; align-items: center; }
+    .plan-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .68rem; font-weight: 800; flex-shrink: 0; cursor: default;
+    }
+    .pd-done    { background: #dcfce7; color: #16a34a; }
+    .pd-missed  { background: #fee2e2; color: #dc2626; }
+    .pd-partial { background: #fff7ed; color: #ea580c; }
+    .pd-skipped { background: #fef9c3; color: #ca8a04; }
+    .pd-today   { background: #dbeafe; color: #2563eb; box-shadow: 0 0 0 2px #3b82f6; }
+    .pd-planned { background: #f1f5f9; color: #94a3b8; }
     /* Intensity over-hard alert (#26) */
     .intensity-alert {
       margin-top: 10px; padding: 8px 12px; border-radius: 8px;
@@ -724,6 +755,7 @@
     {% endif %}
 
     <!-- ── Feasibility strip ────────────────────────────────────────────── -->
+    {% set _proj_display = (canonical_wall_adjusted_display if show_wall_estimate and canonical_wall_adjusted_display else canonical_wall_base_display) or '' %}
     {% if canonical_feasibility_score %}
     <div class="feasibility-strip strip-{{ canonical_feasibility_color }}">
       <div class="fs-out">
@@ -752,6 +784,15 @@
             <span class="fs-sub-bar"><span style="width:{{ fit }}%"></span></span>
           </span>
         </div>
+        {% if _proj_display and intel.goal.goal_time %}
+        <div class="fs-gap-row">
+          <span class="fs-gap-now">{{ _proj_display }}</span>
+          <span class="fs-gap-sep">→</span>
+          <span class="fs-gap-goal">🎯 {{ intel.goal.goal_time }}</span>
+          {% if fm_gap_display %}
+          <span class="fs-gap-badge fs-gap-badge-{{ fm_gap_color or 'amber' }}">{{ fm_gap_display }}</span>
+          {% endif %}
+        </div>
         {% endif %}
       </div>
       {% if canonical_honest_assessment %}
@@ -768,7 +809,6 @@
     <div class="readiness-strip">
       <div class="rs-stat">
         <div class="rs-label">Marathon Projection</div>
-        {% set _proj_display = (canonical_wall_adjusted_display if show_wall_estimate and canonical_wall_adjusted_display else canonical_wall_base_display) or '' %}
         {% if fm_gap_display %}
           <div class="rs-value {{ 'rs-red' if fm_gap_color == 'red' else ('rs-amber' if fm_gap_color == 'amber' else 'rs-green') }}">
             {{ fm_gap_display }}
@@ -819,6 +859,23 @@
     <div class="grid-2">
       <div class="card">
         <h2>Weekly Plan</h2>
+        <!-- Mon–Sun dot strip (B) -->
+        {% set _day_names  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+        {% set _day_abbrs  = ['M','T','W','T','F','S','S'] %}
+        <div class="plan-dot-strip">
+          {% for dn in _day_names %}
+            {% set _dp = weekly_plan | selectattr('day','equalto',dn) | list | first | default(none) %}
+            {% if _dp %}
+              {% if _dp.status in ['completed','done','overdone','bonus'] %}{% set _dc = 'pd-done' %}
+              {% elif _dp.status == 'missed' %}{% set _dc = 'pd-missed' %}
+              {% elif _dp.status == 'partial' %}{% set _dc = 'pd-partial' %}
+              {% elif _dp.status == 'skipped' %}{% set _dc = 'pd-skipped' %}
+              {% elif _dp.is_today %}{% set _dc = 'pd-today' %}
+              {% else %}{% set _dc = 'pd-planned' %}{% endif %}
+            {% else %}{% set _dc = 'pd-planned' %}{% endif %}
+            <div class="plan-dot {{ _dc }}" title="{{ dn }}">{{ _day_abbrs[loop.index0] }}</div>
+          {% endfor %}
+        </div>
         <div>
           {% for p in weekly_plan %}
             <div class="plan-row {{ 'done-row' if p.status in ['completed','done','overdone'] else '' }} {{ 'skip-row' if p.status in ['skipped'] else '' }} {{ 'partial-row' if p.status == 'partial' else '' }} {{ 'today-row' if p.is_today else '' }}">
