@@ -1813,6 +1813,15 @@ def logout():
 @login_required
 @limiter.limit("4 per minute", key_func=lambda: f"{get_remote_address()}-sync", exempt_when=lambda: request.args.get("sync") != "1")
 def dashboard():
+    try:
+        return _dashboard_inner()
+    except Exception as _dash_exc:
+        import traceback
+        current_app.logger.error("Dashboard 500: %s\n%s", _dash_exc, traceback.format_exc())
+        raise  # re-raise so Flask still returns the normal 500 page
+
+
+def _dashboard_inner():
     user = _current_user()
     user_tz = _user_timezone_name()
 
@@ -1961,6 +1970,12 @@ def dashboard():
     canonical_wall_base_display     = _fmt_hms(_base_pred_seconds) if _base_pred_seconds else ''
     canonical_wall_adjusted_display = _fmt_hms(canonical_wall_adjusted_seconds) if canonical_wall_adjusted_seconds else ''
 
+    # ── Goal seconds (needed for FM gap + CTL chart) ─────────────────────────
+    _goal_obj  = intel.get("goal") or {}
+    _goal_secs = float(_goal_obj.get("goal_seconds") or 0)
+    _goal_dist = float(_goal_obj.get("distance_km") or 42.195)
+    _mp        = _goal_secs / _goal_dist if _goal_secs > 0 else 339.0
+
     # ── FM goal gap ───────────────────────────────────────────────────────────
     _fm_pred_sec = canonical_wall_adjusted_seconds or _base_pred_seconds
     if _fm_pred_sec and _goal_secs:
@@ -2016,11 +2031,6 @@ def dashboard():
     import math as _math
     _CTL_DECAY = _math.exp(-1.0 / 42.0)
     _CTL_GAIN  = 1.0 - _CTL_DECAY
-
-    _goal_obj  = intel.get("goal") or {}
-    _goal_secs = float(_goal_obj.get("goal_seconds") or 0)
-    _goal_dist = float(_goal_obj.get("distance_km") or 42.195)
-    _mp        = _goal_secs / _goal_dist if _goal_secs > 0 else 339.0
 
     _all_acts_raw = (
         Activity.query
