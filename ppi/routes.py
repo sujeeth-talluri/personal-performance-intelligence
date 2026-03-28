@@ -2171,6 +2171,23 @@ def _dashboard_inner():
     canonical_wall_base_display     = _fmt_hms(_base_pred_seconds) if _base_pred_seconds else ''
     canonical_wall_adjusted_display = _fmt_hms(canonical_wall_adjusted_seconds) if canonical_wall_adjusted_seconds else ''
 
+    # ── Fallback: use wall_analysis direct prediction when no race prediction ─
+    _wall_fm_display = _wall_data.get('current_predicted_fm_display') or ''
+    _wall_fm_sec     = float(_wall_data.get('current_predicted_fm_seconds') or 0)
+    if not _wall_fm_sec and _wall_fm_display:
+        # parse "H:MM:SS" → seconds
+        try:
+            _p = _wall_fm_display.split(':')
+            _wall_fm_sec = int(_p[0]) * 3600 + int(_p[1]) * 60 + int(_p[2])
+        except Exception:
+            _wall_fm_sec = 0
+    if not canonical_wall_base_display and _wall_fm_display:
+        canonical_wall_base_display = _wall_fm_display
+    if not canonical_wall_adjusted_display and _wall_fm_display:
+        canonical_wall_adjusted_display = _wall_fm_display
+    if not canonical_wall_adjusted_seconds and _wall_fm_sec:
+        canonical_wall_adjusted_seconds = int(_wall_fm_sec)
+
     # ── Goal seconds (needed for FM gap + CTL chart) ─────────────────────────
     _goal_obj  = intel.get("goal") or {}
     _goal_secs = float(_goal_obj.get("goal_seconds") or 0)
