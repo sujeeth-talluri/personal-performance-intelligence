@@ -329,6 +329,18 @@ def _pace_guidance_for_session(session_name, goal_pace_sec_per_km=None):
         "Marathon Pace Run": "Settle into goal marathon pace",
         "Race Day": "Race execution pace",
     }
+    # Normalise short/legacy names that snapshots may have baked in
+    _aliases = {
+        "Aerobic":     "Aerobic Run",
+        "Medium Long": "Medium Long Run",
+        "Speed":       "Speed Session",
+        "Intervals":   "Interval Session",
+        "Easy":        "Easy Run",
+        "Long":        "Long Run",
+        "Recovery":    "Recovery Run",
+        "Tempo":       "Tempo Run",
+    }
+    session_name = _aliases.get(session_name, session_name)
     if not goal_pace_sec_per_km or goal_pace_sec_per_km <= 0:
         return descriptive.get(session_name, "")
     gp = goal_pace_sec_per_km

@@ -353,6 +353,14 @@
     .pace-trend-steady    { background: #f1f5f9; color: #64748b; }
     .status-green  { color: #16a34a; }
     .status-orange { color: #d97706; }
+    /* Plan status pills */
+    .psp { display: inline-block; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; letter-spacing: .02em; }
+    .psp-done    { background: #dcfce7; color: #15803d; }
+    .psp-missed  { background: #fee2e2; color: #dc2626; }
+    .psp-partial { background: #fff7ed; color: #ea580c; }
+    .psp-skipped { background: #fef3c7; color: #b45309; }
+    .psp-today   { background: #eff6ff; color: #2563eb; }
+    .psp-planned { background: #f1f5f9; color: #64748b; }
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
     .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
     /* Week theme bar */
@@ -831,16 +839,16 @@
                 {% endif %}
               </div>
               <div class="plan-status">
-                {% if p.status in ['completed', 'done'] %}<span class="status-green">done</span>
-                {% elif p.status == 'overdone' %}<span class="status-green">over target</span>
-                {% elif p.status == 'partial' %}<span class="status-orange">partial</span>
-                {% elif p.status == 'missed' %}<span class="status-orange">missed</span>
-                {% elif p.status == 'skipped' %}<span class="status-orange">skipped</span>
-                {% elif p.status == 'different_activity' %}<span class="status-orange">{{ p.status_label or 'other activity' }}</span>
-                {% elif p.is_today %}<span class="status-blue" style="color:#3b82f6;font-weight:600">today</span>
-                {% elif p.session_type == 'strength' %}<span style="color:var(--muted)">gym</span>
-                {% elif p.status == 'bonus' %}<span class="status-green">bonus</span>
-                {% else %}<span style="color:var(--muted)">planned</span>{% endif %}
+                {% if p.status in ['completed', 'done'] %}<span class="psp psp-done">Done ✓</span>
+                {% elif p.status == 'overdone' %}<span class="psp psp-done">Over target ✓</span>
+                {% elif p.status == 'partial' %}<span class="psp psp-partial">Partial</span>
+                {% elif p.status == 'missed' %}<span class="psp psp-missed">Missed</span>
+                {% elif p.status == 'skipped' %}<span class="psp psp-skipped">Skipped</span>
+                {% elif p.status == 'different_activity' %}<span class="psp psp-skipped">{{ p.status_label or 'Other' }}</span>
+                {% elif p.is_today %}<span class="psp psp-today">Today</span>
+                {% elif p.session_type == 'strength' %}<span class="psp psp-planned">Gym</span>
+                {% elif p.status == 'bonus' %}<span class="psp psp-done">Bonus ✓</span>
+                {% else %}<span class="psp psp-planned">Planned</span>{% endif %}
               </div>
             </div>
           {% endfor %}
