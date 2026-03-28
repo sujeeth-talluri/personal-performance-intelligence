@@ -1678,7 +1678,15 @@ def api_dashboard():
     _api_freeze = _load_coaching_freeze_state(_api_plan_row)
     _api_snapshot = (_api_freeze.get("weekly_plan_snapshots") or {}).get(week_start.isoformat())
     if _api_snapshot:
-        _snap_wk_km = float(_api_snapshot.get("weekly_target_km") or 0.0)
+        # Sum individual day distances (matches what the weekly plan card shows)
+        # rather than reading the stored weekly_target_km field which can be
+        # 1 km lower due to plan-engine distribution rounding.
+        _snap_days = (_api_snapshot.get("days") or {}).values()
+        _snap_wk_km = round(sum(
+            float(d.get("planned_distance_km") or 0.0)
+            for d in _snap_days
+            if d.get("workout_type") == "RUN"
+        ), 1)
         _snap_lr_km = max(
             (
                 float(d.get("planned_distance_km") or 0.0)
