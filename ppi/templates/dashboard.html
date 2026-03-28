@@ -258,11 +258,25 @@
     .fuel-rule .fr-text strong { display: block; font-size: .8rem; }
 
     /* ─── Load tiles ─────────────────────────────────────────────── */
-    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .load-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
     .load-tile { background: var(--bg); border-radius: 10px; padding: 14px 12px; text-align: center; }
     .load-tile .lt-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
     .load-tile .lt-val   { font-size: 2rem; font-weight: 800; line-height: 1; margin: 6px 0 4px; }
     .load-tile .lt-sub   { font-size: .72rem; color: var(--muted); }
+    /* Readiness gauge */
+    .rg-wrap  { margin: 2px 0 14px; }
+    .rg-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+    .rg-track { position: relative; height: 10px; border-radius: 6px;
+      background: linear-gradient(to right,
+        #dc2626 0%, #f97316 22%, #eab308 38%, #3b82f6 52%, #22c55e 68%, #16a34a 100%);
+    }
+    .rg-needle { position: absolute; top: -5px; width: 3px; height: 20px;
+      background: var(--text); border-radius: 2px; transform: translateX(-50%);
+      box-shadow: 0 0 4px rgba(0,0,0,.25);
+    }
+    .rg-zones { display: flex; justify-content: space-between; margin-top: 4px; }
+    .rg-zone-lbl { font-size: .59rem; color: var(--muted); }
+    .rg-current { margin-top: 4px; font-size: .72rem; font-weight: 700; }
     .lt-green { color: var(--green-d); }
     .lt-amber { color: #d97706; }
     .lt-red   { color: var(--red); }
@@ -1290,6 +1304,30 @@
             <div class="lt-val" id="lt-tsb">—</div>
             <div class="lt-sub" id="lt-tsb-sub">Positive = Fresh / Negative = Tired</div>
           </div>
+        </div>
+        <!-- Readiness gauge — maps TSB to overreached→fresh spectrum -->
+        {% set _tsb_now = intel.current_tsb | float %}
+        {% set _rg_pct  = [[ (_tsb_now + 30) / 50 * 100, 0 ] | max, 100] | min %}
+        {% if _tsb_now < -20 %}{% set _rg_zone = "Overreached" %}{% set _rg_col = "#dc2626" %}
+        {% elif _tsb_now < -10 %}{% set _rg_zone = "Fatigued" %}{% set _rg_col = "#f97316" %}
+        {% elif _tsb_now < -5  %}{% set _rg_zone = "Building"  %}{% set _rg_col = "#eab308" %}
+        {% elif _tsb_now < 5   %}{% set _rg_zone = "Balanced"  %}{% set _rg_col = "#3b82f6" %}
+        {% elif _tsb_now < 15  %}{% set _rg_zone = "Fresh"     %}{% set _rg_col = "#22c55e" %}
+        {% else                %}{% set _rg_zone = "Peak Form" %}{% set _rg_col = "#16a34a" %}
+        {% endif %}
+        <div class="rg-wrap">
+          <div class="rg-label">Readiness</div>
+          <div class="rg-track">
+            <div class="rg-needle" style="left:{{ _rg_pct | round(1) }}%"></div>
+          </div>
+          <div class="rg-zones">
+            <span class="rg-zone-lbl">Overreached</span>
+            <span class="rg-zone-lbl">Fatigued</span>
+            <span class="rg-zone-lbl">Building</span>
+            <span class="rg-zone-lbl">Fresh</span>
+            <span class="rg-zone-lbl">Peak</span>
+          </div>
+          <div class="rg-current" style="color:{{ _rg_col }}">{{ _rg_zone }} &nbsp;·&nbsp; TSB {{ '+' if _tsb_now > 0 else '' }}{{ _tsb_now | round(1) }}</div>
         </div>
         <div class="metric-row"><span>Fitness Trend</span><strong id="lt-trend">—</strong></div>
         {% if projected_tsb is not none %}
