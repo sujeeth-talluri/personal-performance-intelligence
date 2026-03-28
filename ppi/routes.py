@@ -1028,19 +1028,24 @@ def fix_coaching_numbers(msg, weekly_target, long_run):
     msg = re.sub(
         r'\b\d+\.?\d*\s*(?:to|-)\s*\d+\.?\d*\s*km'
         r'(?:\s*(?:per week|weekly|target|a week))?',
-        f'{weekly_target:.0f}km',
+        f'{weekly_target:.0f} km',
         msg, flags=re.IGNORECASE
     )
     # "42.0 km this week" / "42km per week" / "42km weekly" / "42km target"
     msg = re.sub(
         r'\b\d+\.?\d*\s*km\s*(?:per week|weekly|target|a week|this week)',
-        f'{weekly_target:.0f}km this week',
+        f'{weekly_target:.0f} km this week',
         msg, flags=re.IGNORECASE
     )
     # "targeting 42km" / "Target 42.0 km" / "target of 42km"
+    # Use a replacement function to preserve the original capitalisation of
+    # the trigger word ("Target" stays "Target", "targeting" stays "targeting").
+    def _repl_target(m):
+        word = m.group(0).split()[0]            # "Target" / "targeting" / "target"
+        return f'{word} {weekly_target:.0f} km'
     msg = re.sub(
         r'(?:target(?:ing)?(?:\s+of)?)\s+\d+\.?\d*\s*km',
-        f'targeting {weekly_target:.0f}km',
+        _repl_target,
         msg, flags=re.IGNORECASE
     )
 
@@ -1050,31 +1055,31 @@ def fix_coaching_numbers(msg, weekly_target, long_run):
         # "long run of 14km" / "long-run of 14 km" (mandatory "of")
         msg = re.sub(
             r'(?:long run|long-run)\s+of\s+(?:\d+\.?\d*\s*(?:to|-)\s*)?\d+\.?\d*\s*km',
-            f'long run of {lr}km',
+            f'long run of {lr} km',
             msg, flags=re.IGNORECASE
         )
         # "14 km on the long run" / "14km on the long run"
         msg = re.sub(
             r'\b\d+\.?\d*\s*km\s+on\s+the\s+(?:long run|long-run)',
-            f'{lr}km on the long run',
+            f'{lr} km on the long run',
             msg, flags=re.IGNORECASE
         )
         # "Long Run — 14 km" / "Long Run - 14km" / "Long Run – 14 km"
         msg = re.sub(
             r'(?:long run|long-run)\s*[—–\-]+\s*\d+\.?\d*\s*km',
-            f'Long Run — {lr}km',
+            f'Long Run — {lr} km',
             msg, flags=re.IGNORECASE
         )
         # "14km long run" (number precedes the label)
         msg = re.sub(
             r'\b\d+\.?\d*\s*km\s+(?:long run|long-run)',
-            f'{lr}km long run',
+            f'{lr} km long run',
             msg, flags=re.IGNORECASE
         )
         # "with 14 km on the long" (partial phrase variant)
         msg = re.sub(
             r'(?<=with\s)\d+\.?\d*\s*km\s+on\s+the\s+long',
-            f'{lr}km on the long',
+            f'{lr} km on the long',
             msg, flags=re.IGNORECASE
         )
     return msg
