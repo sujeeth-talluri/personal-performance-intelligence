@@ -864,7 +864,8 @@
         {% set _day_abbrs  = ['M','T','W','T','F','S','S'] %}
         <div class="plan-dot-strip">
           {% for dn in _day_names %}
-            {% set _dp = weekly_plan | selectattr('day','equalto',dn) | list | first | default(none) %}
+            {% set _dp_list = weekly_plan | selectattr('day','equalto',dn) | list %}
+            {% set _dp = _dp_list[0] if _dp_list else none %}
             {% if _dp %}
               {% if _dp.status in ['completed','done','overdone','bonus'] %}{% set _dc = 'pd-done' %}
               {% elif _dp.status == 'missed' %}{% set _dc = 'pd-missed' %}
