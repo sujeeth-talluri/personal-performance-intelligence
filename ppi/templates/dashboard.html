@@ -864,17 +864,11 @@
         {% set _day_abbrs  = ['M','T','W','T','F','S','S'] %}
         <div class="plan-dot-strip">
           {% for dn in _day_names %}
-            {% set _dp_list = weekly_plan | selectattr('day','equalto',dn) | list %}
-            {% set _dp = _dp_list[0] if _dp_list else none %}
-            {% if _dp %}
-              {% if _dp.status in ['completed','done','overdone','bonus'] %}{% set _dc = 'pd-done' %}
-              {% elif _dp.status == 'missed' %}{% set _dc = 'pd-missed' %}
-              {% elif _dp.status == 'partial' %}{% set _dc = 'pd-partial' %}
-              {% elif _dp.status == 'skipped' %}{% set _dc = 'pd-skipped' %}
-              {% elif _dp.is_today %}{% set _dc = 'pd-today' %}
-              {% else %}{% set _dc = 'pd-planned' %}{% endif %}
-            {% else %}{% set _dc = 'pd-planned' %}{% endif %}
-            <div class="plan-dot {{ _dc }}" title="{{ dn }}">{{ _day_abbrs[loop.index0] }}</div>
+            {% set _dpl = weekly_plan | selectattr('day','equalto',dn) | list %}
+            {% set _dp  = _dpl[0] if _dpl else none %}
+            {% set _st  = _dp.status if _dp else '' %}
+            {% set _it  = _dp.is_today if _dp else false %}
+            <div class="plan-dot {% if _st in ['completed','done','overdone','bonus'] %}pd-done{% elif _st == 'missed' %}pd-missed{% elif _st == 'partial' %}pd-partial{% elif _st == 'skipped' %}pd-skipped{% elif _it %}pd-today{% else %}pd-planned{% endif %}" title="{{ dn }}">{{ _day_abbrs[loop.index0] }}</div>
           {% endfor %}
         </div>
         <div>
