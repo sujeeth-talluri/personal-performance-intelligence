@@ -939,22 +939,65 @@ def _deterministic_feasibility_fields(
 
 
 def _persist_snapshot_workout_logs(user_id, snapshot):
+    """Write snapshot planned distances to WorkoutLog rows.
+
+    For each day in the snapshot:
+    - If no row exists → insert a new 'planned' row.
+    - If an engine-sourced 'planned' row already exists with the WRONG
+      target_distance_km (e.g. None when the snapshot was repaired from
+      0 → correct km) → update target_distance_km so /api/dashboard picks
+      up the canonical km instead of the stale analytics-derived value.
+
+    Rows that are already completed/partial are never overwritten.
+    """
+    existing_logs = {
+        log.workout_date: log
+        for log in fetch_workout_logs(
+            user_id,
+            date.fromisoformat(min(snapshot.get("days", {}).keys())),
+            date.fromisoformat(max(snapshot.get("days", {}).keys())),
+        )
+    } if snapshot.get("days") else {}
+
     for day_key, planned in snapshot.get("days", {}).items():
         day_date = date.fromisoformat(day_key)
-        if WorkoutLog.query.filter_by(user_id=user_id, workout_date=day_date).first():
-            continue
-        upsert_workout_log(
-            user_id=user_id,
-            workout_date=day_date,
-            workout_type=planned["workout_type"],
-            session_name=planned["session_name"],
-            target_distance_km=planned["planned_distance_km"] if planned["planned_distance_km"] > 0 else None,
-            status="planned",
-            actual_distance_km=None,
-            notes=planned.get("notes", ""),
-            source="engine",
-            auto_commit=False,
-        )
+        planned_km = float(planned.get("planned_distance_km") or 0.0)
+        target_km = planned_km if planned_km > 0 else None
+
+        existing = existing_logs.get(day_date)
+        if existing:
+            # Update engine-sourced planned rows whose target has drifted
+            # (covers the snapshot-repair case where LR was 0 → now correct).
+            if (
+                existing.source == "engine"
+                and existing.status == "planned"
+                and float(existing.target_distance_km or 0.0) != (target_km or 0.0)
+            ):
+                upsert_workout_log(
+                    user_id=user_id,
+                    workout_date=day_date,
+                    workout_type=planned["workout_type"],
+                    session_name=planned["session_name"],
+                    target_distance_km=target_km,
+                    status="planned",
+                    actual_distance_km=None,
+                    notes=planned.get("notes", ""),
+                    source="engine",
+                    auto_commit=False,
+                )
+        else:
+            upsert_workout_log(
+                user_id=user_id,
+                workout_date=day_date,
+                workout_type=planned["workout_type"],
+                session_name=planned["session_name"],
+                target_distance_km=target_km,
+                status="planned",
+                actual_distance_km=None,
+                notes=planned.get("notes", ""),
+                source="engine",
+                auto_commit=False,
+            )
     commit_all()
 
 def _parse_iso_datetime(value):
@@ -1625,9 +1668,34 @@ def api_dashboard():
     }
 
     # ── Step 3: Coaching output ─────────────────────────────────────────────
-    # generate_coaching_output receives intel (containing both load and
-    # prediction data) and the weekly plan for context.
+    # Override intel with the frozen weekly snapshot's canonical km values so
+    # _build_weekly_plan and generate_coaching_output use the same figures as
+    # the weekly plan card (not the analytics-derived pipeline values which can
+    # lag behind the snapshot, e.g. long_run next_milestone_km = 14 when the
+    # snapshot correctly shows 15).
     week_start, _ = _week_bounds(today_local)
+    _api_plan_row = _get_coaching_plan_row(user.id)
+    _api_freeze = _load_coaching_freeze_state(_api_plan_row)
+    _api_snapshot = (_api_freeze.get("weekly_plan_snapshots") or {}).get(week_start.isoformat())
+    if _api_snapshot:
+        _snap_wk_km = float(_api_snapshot.get("weekly_target_km") or 0.0)
+        _snap_lr_km = max(
+            (
+                float(d.get("planned_distance_km") or 0.0)
+                for d in (_api_snapshot.get("days") or {}).values()
+                if d.get("session_name") == "Long Run"
+            ),
+            default=0.0,
+        )
+        if _snap_wk_km > 0 or _snap_lr_km > 0:
+            intel = dict(intel)
+            if _snap_wk_km > 0:
+                intel["weekly"] = dict(intel.get("weekly") or {})
+                intel["weekly"]["weekly_goal_km"] = _snap_wk_km
+            if _snap_lr_km > 0:
+                intel["long_run"] = dict(intel.get("long_run") or {})
+                intel["long_run"]["next_milestone_km"] = _snap_lr_km
+
     weekly_plan = _build_weekly_plan(
         user.id, today_local, user_tz,
         intel["weekly"], intel["long_run"],
