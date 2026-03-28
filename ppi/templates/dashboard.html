@@ -355,6 +355,20 @@
     .status-orange { color: #d97706; }
     .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 12px; }
     .progress-bar span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .4s; }
+    /* Week theme bar */
+    .week-theme-bar { font-size: .78rem; color: var(--muted); margin: -4px 0 10px; padding: 6px 10px; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; }
+    .week-theme-bar strong { color: var(--text); margin-right: 6px; }
+    .week-theme-focus { color: var(--muted); }
+    /* Weekly km summary strip */
+    .week-km-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; font-size: .82rem; margin-top: 10px; padding: 8px 0 6px; border-top: 1px solid var(--border); }
+    .wks-done    { font-weight: 700; color: var(--text); }
+    .wks-sep     { color: var(--muted); }
+    .wks-target  { color: var(--muted); }
+    .wks-remaining { color: #d97706; font-weight: 600; }
+    .wks-complete  { color: #16a34a; font-weight: 600; }
+    .wks-status  { margin-left: auto; font-size: .72rem; color: var(--muted); font-style: italic; }
+    /* Plan note */
+    .plan-note { font-size: .7rem; color: var(--muted); font-style: italic; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
 
     /* ─── Activity rows (unified grid) ──────────────────────────── */
     .activity-row {
@@ -699,6 +713,12 @@
 
     <!-- ── 3. Today + This Week ─────────────────────────────────────────── -->
     <div class="section-label">This Week</div>
+    {% if canonical_week_theme or canonical_focus_point %}
+    <div class="week-theme-bar">
+      {% if canonical_week_theme %}<strong>{{ canonical_week_theme }}</strong>{% endif %}
+      {% if canonical_focus_point %}<span class="week-theme-focus">{{ canonical_focus_point }}</span>{% endif %}
+    </div>
+    {% endif %}
     <div class="grid-2">
       <div class="card">
         <h2>Weekly Plan</h2>
@@ -749,13 +769,20 @@
             </div>
           {% endfor %}
         </div>
-        {% if week_closed %}
-          <div class="metric-row" style="margin-top:10px"><span>Weekly status</span><strong>{{ weekly_status }}</strong></div>
-        {% endif %}
-        <div class="metric-row"><span>Weekly target</span><strong>{{ display_weekly_target_km }} km</strong></div>
-        <div class="metric-row"><span>Completed</span><strong>{{ week_actual_km }} km</strong></div>
-        <div class="metric-row"><span>Remaining</span><strong>{{ display_weekly_remaining_km }} km</strong></div>
-        <div class="metric-row"><span>Long-run goal</span><strong>{{ 'Met' if weekly_long_run_goal_met else ('Target ' ~ display_long_run_target_km ~ ' km') }}</strong></div>
+        <div class="week-km-summary">
+          <span class="wks-done">{{ week_actual_km }} km done</span>
+          <span class="wks-sep">/</span>
+          <span class="wks-target">{{ display_weekly_target_km }} km target</span>
+          {% if display_weekly_remaining_km and display_weekly_remaining_km > 0 %}
+          <span class="wks-remaining">· {{ display_weekly_remaining_km }} km to go</span>
+          {% elif week_closed or weekly_long_run_goal_met %}
+          <span class="wks-complete">· Week complete 🎉</span>
+          {% endif %}
+          {% if weekly_status and week_closed %}
+          <span class="wks-status">{{ weekly_status }}</span>
+          {% endif %}
+        </div>
+        <div class="metric-row" style="margin-top:6px"><span>Long-run goal</span><strong>{{ 'Met ✓' if weekly_long_run_goal_met else ('Target ' ~ display_long_run_target_km ~ ' km') }}</strong></div>
         <div class="metric-row">
           <span>Quality session</span>
           <strong>
@@ -784,6 +811,9 @@
           Swap a hard session for an easy run to reduce injury risk and improve adaptation.
         </div>
         {% endif %}
+        {% endif %}
+        {% if weekly_plan_note %}
+        <div class="plan-note">ℹ️ {{ weekly_plan_note }}</div>
         {% endif %}
       </div>
 
@@ -1167,8 +1197,10 @@
     costMinutes:     {{ canonical_wall_cost_minutes }},
     risk:            {{ canonical_wall_risk | tojson }},
   };
-  window._goalTime = {{ intel.goal.goal_time | tojson }};
-  window._goalSec  = {{ (intel.goal.goal_seconds | default(0)) | int }};
+  window._goalTime     = {{ intel.goal.goal_time | tojson }};
+  window._goalSec      = {{ (intel.goal.goal_seconds | default(0)) | int }};
+  window._fmGapDisplay = {{ fm_gap_display | tojson }};
+  window._fmGapColor   = {{ fm_gap_color | tojson }};
 </script>
 <script>
 (function () {
@@ -1245,6 +1277,10 @@
           <div class="sub-time">${subPace}</div>
           <div><span class="${confClass(conf)}">${conf.toUpperCase()}</span></div>
         `;
+        if (fm && window._fmGapDisplay) {
+          const gapColor = window._fmGapColor === 'green' ? '#16a34a' : window._fmGapColor === 'amber' ? '#d97706' : '#dc2626';
+          inner += `<div style="font-size:.72rem;font-weight:700;color:${gapColor};margin-top:4px">${window._fmGapDisplay}</div>`;
+        }
         if (fm && window._goalTime && window._goalTime !== '--') {
           const gSec = window._goalSec || 0;
           const gPace = gSec > 0 ? fmtPace(gSec / 42.195) + '/km' : '';
