@@ -1820,14 +1820,15 @@ def dashboard():
         _trace = _tb.format_exc()
         current_app.logger.error("Dashboard 500: %s\n%s", _dash_exc, _trace)
         # TEMPORARY DEBUG — remove once root cause confirmed
-        from flask import escape as _esc
-        return (
+        _safe = _trace.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        _html = (
             "<pre style='background:#0d1117;color:#f87171;padding:24px;"
             "font-family:monospace;font-size:13px;white-space:pre-wrap'>"
-            "<b style='color:#fbbf24'>StrideIQ — Dashboard error (temp debug)</b>\n\n"
-            + _trace.replace("<", "&lt;").replace(">", "&gt;")
-            + "</pre>"
-        ), 500
+            "<b style='color:#fbbf24'>StrideIQ debug</b>\n\n"
+            + _safe + "</pre>"
+        )
+        from flask import Response as _Resp
+        return _Resp(_html, status=500, mimetype="text/html")
 
 
 def _dashboard_inner():
