@@ -3,11 +3,11 @@
 import requests
 
 from ..repositories import (
+    bulk_upsert_activities,
+    bulk_upsert_metrics,
     commit_all,
     fetch_activities,
     get_goal,
-    upsert_activity,
-    upsert_metric,
 )
 from .load_engine import _ATL_DECAY, _ATL_GAIN, _CTL_DECAY, _CTL_GAIN, running_stress_score
 from .strava_oauth_service import refresh_access_token
@@ -74,6 +74,9 @@ def _load_metrics(user_id):
     Uses load_engine.running_stress_score (duration × IF²) and the correct
     exponential decay constants so the stored Metric rows match what the
     dashboard computes live.
+
+    All rows are written in a single bulk INSERT ... ON CONFLICT DO UPDATE
+    statement instead of N individual round-trips.
     """
     all_activities = fetch_activities(user_id)
     if not all_activities:
@@ -104,20 +107,23 @@ def _load_metrics(user_id):
         stress = running_stress_score(activity_dict, marathon_pace)
         by_day[day] = by_day.get(day, 0.0) + stress
 
+    # Accumulate all computed rows, then write in one bulk statement.
     atl = 0.0
     ctl = 0.0
+    metric_rows = []
     for metric_day, stress in sorted(by_day.items()):
         atl = atl * _ATL_DECAY + stress * _ATL_GAIN
         ctl = ctl * _CTL_DECAY + stress * _CTL_GAIN
         tsb = ctl - atl
-        upsert_metric(
-            user_id=user_id,
-            metric_date=metric_day,
-            stress=round(stress, 2),
-            atl=round(atl, 2),
-            ctl=round(ctl, 2),
-            tsb=round(tsb, 2),
-        )
+        metric_rows.append({
+            "metric_date": metric_day,
+            "stress":      round(stress, 2),
+            "atl":         round(atl, 2),
+            "ctl":         round(ctl, 2),
+            "tsb":         round(tsb, 2),
+        })
+
+    bulk_upsert_metrics(user_id, metric_rows)
 
 
 def sync_strava_data(user_id, pages=3):
@@ -129,32 +135,27 @@ def sync_strava_data(user_id, pages=3):
     if not fetched:
         return {"status": "ok", "reason": "up_to_date", "new_activities": 0}
 
-    new_count = 0
+    # Build the full batch — filter invalid rows in Python, then write once.
+    activity_rows = []
     for activity in fetched:
         start_date = activity.get("start_date")
-        if not start_date:
+        strava_id  = activity.get("id")
+        if not start_date or not strava_id:
             continue
+        activity_rows.append({
+            "strava_activity_id": int(strava_id),
+            "date":               datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ"),
+            "activity_type":      _normalize_type(activity),
+            "distance_km":        (activity.get("distance") or 0) / 1000.0,
+            "moving_time":        float(activity.get("moving_time") or 0.0),
+            "avg_hr":             activity.get("average_heartrate"),
+            "elevation_gain":     float(activity.get("total_elevation_gain") or 0.0),
+            "is_race":            _is_race_event(activity),
+        })
 
-        date_utc = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ")
-        strava_id = activity.get("id")
-        if not strava_id:
-            continue
-
-        upsert_activity(
-            user_id=user_id,
-            strava_activity_id=int(strava_id),
-            date_utc=date_utc,
-            activity_type=_normalize_type(activity),
-            distance_km=(activity.get("distance") or 0) / 1000.0,
-            moving_time=float(activity.get("moving_time") or 0.0),
-            avg_hr=activity.get("average_heartrate"),
-            elevation_gain=float(activity.get("total_elevation_gain") or 0.0),
-            is_race=_is_race_event(activity),
-        )
-        new_count += 1
-
+    bulk_upsert_activities(user_id, activity_rows)
     _load_metrics(user_id)
     commit_all()
 
-    return {"status": "ok", "reason": "synced", "new_activities": new_count}
+    return {"status": "ok", "reason": "synced", "new_activities": len(activity_rows)}
 

@@ -1,5 +1,7 @@
 from datetime import date, datetime
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from .crypto import decrypt_token, encrypt_token
 from .extensions import db
 from .models import Activity, Goal, Metric, PasswordReset, PredictionHistory, StravaToken, User, WorkoutLog
@@ -72,23 +74,29 @@ def get_goal(user_id):
     return Goal.query.filter_by(user_id=user_id).order_by(Goal.id.desc()).first()
 
 
+def _unix_to_datetime(ts) -> datetime:
+    """Convert a Unix timestamp (int or float) to a naive UTC datetime."""
+    return datetime.utcfromtimestamp(int(ts))
+
+
 def save_strava_tokens(user_id, athlete_id, access_token, refresh_token, expires_at):
     """Persist Strava OAuth tokens. Tokens are encrypted at rest."""
     enc_access  = encrypt_token(access_token)
     enc_refresh = encrypt_token(refresh_token)
+    expires_dt  = _unix_to_datetime(expires_at)
     token = StravaToken.query.filter_by(user_id=user_id).first()
     if token:
         token.athlete_id    = athlete_id
         token.access_token  = enc_access
         token.refresh_token = enc_refresh
-        token.expires_at    = int(expires_at)
+        token.expires_at    = expires_dt
     else:
         token = StravaToken(
             user_id=user_id,
             athlete_id=athlete_id,
             access_token=enc_access,
             refresh_token=enc_refresh,
-            expires_at=int(expires_at),
+            expires_at=expires_dt,
         )
         db.session.add(token)
     _commit()
@@ -171,6 +179,83 @@ def upsert_metric(user_id, metric_date, stress, atl, ctl, tsb):
         db.session.add(row)
 
 
+def bulk_upsert_metrics(user_id, rows):
+    """Insert or update all metric rows in a single PostgreSQL statement.
+
+    rows — list of dicts with keys: metric_date, stress, atl, ctl, tsb.
+
+    Replaces the N individual upsert_metric() calls done during sync.
+    For a user with 2 years of history this cuts ~730 SELECT+write round-
+    trips down to 1 INSERT ... ON CONFLICT DO UPDATE statement.
+    """
+    if not rows:
+        return
+
+    stmt = pg_insert(Metric).values([
+        {
+            "user_id":  user_id,
+            "date":     r["metric_date"],
+            "stress":   r["stress"],
+            "atl":      r["atl"],
+            "ctl":      r["ctl"],
+            "tsb":      r["tsb"],
+        }
+        for r in rows
+    ])
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_user_metric_date",
+        set_={
+            "stress": stmt.excluded.stress,
+            "atl":    stmt.excluded.atl,
+            "ctl":    stmt.excluded.ctl,
+            "tsb":    stmt.excluded.tsb,
+        },
+    )
+    db.session.execute(stmt)
+
+
+def bulk_upsert_activities(user_id, rows):
+    """Insert or update a batch of Strava activities in a single statement.
+
+    rows — list of dicts with keys matching Activity columns:
+      strava_activity_id, date, activity_type, distance_km, moving_time,
+      avg_hr, elevation_gain, is_race.
+
+    Replaces the per-activity upsert_activity() loop in sync_strava_data(),
+    reducing N SELECT+write round-trips to 1 INSERT ... ON CONFLICT DO UPDATE.
+    """
+    if not rows:
+        return
+
+    stmt = pg_insert(Activity).values([
+        {
+            "user_id":            user_id,
+            "strava_activity_id": r["strava_activity_id"],
+            "date":               r["date"],
+            "activity_type":      r["activity_type"],
+            "distance_km":        r["distance_km"],
+            "moving_time":        r["moving_time"],
+            "avg_hr":             r["avg_hr"],
+            "elevation_gain":     r["elevation_gain"],
+            "is_race":            r["is_race"],
+        }
+        for r in rows
+    ])
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_user_activity",
+        set_={
+            "date":          stmt.excluded.date,
+            "activity_type": stmt.excluded.activity_type,
+            "distance_km":   stmt.excluded.distance_km,
+            "moving_time":   stmt.excluded.moving_time,
+            "avg_hr":        stmt.excluded.avg_hr,
+            "elevation_gain":stmt.excluded.elevation_gain,
+            "is_race":       stmt.excluded.is_race,
+        },
+    )
+    db.session.execute(stmt)
+
+
 def fetch_metrics(user_id):
     return Metric.query.filter_by(user_id=user_id).order_by(Metric.date.asc()).all()
 
@@ -211,6 +296,16 @@ def save_prediction(user_id, projection_seconds):
 
 def get_latest_prediction(user_id):
     return PredictionHistory.query.filter_by(user_id=user_id).order_by(PredictionHistory.created_at.desc()).first()
+
+
+def fetch_recent_predictions(user_id, limit=10):
+    """Return up to `limit` PredictionHistory rows, oldest-first, for sparkline display."""
+    return (
+        PredictionHistory.query.filter_by(user_id=user_id)
+        .order_by(PredictionHistory.created_at.asc())
+        .limit(limit)
+        .all()
+    )
 
 
 def commit_all():

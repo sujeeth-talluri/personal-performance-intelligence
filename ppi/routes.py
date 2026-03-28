@@ -20,6 +20,7 @@ from .repositories import (
     create_user,
     delete_workout_log,
     fetch_activities_between,
+    fetch_recent_predictions,
     fetch_workout_logs,
     get_goal,
     get_password_reset,
@@ -2402,6 +2403,22 @@ def dashboard():
 
     runs = recent_runs(user.id, limit=5, user_timezone=user_tz)
     weekly_summary = weekly_training_summary(user.id)
+
+    # ── Prediction trend sparkline ─────────────────────────────────────────────
+    # Fetch up to 10 historical predictions (oldest-first) so the template can
+    # render a mini sparkline showing how the marathon projection has evolved.
+    # Each row is formatted as {label, seconds} — the JS side converts seconds
+    # to a display time string using the same _fmt helper used for other cards.
+    _pred_history = fetch_recent_predictions(user.id, limit=10)
+    prediction_trend_json = json.dumps([
+        {
+            "label": row.created_at.strftime("%b %d") if row.created_at else "—",
+            "seconds": round(float(row.projection_seconds)),
+        }
+        for row in _pred_history
+        if row.projection_seconds and row.projection_seconds > 0
+    ])
+
     weekly_plan_note = (
         "If you do both gym and a run on a strength day, the gym session counts as completed"
         " and the run counts toward weekly mileage."
@@ -2497,6 +2514,7 @@ def dashboard():
         wall_actions=wall_actions,
         weekly_signal=weekly_signal,
         weekly_signal_color=weekly_signal_color,
+        prediction_trend_json=prediction_trend_json,
     )
 
 # ---------------------------------------------------------------------------

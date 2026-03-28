@@ -19,7 +19,7 @@ def create_app(config_object=Config):
     if not app.config.get("SQLALCHEMY_DATABASE_URI"):
         raise RuntimeError("DATABASE_URL is required. Configure a persistent PostgreSQL connection.")
 
-    # Warn loudly at startup if AI coaching key is missing — prevents silent
+    # Warn loudly at startup if AI keys are missing — prevents silent
     # failures when the AI coach engine is first called at request time.
     if not app.config.get("TESTING"):
         if not app.config.get("ANTHROPIC_API_KEY"):
@@ -27,6 +27,11 @@ def create_app(config_object=Config):
                 "ANTHROPIC_API_KEY is not set — AI coaching plan generation will "
                 "fall back to the rule-based engine. Set the key in your environment "
                 "to enable Claude-powered coaching."
+            )
+        if not app.config.get("OPENAI_API_KEY"):
+            app.logger.warning(
+                "OPENAI_API_KEY is not set — any OpenAI-dependent features will "
+                "be unavailable. Set the key if you intend to use OpenAI models."
             )
 
     db.init_app(app)

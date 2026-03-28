@@ -1,5 +1,5 @@
 ﻿import secrets
-import time
+from datetime import datetime, timedelta
 
 import requests
 from flask import current_app
@@ -71,8 +71,7 @@ def refresh_access_token(user_id):
     if not token:
         return None
 
-    now = int(time.time())
-    if token.access_token and token.expires_at and token.expires_at > now + 60:
+    if token.access_token and token.expires_at and token.expires_at > datetime.utcnow() + timedelta(seconds=60):
         return token.access_token
 
     _validate_strava_config(require_secret=True)
