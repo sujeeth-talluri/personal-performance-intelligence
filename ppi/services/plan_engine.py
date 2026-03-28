@@ -1171,7 +1171,13 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
         sum(float(day["target_km"] or 0.0) for day in current_template.values() if day["workout_type"] == "RUN"),
         1,
     )
-    template_long_target = round(float(current_template[6]["target_km"] or 0.0), 1)
+    template_long_target = round(
+        float(next(
+            (day["target_km"] for day in current_template.values() if day.get("session") == "Long Run"),
+            0.0,
+        ) or 0.0),
+        1,
+    )
     current_week_target = round(float(base_weekly_goal.get("anchor_weekly_target_km") or template_week_target), 1)
     current_long_target = round(float(base_weekly_goal.get("anchor_long_run_km") or template_long_target), 1)
     current_weeks_to_race = float(base_weekly_goal.get("weeks_to_race") or 0.0)
@@ -1251,7 +1257,18 @@ def build_progression_weeks(weekly_goal, long_run, weeks=8):
             sum(float(day["target_km"] or 0.0) for day in template.values() if day["workout_type"] == "RUN"),
             1,
         )
-        long_target = round(float(template[6]["target_km"] or 0.0), 1)
+        # Find the Long Run session by name — avoids assuming it's always at day index 6
+        long_target = round(
+            float(next(
+                (day["target_km"] for day in template.values() if day.get("session") == "Long Run"),
+                0.0,
+            ) or 0.0),
+            1,
+        )
+        # Guardrail: in non-cutback, non-taper weeks the long run should never drop
+        # more than 25% below the previous projection (protects against calibration edge cases)
+        if week_type not in {"cutback", "recovery", "rebuild"} and phase not in {"taper"} and projected_longest > 0:
+            long_target = max(long_target, round(projected_longest * 0.75, 1))
 
         progression.append(
             {
