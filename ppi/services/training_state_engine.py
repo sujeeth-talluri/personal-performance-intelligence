@@ -24,7 +24,10 @@ CROSS_TRAIN_TYPES = {"ride", "virtualride", "cycling", "swim", "swimming", "rowi
 SESSION_NAMES = {
     "easy": "Easy Run",
     "long": "Long Run",
+    "medium_long": "Medium Long Run",
+    "aerobic": "Aerobic Run",
     "tempo": "Tempo Run",
+    "speed": "Speed Session",
     "recovery": "Recovery Run",
     "active_recovery": "Active Recovery",
     "intervals": "Interval Session",
