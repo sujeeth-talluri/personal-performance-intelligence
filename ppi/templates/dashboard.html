@@ -872,7 +872,7 @@
             </div>
             <div class="week-preview-list">
               {% if fw.all_run_days %}
-                {% for rd in fw.all_run_days %}
+                {% for rd in fw.all_run_days if rd.km > 0 %}
                 <div class="week-preview-row {{ 'primary' if rd.is_long else '' }}">
                   <span class="label-stack">
                     <span class="label" style="{{ 'font-weight:600;color:var(--text)' if rd.is_long else ('color:#7c3aed' if rd.is_quality else '') }}">{{ rd.session }}</span>
