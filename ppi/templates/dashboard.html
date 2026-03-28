@@ -405,6 +405,18 @@
       .readiness-strip { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* ─── Session verdict ────────────────────────────────────────── */
+    .session-verdict { font-size: .78rem; font-weight: 600; padding: 6px 10px; border-radius: 6px; margin: 6px 0 2px; }
+    .verdict-great { background: #dcfce7; color: #15803d; }
+    .verdict-ok    { background: #fff7ed; color: #c2410c; }
+
+    /* ─── Long run ladder pills ──────────────────────────────────── */
+    .ladder-pill { display: inline-block; font-size: .58rem; font-weight: 700; padding: 1px 6px; border-radius: 8px; letter-spacing: .04em; text-transform: uppercase; margin-top: 3px; }
+    .lp-peak     { background: #dcfce7; color: #15803d; }
+    .lp-recovery { background: #fef3c7; color: #b45309; }
+    .lp-taper    { background: #ede9fe; color: #6d28d9; }
+    .lp-build    { background: #eff6ff; color: #1d4ed8; }
+
     /* ─── Activity intensity badge ───────────────────────────────── */
     .int-badge { font-size: .62rem; font-weight: 700; padding: 1px 5px; border-radius: 8px; margin-left: 4px; vertical-align: middle; }
     .int-hard  { background: #fee2e2; color: #dc2626; }
@@ -835,7 +847,7 @@
                   {% endif %}
                 </div>
                 {% if p.workout_type == 'RUN' and p.pace_guidance %}
-                  <div class="plan-pace">{{ p.pace_guidance }}</div>
+                  <div class="plan-pace">⏱ {{ p.pace_guidance }}</div>
                 {% endif %}
               </div>
               <div class="plan-status">
@@ -912,6 +924,11 @@
         </div>
         {% if today_workout.completed %}
           <div class="metric-row"><span>Completed</span><strong>{{ today_workout.completed_summary }}</strong></div>
+          {% if today_workout.verdict %}
+          <div class="session-verdict {{ 'verdict-great' if '⚡' in today_workout.verdict or 'nailed' in today_workout.verdict else ('verdict-ok' if 'Partial' in today_workout.verdict else 'verdict-ok') }}">
+            {{ today_workout.verdict }}
+          </div>
+          {% endif %}
         {% else %}
           <div class="metric-row"><span>Target</span><strong>{{ today_workout.distance_target }}</strong></div>
         {% endif %}
@@ -947,11 +964,15 @@
                   </span>
                 {% endif %}
                 {% if lr.is_recovery_week %}
-                  <span class="ladder-meta" style="color:#f59e0b;font-weight:600">Recovery</span>
+                  <span class="ladder-pill lp-recovery">Recovery</span>
                 {% elif lr.is_peak_run %}
-                  <span class="ladder-meta" style="color:#00C853;font-weight:600">Peak Run</span>
+                  <span class="ladder-pill lp-peak">Peak Run</span>
+                {% elif lr.week_type == 'taper' %}
+                  <span class="ladder-pill lp-taper">Taper</span>
+                {% elif lr.week_type == 'cutback' %}
+                  <span class="ladder-pill lp-recovery">Cutback</span>
                 {% elif lr.label %}
-                  <span class="ladder-meta">{{ lr.label }}</span>
+                  <span class="ladder-pill lp-build">{{ lr.label }}</span>
                 {% endif %}
                 {% if loop.first and lr.variant_pace_guidance %}
                   <span class="ladder-guidance">{{ lr.variant_pace_guidance }}</span>

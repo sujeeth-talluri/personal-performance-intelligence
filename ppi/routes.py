@@ -631,6 +631,27 @@ def _format_alternate_activity_text(item, is_today=False):
     return "Other activity done"
 
 
+def _build_session_verdict(today_item):
+    """Return a short verdict string for a completed session, or None."""
+    if not today_item or not today_item.get("done"):
+        return None
+    actual  = float(today_item.get("actual_km") or 0.0)
+    planned = float(today_item.get("planned_km") or 0.0)
+    wtype   = today_item.get("workout_type", "")
+    if wtype == "STRENGTH":
+        return "Gym session completed ✓"
+    if wtype != "RUN" or planned <= 0:
+        return None
+    ratio = actual / planned
+    if ratio >= 1.08:
+        return f"⚡ {actual:.1f} km — {actual - planned:.1f} km over target"
+    if ratio >= 0.95:
+        return f"✓ {actual:.1f} km — target nailed"
+    if ratio >= 0.70:
+        return f"Partial — {actual:.1f} of {planned:.1f} km done"
+    return None
+
+
 def _different_activity_status_label(item, is_today=False):
     if item.get("workout_type") == "RUN":
         return "Run open" if is_today else "Run missed"
@@ -2174,6 +2195,20 @@ def _dashboard_inner():
         fm_gap_display = ""
         fm_gap_color   = "green"
 
+    # ── FM gap fallback: use wall-adjusted seconds when race-prediction path misses ──
+    if not fm_gap_display and canonical_wall_adjusted_seconds > 0 and _goal_secs > 0:
+        _wall_gap_sec = canonical_wall_adjusted_seconds - _goal_secs
+        _wall_gap_min = abs(int(_wall_gap_sec // 60))
+        if _wall_gap_sec > 30:
+            fm_gap_display = f"+{_wall_gap_min} min from goal"
+            fm_gap_color   = "amber"
+        elif _wall_gap_sec < -30:
+            fm_gap_display = f"{_wall_gap_min} min under goal"
+            fm_gap_color   = "green"
+        else:
+            fm_gap_display = "On goal pace"
+            fm_gap_color   = "green"
+
     # ── Limiting factor (lowest readiness subscore) ───────────────────────────
     _factor_scores_raw = {
         "Long Run":    intel.get("readiness_long_run_pct", 0),
@@ -2585,6 +2620,7 @@ def _dashboard_inner():
             _format_alternate_activity_text(today_item, is_today=True) if today_item and today_item["status"] == "different_activity" else ""
         ),
         "completed_summary": completed_summary,
+        "verdict":           _build_session_verdict(today_item),
     }
     current_week_coaching_message = _build_current_week_coaching_message(
         float(display_weekly_target_km),
