@@ -8,8 +8,8 @@
     /* ─── Reset & Base ───────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --green:    #00C853;
-      --green-d:  #009624;
+      --green:    #10b981;
+      --green-d:  #059669;
       --dark:     #0f1117;
       --sidebar:  #161b27;
       --card:     #ffffff;
@@ -29,29 +29,52 @@
     .app { display: flex; min-height: 100vh; }
 
     .sidebar {
-      width: 220px; min-height: 100vh; background: var(--sidebar);
-      display: flex; flex-direction: column; padding: 24px 16px;
-      position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+      width: 64px; min-height: 100vh; background: var(--sidebar);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 20px 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+      border-right: 1px solid rgba(255,255,255,.06);
     }
     .sidebar-logo {
-      font-size: 1.3rem; font-weight: 800; color: var(--green);
-      letter-spacing: -0.5px; margin-bottom: 8px;
+      font-size: 1rem; font-weight: 900; color: var(--green);
+      letter-spacing: -0.5px; margin-bottom: 28px; text-align: center;
+      writing-mode: horizontal-tb;
     }
-    .sidebar-tagline { font-size: .72rem; color: #64748b; margin-bottom: 32px; }
-    .sidebar nav { flex: 1; }
+    .sidebar-tagline { display: none; }
+    .sidebar nav { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
     .nav-link {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px; border-radius: 8px; color: #94a3b8;
-      text-decoration: none; font-size: .88rem; margin-bottom: 4px;
+      display: flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; border-radius: 10px; color: #64748b;
+      text-decoration: none; font-size: 1.2rem; position: relative;
       transition: background .15s, color .15s;
     }
-    .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.07); color: #fff; }
-    .nav-link .icon { font-size: 1rem; width: 20px; text-align: center; }
-    .sidebar-footer { border-top: 1px solid #1e2638; padding-top: 16px; }
-    .sidebar-user { font-size: .8rem; color: #94a3b8; margin-bottom: 8px; }
-    .sidebar-user strong { display: block; color: #e2e8f0; font-size: .85rem; }
+    .nav-link:hover, .nav-link.active {
+      background: rgba(16,185,129,.12); color: var(--green);
+    }
+    .nav-link .icon { font-size: 1.1rem; }
+    .nav-link .nav-label {
+      display: none; position: absolute; left: 56px; top: 50%;
+      transform: translateY(-50%); background: #1e2638; color: #e2e8f0;
+      padding: 4px 10px; border-radius: 6px; font-size: .78rem;
+      white-space: nowrap; pointer-events: none; z-index: 300;
+      border: 1px solid rgba(255,255,255,.1);
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .nav-link:hover .nav-label { display: block; }
+    .sidebar-footer {
+      border-top: 1px solid #1e2638; padding-top: 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%;
+    }
+    .sidebar-user {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(16,185,129,.15); color: var(--green);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 800; margin-bottom: 8px;
+      position: relative;
+    }
+    .sidebar-user:hover .nav-label { display: block; }
+    .sidebar-user strong { display: none; }
 
-    .main { margin-left: 220px; padding: 28px; min-height: 100vh; }
+    .main { margin-left: 64px; padding: 24px 28px; min-height: 100vh; }
 
     /* ─── Cards ──────────────────────────────────────────────────── */
     .card {
@@ -72,7 +95,7 @@
     }
     .banner-warning { background: #2a1f00; border-left: 4px solid #f59e0b; color: #fbbf24; }
     .banner-info    { background: #0d2137; border-left: 4px solid #3b82f6; color: #93c5fd; }
-    .banner-success { background: #0d2a1a; border-left: 4px solid #00C853; color: #00C853; }
+    .banner-success { background: #0d2a1a; border-left: 4px solid #10b981; color: #10b981; }
     .banner-icon    { font-size: 1.1rem; flex-shrink: 0; }
     .banner-message { flex: 1; }
     .banner-action {
@@ -129,7 +152,7 @@
       font-size: 11px; font-weight: 600; text-transform: uppercase;
       color: #fff; margin-top: 6px;
     }
-    .confidence-high     { background: #00C853; }
+    .confidence-high     { background: #10b981; }
     .confidence-moderate { background: #f59e0b; }
     .confidence-low      { background: #ef4444; }
     .prediction-legend {
@@ -288,12 +311,18 @@
     }
 
     /* ─── Coaching card ──────────────────────────────────────────── */
-    .coaching-text {
-      font-size: .92rem; line-height: 1.65; color: var(--text);
-      background: #f8fafc; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px;
-      border-left: 3px solid var(--green);
+    .coaching-card {
+      background: #f8fafc; border-radius: 10px; padding: 18px 20px;
+      border-left: 4px solid var(--green); margin-bottom: 14px;
     }
-    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--muted); }
+    .coaching-headline {
+      font-size: .95rem; font-weight: 700; color: var(--text);
+      margin-bottom: 8px; line-height: 1.4;
+    }
+    .coaching-text {
+      font-size: .88rem; line-height: 1.65; color: #374151;
+    }
+    .coaching-badge { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--muted); margin-top: 10px; }
     .coaching-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--muted); }
 
     /* ─── Weekly plan ────────────────────────────────────────────── */
@@ -552,27 +581,18 @@
 
   <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
   <aside class="sidebar">
-    <div class="sidebar-logo">StrideIQ</div>
-    <div class="sidebar-tagline">AI Marathon Coach</div>
+    <div class="sidebar-logo">S</div>
     <nav>
-      <a class="nav-link active" href="/"><span class="icon">🏃</span> Dashboard</a>
-      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span> Sync Strava</a>
-      <a class="nav-link" href="/settings"><span class="icon">⚙️</span> Settings</a>
+      <a class="nav-link active" href="/"><span class="icon">📊</span><span class="nav-label">Dashboard</span></a>
+      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span><span class="nav-label">Sync Strava</span></a>
+      <a class="nav-link" href="/settings"><span class="icon">⚙️</span><span class="nav-label">Settings</span></a>
     </nav>
     <div class="sidebar-footer">
-      <div class="sidebar-user">
-        <strong>{{ user.name }}</strong>
-        Signed in
+      <div class="sidebar-user" title="{{ user.name }}">
+        {{ user.name[:1].upper() }}
+        <span class="nav-label">{{ user.name }} · {% if session.get('last_sync_at') %}Synced {{ session['last_sync_at'][:10] }}{% else %}Not synced{% endif %}</span>
       </div>
-      {% if session.get('last_sync_at') %}
-        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px;line-height:1.4">
-          Last synced<br>
-          <span id="sync-age" data-ts="{{ session['last_sync_at'] }}" style="color:#64748b">{{ session['last_sync_at'][:16].replace('T',' ') }} UTC</span>
-        </div>
-      {% else %}
-        <div style="font-size:.68rem;color:#475569;padding:6px 12px 2px">Not yet synced</div>
-      {% endif %}
-      <a class="nav-link" href="/logout"><span class="icon">🚪</span> Sign Out</a>
+      <a class="nav-link" href="/logout"><span class="icon">🚪</span><span class="nav-label">Sign Out</span></a>
     </div>
   </aside>
 
@@ -585,25 +605,14 @@
         <h1>{{ intel.goal.race_name }}</h1>
         <div class="sub" style="margin-top:5px">
           Goal <strong style="color:#e2e8f0">{{ intel.goal.goal_time }}</strong>
-          &nbsp;·&nbsp; {{ intel.goal.days_remaining }} days to race
-          &nbsp;·&nbsp; {{ today_date }}
-        </div>
-        <div class="sub" style="margin-top:3px;color:#64748b;font-size:.78rem">
-          Phase: {{ canonical_phase_label }}
-          &nbsp;|&nbsp; {% set _tsb = intel.current_tsb %}
-          {% set _ctl = intel.current_ctl %} {% set _atl = intel.current_atl %}
-          <span class="tooltip-wrap">
-            Freshness: {% if _tsb > 5 %}Feeling Fresh 🟢{% elif _tsb >= 1 %}Race Ready ⚡{% elif _tsb > -1 %}Balanced ⚡{% elif _tsb >= -10 %}Building Fatigue 🟡{% else %}Need Rest 🔴{% endif %}{% if not tsb_quality_allowed %} · No quality sessions{% elif tsb_volume_cap < 1.0 %} · Volume adjusted{% endif %}
-            <span class="tooltip-icon">?</span>
-            <span class="tooltip-text">Your current Form score is {{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} (Fitness {{ '%.1f'|format(_ctl) }} minus Fatigue {{ '%.1f'|format(_atl) }}).<br>{{ '+' if _tsb >= 0 else '' }}{{ '%.1f'|format(_tsb) }} means {% if _tsb > 5 %}you are fresh and race-ready{% elif _tsb > 0 %}you are well balanced for training{% elif _tsb > -10 %}you have some fatigue — normal for training{% else %}you are tired — consider an easy week{% endif %}.<br>Ideal race day form: +5 to +15.</span>
-          </span>
-          &nbsp;·&nbsp; {{ intel.goal.target_pace }} goal pace
+          &nbsp;·&nbsp; <strong style="color:#e2e8f0">{{ intel.goal.days_remaining }}</strong> days to race
+          &nbsp;·&nbsp; {{ canonical_phase_label | title }}
+          &nbsp;·&nbsp; {% set _tsb = intel.current_tsb %}{% if _tsb > 5 %}<span style="color:#10b981">Fresh ●</span>{% elif _tsb >= -5 %}<span style="color:#f59e0b">Fatigued ●</span>{% else %}<span style="color:#ef4444">Tired ●</span>{% endif %}
         </div>
       </div>
       <div class="hero-right">
         <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
         <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
-        <a class="icon-btn" href="/logout" title="Sign Out">🚪</a>
       </div>
     </div>
 
@@ -709,6 +718,19 @@
           </strong>
         </div>
         <div class="progress-bar" style="margin-top:14px"><span style="width:{{ progress_pct }}%"></span></div>
+        {% if intensity_split.easy_pct or intensity_split.hard_pct %}
+        <div class="metric-row" style="margin-top:12px">
+          <span>Intensity balance</span>
+          <strong>
+            <span style="color:var(--green)">{{ intensity_split.easy_pct }}% easy</span>
+            &nbsp;/&nbsp;
+            <span style="color:var(--amber)">{{ intensity_split.hard_pct }}% hard</span>
+            {% if intensity_split.easy_pct < 75 %}
+            <span style="font-size:.72rem;font-weight:400;color:var(--muted);margin-left:6px">· Target 80/20</span>
+            {% endif %}
+          </strong>
+        </div>
+        {% endif %}
       </div>
 
       <div class="card">
@@ -838,7 +860,10 @@
     {% if current_week_coaching_message or canonical_coaching_message %}
     <div class="card" id="card-coaching">
       <div class="card-title">AI Coaching Insight</div>
-      <div class="coaching-text">{{ current_week_coaching_message or canonical_coaching_message }}</div>
+      <div class="coaching-card">
+        <div id="coaching-headline" class="coaching-headline"></div>
+        <div id="coaching-text" class="coaching-text">Loading your coaching insight…</div>
+      </div>
       <div class="coaching-badge" style="margin-top:10px">
         <span>🤖</span>
         <span class="tooltip-wrap">Powered by Claude · StrideIQ coaching engine
@@ -1033,8 +1058,10 @@
 </template>
 
 <script>
-  window._weeklyCTL = {{ weekly_ctl_json | safe }};
-  window._predTrend = {{ prediction_trend_json | safe }};
+  window._weeklyCTL    = {{ weekly_ctl_json | safe }};
+  window._predTrend    = {{ prediction_trend_json | safe }};
+  window._targetCTL    = {{ target_ctl }};
+  window._daysToRace   = {{ intel.goal.days_remaining | int }};
   window._aerobicPaceDisplay = {{ aerobic_pace_display | tojson }};
   window._wallMath = {
     showEstimate:    {{ 'true' if show_wall_estimate else 'false' }},
@@ -1442,6 +1469,42 @@
           return `<text x="${p[0]}" y="${LABEL_Y}" text-anchor="middle" font-size="8" fill="#9ca3af">${weeks[i]}</text>`;
         }).join('');
       }
+
+      // ── Target CTL line (Path to Goal) ──────────────────────────────────
+      // Draw a dashed target line from current CTL trending toward targetCTL
+      // at race day. Gives the athlete a visual goal curve.
+      const targetCTL   = window._targetCTL  || 62;
+      const weeksToRace = Math.max(1, Math.round((window._daysToRace || 0) / 7));
+      const currentCTL  = vals[vals.length - 1] || 0;
+      const svgEl = el('ctl-svg');
+      if (svgEl && currentCTL < targetCTL) {
+        // Project two points: now (last data point) and race day (off-chart right)
+        // Clamp target endpoint to the same x range as existing chart
+        const targetY = PAD_Y + (1 - (targetCTL - minV) / rng) * (CHART_H - PAD_Y * 2);
+        const lastPt  = pts[pts.length - 1];
+        // Extend line a bit past the last data point to race day (proportionally)
+        const extendRatio = Math.min(1.0, weeksToRace / Math.max(1, vals.length));
+        const endX = Math.min(W, lastPt[0] + (W - lastPt[0]) * extendRatio);
+        const endY = Math.max(PAD_Y, Math.min(CHART_H, targetY));
+        const targetPath = document.createElementNS('http://www.w3.org/2000/svg','path');
+        targetPath.setAttribute('d', `M${lastPt[0]},${lastPt[1]} L${endX.toFixed(1)},${endY.toFixed(1)}`);
+        targetPath.setAttribute('stroke', '#f59e0b');
+        targetPath.setAttribute('stroke-width', '1.5');
+        targetPath.setAttribute('stroke-dasharray', '4 3');
+        targetPath.setAttribute('fill', 'none');
+        targetPath.setAttribute('opacity', '0.7');
+        svgEl.appendChild(targetPath);
+        // Target label
+        const targetLabelEl = document.createElementNS('http://www.w3.org/2000/svg','text');
+        targetLabelEl.setAttribute('x', String(endX.toFixed(1)));
+        targetLabelEl.setAttribute('y', String((endY - 5).toFixed(1)));
+        targetLabelEl.setAttribute('text-anchor', 'end');
+        targetLabelEl.setAttribute('font-size', '8');
+        targetLabelEl.setAttribute('fill', '#f59e0b');
+        targetLabelEl.setAttribute('opacity', '0.85');
+        targetLabelEl.textContent = `Goal CTL ${targetCTL}`;
+        svgEl.appendChild(targetLabelEl);
+      }
     }
 
     // ── Prediction history sparkline ────────────────────────────────────
@@ -1499,9 +1562,20 @@
       }
     })();
 
-    // ── 6. AI Coaching Summary ───────────────────────────────────────────
-    const coachText = el('coaching-text');
-    if (coachText) coachText.textContent = coach || 'Coaching insight loading…';
+    // ── 6. AI Coaching Summary — headline + body ────────────────────────
+    const coachHeadline = el('coaching-headline');
+    const coachText     = el('coaching-text');
+    if (coach && (coachHeadline || coachText)) {
+      // Split on first sentence boundary to get a headline
+      const sentenceEnd = coach.search(/[.!?]\s+[A-Z]/);
+      if (sentenceEnd > 0 && sentenceEnd < 160 && coachHeadline) {
+        coachHeadline.textContent = coach.substring(0, sentenceEnd + 1).trim();
+        if (coachText) coachText.textContent = coach.substring(sentenceEnd + 1).trim();
+      } else {
+        if (coachHeadline) coachHeadline.style.display = 'none';
+        if (coachText) coachText.textContent = coach;
+      }
+    }
   }
 
   // ── Fetch & orchestrate ──────────────────────────────────────────────────

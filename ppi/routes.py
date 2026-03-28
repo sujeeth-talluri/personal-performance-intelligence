@@ -827,9 +827,24 @@ def _deterministic_feasibility_fields(
     )
     days_remaining = int(goal.get("days_remaining") or 0)
 
-    if score >= 70:
-        color = "green"
-        label = "On Track"
+    # Use goal_alignment (probability-based) as the primary label when a valid
+    # prediction exists — it's more honest than the readiness score alone.
+    # A score of 70/100 while 42 minutes off goal should NOT read "On Track".
+    goal_alignment = str(intel.get("goal_alignment") or "").strip()
+    probability    = intel.get("probability")  # 0–100 or None
+
+    _ALIGNMENT_COLOR = {
+        "On Track":    "green",
+        "Within Reach":"amber",
+        "Building":    "amber",
+        "Stretch":     "grey",
+    }
+    if goal_alignment and goal_alignment not in ("Too early to compare", "--"):
+        label = goal_alignment
+        color = _ALIGNMENT_COLOR.get(goal_alignment, "grey")
+    elif score >= 70:
+        color = "amber"
+        label = "Building"
     elif score >= 55:
         color = "amber"
         label = "Building"
@@ -2404,6 +2419,54 @@ def dashboard():
     runs = recent_runs(user.id, limit=5, user_timezone=user_tz)
     weekly_summary = weekly_training_summary(user.id)
 
+    # ── 80/20 intensity split for this week ───────────────────────────────────
+    # Easy run = pace significantly slower than goal marathon pace (athlete is
+    # building aerobic base). Hard/quality = at or faster than goal pace.
+    # Non-run activities always count as easy (cross-training / recovery).
+    # Result: {"easy_pct": 72, "hard_pct": 28, "easy_km": 24.0, "hard_km": 9.3}
+    _intensity_split = {"easy_pct": 0, "hard_pct": 0, "easy_km": 0.0, "hard_km": 0.0}
+    try:
+        _goal_pace_sec = None
+        _goal_obj = intel.get("goal") or {}
+        _goal_time_str = _goal_obj.get("goal_time", "")
+        _goal_dist_km  = float(_goal_obj.get("distance_km") or 42.195)
+        if _goal_time_str:
+            _parts = _goal_time_str.split(":")
+            if len(_parts) == 3:
+                _goal_total_sec = int(_parts[0]) * 3600 + int(_parts[1]) * 60 + int(_parts[2])
+                _goal_pace_sec  = _goal_total_sec / _goal_dist_km  # sec/km at goal pace
+
+        _week_acts = fetch_activities_between(user.id, week_start, week_end)
+        _easy_km = _hard_km = 0.0
+        _RUN_ACTIVITY_TYPES = {"run", "trail run", "trail_run", "track", "virtualrun", "treadmill"}
+        for _act in _week_acts:
+            _dist = float(_act.distance_km or 0.0)
+            if _dist <= 0:
+                continue
+            _atype = (_act.activity_type or "").lower()
+            if _atype not in _RUN_ACTIVITY_TYPES:
+                _easy_km += _dist
+                continue
+            # For runs: compare actual pace to goal pace.
+            # Easy threshold = goal pace * 1.05 (5% slower than goal = easy)
+            _mv = float(_act.moving_time or 0.0)
+            _pace = _mv / _dist if _dist > 0 else None
+            if _goal_pace_sec and _pace and _pace > _goal_pace_sec * 1.05:
+                _easy_km += _dist
+            else:
+                _hard_km += _dist
+
+        _total_km = _easy_km + _hard_km
+        if _total_km > 0:
+            _intensity_split = {
+                "easy_pct": int(round(_easy_km / _total_km * 100)),
+                "hard_pct": int(round(_hard_km / _total_km * 100)),
+                "easy_km":  round(_easy_km, 1),
+                "hard_km":  round(_hard_km, 1),
+            }
+    except Exception:
+        pass  # Never break the dashboard over a non-critical metric
+
     # ── Prediction trend sparkline ─────────────────────────────────────────────
     # Fetch up to 10 historical predictions (oldest-first) so the template can
     # render a mini sparkline showing how the marathon projection has evolved.
@@ -2515,6 +2578,8 @@ def dashboard():
         weekly_signal=weekly_signal,
         weekly_signal_color=weekly_signal_color,
         prediction_trend_json=prediction_trend_json,
+        intensity_split=_intensity_split,
+        target_ctl=62 if float((intel.get("goal") or {}).get("distance_km") or 42.195) >= 40 else 55,
     )
 
 # ---------------------------------------------------------------------------
