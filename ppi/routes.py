@@ -633,10 +633,10 @@ def _format_alternate_activity_text(item, is_today=False):
 
 def _different_activity_status_label(item, is_today=False):
     if item.get("workout_type") == "RUN":
-        return "run open" if is_today else "run missed"
+        return "Run open" if is_today else "Run missed"
     if item.get("workout_type") == "STRENGTH":
-        return "gym open" if is_today else "gym missed"
-    return "other activity"
+        return "Gym open" if is_today else "Gym missed"
+    return "Other activity"
 
 
 def _deterministic_progression_weeks(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, weeks=18, schedule_prefs=None):
