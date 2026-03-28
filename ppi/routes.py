@@ -1704,13 +1704,24 @@ def api_dashboard():
     )
     coaching = generate_coaching_output(intel, weekly_plan)
 
+    # ── Step 3b: Sanitise coaching summary numbers ───────────────────────────
+    # The AI / heuristic may quote values that are slightly off (e.g. the
+    # analytics pipeline's 42.0 vs the snapshot's canonical 43 km).  Apply
+    # fix_coaching_numbers here using the same snapshot-derived values so the
+    # coaching card always agrees with the weekly plan card.
+    _canonical_wk = _snap_wk_km if (_api_snapshot and _snap_wk_km > 0) else float(intel.get("weekly", {}).get("weekly_goal_km") or 0)
+    _canonical_lr = _snap_lr_km if (_api_snapshot and _snap_lr_km > 0) else float(intel.get("long_run", {}).get("next_milestone_km") or 0)
+    _raw_summary = coaching["coaching_summary"] or ""
+    if _canonical_wk > 0 or _canonical_lr > 0:
+        _raw_summary = fix_coaching_numbers(_raw_summary, _canonical_wk, _canonical_lr)
+
     # ── Step 4: Single JSON response with all 3 outputs ─────────────────────
     return jsonify({
         "load": load_output,
         "prediction": prediction_output,
         "pace_strategy": coaching["pace_strategy"],
         "training_recommendations": coaching["training_recommendations"],
-        "coaching_summary": coaching["coaching_summary"],
+        "coaching_summary": _raw_summary,
         "wall_analysis": coaching["wall_analysis"],
     })
 
