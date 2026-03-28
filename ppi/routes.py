@@ -198,6 +198,41 @@ def _replace_weekly_snapshot(plan_row, week_start, daily_plan):
     return snapshot
 
 
+def _repair_snapshot_zero_long_run(plan_row, week_start, snapshot, daily_plan):
+    """Repair a frozen snapshot whose Long Run day has planned_distance_km == 0.
+
+    A snapshot can be frozen with Long Run km = 0 if it was first created
+    before the plan engine had sufficient data (e.g. weekly_goal_km = 0 on
+    an early page load).  When that happens `weekly_snapshot_is_valid` still
+    passes because it only checks whether run_total ≈ weekly_target_km — both
+    of which are 0 for the Long Run.
+
+    If the fresh daily_plan now produces a nonzero Long Run the snapshot is
+    rebuilt from the fresh plan so the correct mileage is displayed.
+
+    Returns (snapshot, was_repaired).
+    """
+    if not snapshot or not plan_row:
+        return snapshot, False
+    days = snapshot.get("days") or {}
+    has_zero_long_run = any(
+        float(day.get("planned_distance_km") or 0.0) == 0.0
+        and day.get("session_name") == "Long Run"
+        for day in days.values()
+    )
+    if not has_zero_long_run:
+        return snapshot, False
+    # Only repair if the fresh plan actually has a meaningful Long Run km.
+    fresh_long_run_km = max(
+        (float(v.get("km") or 0.0) for v in daily_plan.values() if v.get("type") == "long"),
+        default=0.0,
+    )
+    if fresh_long_run_km <= 0:
+        return snapshot, False
+    repaired = _replace_weekly_snapshot(plan_row, week_start, daily_plan)
+    return repaired, True
+
+
 def _apply_confirmed_current_week_repair(user_id, plan_row, week_start, snapshot):
     if not plan_row or not snapshot:
         return snapshot, False
@@ -1895,13 +1930,14 @@ def _dashboard_inner():
     weekly_snapshot = _load_or_create_weekly_snapshot(_plan_row, week_start, _daily_plan)
     if _snapshot_needs_schedule_repair(weekly_snapshot, _profile, week_start) and _plan_row:
         weekly_snapshot = _replace_weekly_snapshot(_plan_row, week_start, _daily_plan)
+    weekly_snapshot, _ = _repair_snapshot_zero_long_run(_plan_row, week_start, weekly_snapshot, _daily_plan)
     weekly_snapshot, _ = _apply_confirmed_current_week_repair(user.id, _plan_row, week_start, weekly_snapshot)
     _persist_snapshot_workout_logs(user.id, weekly_snapshot)
     canonical_weekly_target_km = round(float(weekly_snapshot.get("weekly_target_km") or 0.0), 1)
     canonical_long_run_km = round(
         max(
             [
-                float(day.get("planned_km") or 0.0)
+                float(day.get("planned_distance_km") or 0.0)
                 for day in (weekly_snapshot.get("days") or {}).values()
                 if (day.get("session_name") or "") == "Long Run"
             ]

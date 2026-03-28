@@ -223,6 +223,16 @@ def _calibrated_weekly_target(weekly_goal, baseline_weekly_target, long_target):
 
     if phase in {"taper", "recovery", "rebuild"}:
         weekly_target = min(weekly_target, max(baseline_weekly_target, allowed_growth_cap))
+
+    # Hard guardrail: after all long-run support adjustments, ensure the
+    # weekly target never exceeds the larger of (a) allowed_growth_cap or
+    # (b) 125% of the runner's recent actual volume.  Without this, a high-
+    # mileage long run (e.g. 20 km) pushes current_long_support to 51 km
+    # which overrides the safe ramp cap and produces dangerous load spikes
+    # in the "Next 3 Weeks" preview for a runner actually doing ~29 km/week.
+    guardrail = round(max(allowed_growth_cap, recent_anchor * 1.25), 1)
+    weekly_target = min(weekly_target, guardrail)
+
     return round(max(18.0, weekly_target), 1)
 
 
