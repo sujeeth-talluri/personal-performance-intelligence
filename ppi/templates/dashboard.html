@@ -135,15 +135,25 @@
     .col-span-2 { grid-column: span 2; }
 
     /* ─── Distance tiles ─────────────────────────────────────────── */
-    .dist-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dist-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1.65fr; gap: 14px; align-items: stretch; }
     .dist-tile {
       background: var(--bg); border-radius: 10px; padding: 16px 14px;
       text-align: center; position: relative;
+      border: 1.5px solid var(--border);
     }
-    .dist-tile.fm { background: linear-gradient(135deg, #e8fff1 0%, #f0fdf4 100%); }
+    .dist-tile.fm {
+      background: linear-gradient(160deg, #f0fdf4 0%, #e8fff1 60%, #fff 100%);
+      border: 2px solid #86efac;
+      box-shadow: 0 4px 18px rgba(22,163,74,.10);
+      text-align: left;
+      padding: 18px 20px;
+    }
     .dist-tile .label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+    .dist-tile.fm .label { color: #16a34a; font-weight: 800; letter-spacing: .08em; }
     .dist-tile .time { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .dist-tile.fm .time { font-size: 2.15rem; letter-spacing: -.02em; }
     .dist-tile .sub-time { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+    .dist-tile.fm .sub-time { font-size: .8rem; margin-top: 6px; }
     .dist-tile .potential { font-size: .8rem; color: var(--green-d); font-weight: 600; margin-top: 8px; }
     .dist-tile .potential span { font-size: .7rem; color: var(--muted); display: block; }
     /* Unified confidence badges — same style in tiles and legend */
@@ -688,14 +698,15 @@
     @media (max-width: 768px) {
       .sidebar { display: none; }
       .main    { margin-left: 0; padding: 16px; }
-      .dist-grid { grid-template-columns: repeat(2, 1fr); }
+      .dist-grid { grid-template-columns: 1fr 1fr; }
+      .dist-tile.fm { grid-column: 1 / -1; text-align: center; }
       .grid-2  { grid-template-columns: 1fr; }
       .load-tiles { grid-template-columns: repeat(3, 1fr); }
       .fm-compare { flex-direction: column; }
       .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 480px) {
-      .dist-grid  { grid-template-columns: repeat(2, 1fr); }
+      .dist-grid  { grid-template-columns: 1fr 1fr; }
       .load-tiles { grid-template-columns: 1fr 1fr 1fr; }
       .ladder { grid-template-columns: 1fr; }
       .ladder-step { min-height: 0; }
@@ -1143,9 +1154,10 @@
         <div class="card">
           <div class="card-title">Race Predictions</div>
           <div class="dist-grid">
-            {% for _ in range(4) %}
+            {% for _ in range(3) %}
               <div class="dist-tile"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>
             {% endfor %}
+            <div class="dist-tile fm"><div class="skeleton sk-big"></div><div class="skeleton sk-line" style="width:70%"></div><div class="skeleton sk-line" style="width:50%"></div></div>
           </div>
         </div>
         <div class="grid-2">
