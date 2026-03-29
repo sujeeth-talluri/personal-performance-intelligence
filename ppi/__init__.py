@@ -45,6 +45,7 @@ def create_app(config_object=Config):
         with app.app_context():
             db.create_all()
 
+    from . import routes_auth  # noqa: F401  — registers auth/onboarding/strava routes on `web`
     app.register_blueprint(web)
 
     return app
