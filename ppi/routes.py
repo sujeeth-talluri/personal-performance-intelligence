@@ -576,6 +576,71 @@ def _display_planned_km(km):
     return int(round(float(km or 0.0))) if float(km or 0.0) > 0 else 0
 
 
+# ---------------------------------------------------------------------------
+# Adaptive planning helpers
+# ---------------------------------------------------------------------------
+
+# Goal bands: (max_goal_seconds, min_weekly_km, max_weekly_km, lr_cap, required_weekly_km)
+# "required_weekly_km" = what the athlete needs to average to build sufficient CTL for the goal
+_ADAPTIVE_GOAL_BANDS = [
+    (10_800,  70, 120, 35, 90),   # sub-3:00
+    (12_600,  55,  95, 32, 75),   # sub-3:30
+    (14_400,  42,  75, 30, 58),   # sub-4:00
+    (16_200,  35,  62, 28, 48),   # sub-4:30
+    (18_000,  28,  52, 26, 40),   # sub-5:00
+    (99_999,  20,  42, 24, 32),   # 5:00+
+]
+
+def _get_adaptive_goal_band(goal_seconds):
+    """Return guardrail bounds for the athlete's goal time."""
+    for max_sec, min_km, max_km, lr_cap, req_km in _ADAPTIVE_GOAL_BANDS:
+        if goal_seconds < max_sec:
+            return {"min_km": min_km, "max_km": max_km, "lr_cap": lr_cap, "required_km": req_km}
+    return {"min_km": 20, "max_km": 42, "lr_cap": 24, "required_km": 32}
+
+
+def _compute_trailing_actuals(user_id, current_week_start, user_tz, n_weeks=4):
+    """
+    Fetch trailing N completed weeks of run-activity km data.
+
+    Returns a dict with:
+      avg_km          -- mean weekly run km across active weeks
+      avg_long_km     -- mean longest run per week across active weeks
+      n_active_weeks  -- number of weeks with >= 5 km (filters out illness/injury gaps)
+
+    Signal-filter: caller should only apply adaptation when n_active_weeks >= 2.
+    """
+    _RUN_TYPES = {"run", "trail run", "trail_run", "trailrun", "track", "virtualrun", "treadmill"}
+    weeks = []
+    for i in range(1, n_weeks + 1):
+        w_start = current_week_start - timedelta(weeks=i)
+        w_end   = w_start + timedelta(days=6)
+        try:
+            acts = fetch_activities_between(user_id, w_start, w_end)
+        except Exception:
+            acts = []
+        run_kms = [
+            float(a.distance_km or 0)
+            for a in acts
+            if (a.activity_type or "").lower().replace(" ", "") in {t.replace(" ", "") for t in _RUN_TYPES}
+            and float(a.distance_km or 0) > 0
+        ]
+        total_km = sum(run_kms)
+        long_km  = max(run_kms, default=0.0)
+        weeks.append({"total_km": round(total_km, 1), "long_km": round(long_km, 1)})
+
+    # Exclude illness/injury weeks (< 5 km = essentially no running that week)
+    active = [w for w in weeks if w["total_km"] >= 5]
+    if not active:
+        return {"avg_km": 0.0, "avg_long_km": 0.0, "n_active_weeks": 0}
+
+    return {
+        "avg_km":          round(sum(w["total_km"] for w in active) / len(active), 1),
+        "avg_long_km":     round(sum(w["long_km"]  for w in active) / len(active), 1),
+        "n_active_weeks":  len(active),
+    }
+
+
 def _format_alternate_activity_text(item, is_today=False):
     walk_km = round(float(item.get("actual_walk_km") or 0.0), 1)
     cross_km = round(float(item.get("actual_cross_train_km") or 0.0), 1)
@@ -763,7 +828,7 @@ def _deterministic_long_run_progression(intel, week_start, current_week_weekly_t
     return output
 
 
-def _deterministic_future_week_preview(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, limit=3, schedule_prefs=None):
+def _deterministic_future_week_preview(intel, week_start, current_week_weekly_target_km, current_week_long_run_km, limit=3, schedule_prefs=None, trailing_actuals=None):
     progression, weekly_goal, race_date_obj = _deterministic_progression_weeks(
         intel,
         week_start,
@@ -772,6 +837,19 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
         weeks=max(6, limit + 2),
         schedule_prefs=schedule_prefs,
     )
+
+    # ── Adaptive planning context ────────────────────────────────────────────
+    # Resolve goal band and trailing-actual averages once for the full loop.
+    # Adaptation is ONLY applied when:
+    #   (a) we have >= 2 active trailing weeks (signal filter — ignore noise)
+    #   (b) the week is NOT in taper (taper is sacred, never overridden)
+    _goal_secs     = float((intel.get("goal") or {}).get("goal_seconds") or 0)
+    _goal_band     = _get_adaptive_goal_band(_goal_secs) if _goal_secs > 0 else None
+    _trailing_avg  = float((trailing_actuals or {}).get("avg_km") or 0)
+    _trailing_lr   = float((trailing_actuals or {}).get("avg_long_km") or 0)
+    _n_data_weeks  = int((trailing_actuals or {}).get("n_active_weeks") or 0)
+    _can_adapt     = _goal_band is not None and _trailing_avg > 0 and _n_data_weeks >= 2
+
     preview = []
     for week in progression[1:]:
         week_end = week["week_start"] + timedelta(days=6)
@@ -799,6 +877,45 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
         weekly_target = sum(_display_planned_km(day.get("target_km") or 0.0) for day in run_days)
         if long_day:
             weekly_target = weekly_target - _display_planned_km(long_day.get("target_km") or 0.0) + snapped_long_run_km
+
+        # ── Guardrail-bounded adaptive override (non-taper weeks only) ───────
+        _weeks_to_race = (
+            max(0, (race_date_obj - week["week_start"]).days // 7)
+            if race_date_obj else 99
+        )
+        _week_type = (week.get("week_type") or "build").lower()
+        _is_taper  = _weeks_to_race <= 4 or week.get("phase") == "taper"
+
+        if _can_adapt and not _is_taper:
+            # Adaptive base: 50% actuals · 30% goal requirement · 20% plan template
+            _adaptive_base = (
+                _trailing_avg            * 0.50
+                + _goal_band["required_km"] * 0.30
+                + weekly_target          * 0.20
+            )
+            # Week-type modifier
+            if _week_type in ("cutback", "recovery", "rebuild"):
+                _adapted_km = _adaptive_base * 0.83
+            elif _week_type == "peak":
+                _adapted_km = _adaptive_base * 1.05
+            else:
+                _adapted_km = _adaptive_base
+
+            # Structural guardrails
+            _adapted_km = min(_adapted_km, _trailing_avg * 1.10)  # 10% cap
+            _adapted_km = max(_adapted_km, _goal_band["min_km"])   # goal floor
+            _adapted_km = min(_adapted_km, _goal_band["max_km"])   # goal ceiling
+            weekly_target = round(_adapted_km)
+
+            # Long run: more conservative blend (60% trailing, 40% plan)
+            if _trailing_lr > 0:
+                _lr_base = _trailing_lr * 0.60 + snapped_long_run_km * 0.40
+                if _week_type in ("cutback", "recovery", "rebuild"):
+                    snapped_long_run_km = max(round(_lr_base * 0.83), 10)
+                else:
+                    snapped_long_run_km = round(min(_lr_base * 1.02, _goal_band["lr_cap"]))
+                snapped_long_run_km = min(snapped_long_run_km, _goal_band["lr_cap"])
+
         week_label = f"{week['week_start'].strftime('%d %b')} - {week_end.strftime('%d %b')}"
         quality_prescription = (
             service_quality_session_prescription(
@@ -2872,6 +2989,13 @@ def _dashboard_inner():
     except Exception:
         pass  # Non-critical — never break the dashboard
 
+    # ── Trailing actuals for adaptive planning ────────────────────────────────
+    _trailing_actuals = {}
+    try:
+        _trailing_actuals = _compute_trailing_actuals(user.id, week_start, user_tz, n_weeks=4)
+    except Exception:
+        pass  # Never break dashboard over non-critical adaptive data
+
     return render_template(
         "dashboard.html",
         user=user,
@@ -2929,6 +3053,7 @@ def _dashboard_inner():
             display_long_run_target_km,
             limit=3,
             schedule_prefs=schedule_prefs,
+            trailing_actuals=_trailing_actuals,
         ),
         week_remaining_km=display_weekly_remaining_km,
         recent_long_run_km=recent_long_run_km,
