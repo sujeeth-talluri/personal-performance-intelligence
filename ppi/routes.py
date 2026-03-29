@@ -886,7 +886,8 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
             max(0, (race_date_obj - week["week_start"]).days // 7)
             if race_date_obj else 99
         )
-        _week_type = (week.get("week_type") or "build").lower()
+        # Normalise: "recovery week" → "recovery", "cutback week" → "cutback"
+        _week_type = (week.get("week_type") or "build").lower().replace(" week", "").strip()
         _is_taper  = _weeks_to_race <= 4 or week.get("phase") == "taper"
 
         if _can_adapt and not _is_taper:
@@ -3024,6 +3025,21 @@ def _dashboard_inner():
     _trailing_actuals = {}
     try:
         _trailing_actuals = _compute_trailing_actuals(user.id, week_start, user_tz, n_weeks=4)
+        # Boost the trailing average if the current week's actual is stronger —
+        # this ensures an over-achiever week immediately lifts next-week targets.
+        if week_actual_km > 0:
+            _trailing_actuals["avg_km"] = max(
+                float(_trailing_actuals.get("avg_km") or 0),
+                week_actual_km * 0.88,
+            )
+            if recent_long_run_km > 0:
+                _trailing_actuals["avg_long_km"] = max(
+                    float(_trailing_actuals.get("avg_long_km") or 0),
+                    recent_long_run_km * 0.90,
+                )
+            # Ensure at least 2 active weeks so adaptation can trigger
+            if _trailing_actuals.get("n_active_weeks", 0) < 2:
+                _trailing_actuals["n_active_weeks"] = 2
     except Exception:
         pass  # Never break dashboard over non-critical adaptive data
 

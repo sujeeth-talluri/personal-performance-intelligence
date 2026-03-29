@@ -317,16 +317,18 @@ def _heuristic_coaching_summary(
     long_run = intel.get("long_run") or {}
     next_long = training_recs["next_long_run_km"]
 
+    # completed_km is the key used by performance_intelligence for this week's actual run km
+    _actual_km = float((intel.get("weekly") or {}).get("completed_km") or 0)
+    _target_km = training_recs["weekly_target_km"]
+    _week_done = _actual_km > 0 and _actual_km >= _target_km * 0.85
+
     if training_recs["recovery_needed"]:
-        _actual_km  = float((intel.get("weekly") or {}).get("actual_km") or 0)
-        _target_km  = training_recs["weekly_target_km"]
-        _week_done  = _actual_km >= _target_km * 0.85
         if _week_done:
             return (
                 f"{phase_label}. "
                 f"Your TSB is {tsb:+.0f}, indicating accumulated fatigue. "
                 f"You've already completed {_actual_km:.0f} km this week — week done. "
-                f"Focus on the {key_workout['name'].lower()} to rebuild freshness before your next quality block."
+                f"Focus on easy recovery runs to rebuild freshness before your next quality block."
             )
         return (
             f"{phase_label}. Your TSB is {tsb:+.0f}, indicating accumulated fatigue. "
@@ -336,6 +338,15 @@ def _heuristic_coaching_summary(
 
     goal_alignment = race_prediction.get("goal_alignment") or ""
     time_note = f"Current projection: {predicted_time} ({confidence} confidence)." if predicted_time != "--" else ""
+
+    if _week_done:
+        return (
+            f"{phase_label}. {training_recs['phase_rule']} "
+            f"{time_note} "
+            f"You've already completed {_actual_km:.0f} km this week — great work! "
+            f"Focus on recovery and prep for next week's key session: "
+            f"{key_workout['name']} — {key_workout['description']}"
+        ).strip()
 
     return (
         f"{phase_label}. {training_recs['phase_rule']} "
@@ -350,10 +361,12 @@ def _openai_coaching_summary(
     race_prediction: dict,
     pace_strategy: dict,
     training_recs: dict,
+    intel: dict,
     api_key: str,
     model: str,
 ) -> str | None:
     """Call OpenAI with structured context; request only a coaching paragraph."""
+    _actual_this_week = float((intel.get("weekly") or {}).get("completed_km") or 0)
     context = {
         "race_prediction": {
             "predicted_time": race_prediction.get("predicted_time"),
@@ -370,8 +383,8 @@ def _openai_coaching_summary(
             "atl": training_recs["atl"],
             "tsb": training_recs["tsb"],
             "weekly_target_km": training_recs["weekly_target_km"],
-            "actual_km_this_week": float((intel.get("weekly") or {}).get("actual_km") or 0),
-            "week_complete": float((intel.get("weekly") or {}).get("actual_km") or 0) >= training_recs["weekly_target_km"] * 0.85,
+            "actual_km_this_week": _actual_this_week,
+            "week_complete": _actual_this_week >= training_recs["weekly_target_km"] * 0.85,
             "next_long_run_km": training_recs["next_long_run_km"],
             "key_workout": training_recs["key_workout"],
         },
@@ -473,7 +486,7 @@ def generate_coaching_output(intel: dict, weekly_plan: list) -> dict:
         pass  # outside app context (e.g. tests)
 
     if api_key:
-        summary = _openai_coaching_summary(race_prediction, pace_strategy, training_recs, api_key, model)
+        summary = _openai_coaching_summary(race_prediction, pace_strategy, training_recs, intel, api_key, model)
     else:
         summary = None
 
