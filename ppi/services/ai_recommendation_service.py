@@ -318,9 +318,19 @@ def _heuristic_coaching_summary(
     next_long = training_recs["next_long_run_km"]
 
     if training_recs["recovery_needed"]:
+        _actual_km  = float((intel.get("weekly") or {}).get("actual_km") or 0)
+        _target_km  = training_recs["weekly_target_km"]
+        _week_done  = _actual_km >= _target_km * 0.85
+        if _week_done:
+            return (
+                f"{phase_label}. "
+                f"Your TSB is {tsb:+.0f}, indicating accumulated fatigue. "
+                f"You've already completed {_actual_km:.0f} km this week — week done. "
+                f"Focus on the {key_workout['name'].lower()} to rebuild freshness before your next quality block."
+            )
         return (
             f"{phase_label}. Your TSB is {tsb:+.0f}, indicating accumulated fatigue. "
-            f"Cap this week at {training_recs['weekly_target_km']} km and focus on the "
+            f"Cap this week at {_target_km} km and focus on the "
             f"{key_workout['name'].lower()} to rebuild freshness before your next quality block."
         )
 
@@ -360,6 +370,8 @@ def _openai_coaching_summary(
             "atl": training_recs["atl"],
             "tsb": training_recs["tsb"],
             "weekly_target_km": training_recs["weekly_target_km"],
+            "actual_km_this_week": float((intel.get("weekly") or {}).get("actual_km") or 0),
+            "week_complete": float((intel.get("weekly") or {}).get("actual_km") or 0) >= training_recs["weekly_target_km"] * 0.85,
             "next_long_run_km": training_recs["next_long_run_km"],
             "key_workout": training_recs["key_workout"],
         },

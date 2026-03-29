@@ -849,6 +849,9 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
     _trailing_lr   = float((trailing_actuals or {}).get("avg_long_km") or 0)
     _n_data_weeks  = int((trailing_actuals or {}).get("n_active_weeks") or 0)
     _can_adapt     = _goal_band is not None and _trailing_avg > 0 and _n_data_weeks >= 2
+    # Tracks the previous adapted week target so the 10% cap compounds
+    # week-over-week rather than being pegged to a static trailing average.
+    _prev_adapted_km = _trailing_avg if _trailing_avg > 0 else float(current_week_weekly_target_km or 0)
 
     preview = []
     for week in progression[1:]:
@@ -902,10 +905,18 @@ def _deterministic_future_week_preview(intel, week_start, current_week_weekly_ta
                 _adapted_km = _adaptive_base
 
             # Structural guardrails
-            _adapted_km = min(_adapted_km, _trailing_avg * 1.10)  # 10% cap
-            _adapted_km = max(_adapted_km, _goal_band["min_km"])   # goal floor
+            # 10% cap compounds week-over-week (not from a fixed trailing avg)
+            _adapted_km = min(_adapted_km, _prev_adapted_km * 1.10)
+            # Recovery weeks get a relaxed floor so they can actually recover
+            _floor = (
+                _goal_band["min_km"] * 0.70
+                if _week_type in ("cutback", "recovery", "rebuild")
+                else _goal_band["min_km"]
+            )
+            _adapted_km = max(_adapted_km, _floor)
             _adapted_km = min(_adapted_km, _goal_band["max_km"])   # goal ceiling
             weekly_target = round(_adapted_km)
+            _prev_adapted_km = weekly_target   # carry forward for next week's cap
 
             # Long run: more conservative blend (60% trailing, 40% plan)
             if _trailing_lr > 0:
@@ -1089,10 +1100,29 @@ def _deterministic_feasibility_fields(
         label = "Needs Support"
 
     if actual_km > 0 and weekly_target > 0:
-        summary = (
-            f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week. "
-            f"Keep building toward a {long_run_target:.0f} km long run and stay consistent over the next {max(1, days_remaining // 7)} weeks."
-        )
+        _weeks_left  = max(1, days_remaining // 7)
+        _week_done   = actual_km >= weekly_target * 0.85
+        _lr_done     = long_run_target > 0 and actual_km >= long_run_target
+        if _week_done:
+            summary = (
+                f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week — week target met! "
+                f"Stay consistent over the next {_weeks_left} weeks to build toward your goal."
+            )
+        elif _lr_done:
+            summary = (
+                f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week. "
+                f"Long run done — keep easy miles to round out the week and stay consistent over the next {_weeks_left} weeks."
+            )
+        elif long_run_target > 0:
+            summary = (
+                f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week. "
+                f"Key remaining: {long_run_target:.0f} km long run. Stay consistent over the next {_weeks_left} weeks."
+            )
+        else:
+            summary = (
+                f"You've completed {actual_km:.1f} km of {weekly_target:.0f} km this week. "
+                f"Stay consistent over the next {_weeks_left} weeks."
+            )
     else:
         summary = next_step or "Readiness will improve as weekly mileage, long runs, and consistency build together."
 
@@ -2535,7 +2565,7 @@ def _dashboard_inner():
             "planned_km": item["planned_distance_km"],
             "display_planned_km": _display_planned_km(item["planned_distance_km"]),
             "actual_km": item["actual_run_km"],
-            "done": item["state"] == DONE,
+            "done": item["state"] in {DONE, OVERDONE},
             "status": _state_to_status[item["state"]],
             "state": item["state"],
             "is_today": item["state"] == TODAY or is_current_day,
@@ -2859,7 +2889,8 @@ def _dashboard_inner():
         round(a.moving_time / a.distance_km)
         for a in _pace_trend_acts
         if (a.activity_type or "").lower() in _RUN_TYPE_VARIANTS
-        and a.moving_time and a.distance_km and float(a.distance_km) > 0
+        and a.moving_time and a.distance_km
+        and 0 < float(a.distance_km) <= 16   # exclude long runs — their intentionally slow pace skews trend
     ][:5]  # use the 5 most recent qualifying runs
     _pace_trend = None  # "improving", "steady", "slowing"
     if len(_run_paces) >= 2:

@@ -861,7 +861,7 @@
         <div class="rs-value {{ 'rs-green' if _tsb > 5 else ('rs-red' if _tsb < -10 else 'rs-amber') }}">
           {{ 'Fresh' if _tsb > 5 else ('Tired' if _tsb < -10 else 'Fatigued') }}
         </div>
-        <div class="rs-sub">TSB {{ '%.1f'|format(_tsb) }} · {{ 'Good to train hard' if _tsb > 5 else ('Rest or easy runs today' if _tsb < -10 else 'Train but monitor effort') }}</div>
+        <div class="rs-sub">TSB {{ '%.1f'|format(_tsb) }} · {% if today_workout and today_workout.completed %}Session done · focus on rest and recovery{% else %}{{ 'Good to train hard' if _tsb > 5 else ('Rest or easy runs today' if _tsb < -10 else 'Train but monitor effort') }}{% endif %}</div>
       </div>
       <div class="rs-stat">
         <div class="rs-label">Taper Starts</div>
