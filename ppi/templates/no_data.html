@@ -82,7 +82,10 @@
   <a class="nav-brand" href="/">StrideIQ</a>
   <div class="nav-links">
     <a href="/settings">Settings</a>
-    <a href="/logout">Sign Out</a>
+    <form method="POST" action="/logout" style="display:inline;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" style="background:none;border:none;cursor:pointer;color:inherit;font:inherit;padding:0">Sign Out</button>
+    </form>
   </div>
 </nav>
 
@@ -113,7 +116,10 @@
   </div>
   {% endif %}
 
-  <a class="btn-primary" href="/?sync=1">🔄 Sync Strava Now</a>
+  <form method="POST" action="/sync" style="margin:0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn-primary">🔄 Sync Strava Now</button>
+  </form>
   <br>
   <button class="secondary-link" onclick="window.location.reload()">
     Already synced? Refresh the page

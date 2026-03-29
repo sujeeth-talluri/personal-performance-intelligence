@@ -743,7 +743,10 @@
     <div class="sidebar-logo">S</div>
     <nav>
       <a class="nav-link active" href="/"><span class="icon">📊</span><span class="nav-label">Dashboard</span></a>
-      <a class="nav-link" href="/?sync=1"><span class="icon">🔄</span><span class="nav-label">Sync Strava</span></a>
+      <form method="POST" action="/sync" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="nav-link" style="background:none;border:none;cursor:pointer;width:100%;text-align:left"><span class="icon">🔄</span><span class="nav-label">Sync Strava</span></button>
+      </form>
       <a class="nav-link" href="/settings"><span class="icon">⚙️</span><span class="nav-label">Settings</span></a>
     </nav>
     <div class="sidebar-footer">
@@ -751,7 +754,10 @@
         {{ user.name[:1].upper() }}
         <span class="nav-label">{{ user.name }} · {% if session.get('last_sync_at') %}Synced {{ session['last_sync_at'][:10] }}{% else %}Not synced{% endif %}</span>
       </div>
-      <a class="nav-link" href="/logout"><span class="icon">🚪</span><span class="nav-label">Sign Out</span></a>
+      <form method="POST" action="/logout" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="nav-link" style="background:none;border:none;cursor:pointer;width:100%;text-align:left"><span class="icon">🚪</span><span class="nav-label">Sign Out</span></button>
+      </form>
     </div>
   </aside>
 
@@ -771,7 +777,10 @@
       </div>
       <div class="hero-right">
         <a class="icon-btn" href="/settings" title="Settings">⚙️</a>
-        <a class="icon-btn" href="/?sync=1" title="Sync Strava">🔄</a>
+        <form method="POST" action="/sync" style="margin:0;display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="icon-btn" title="Sync Strava" style="background:none;border:none;cursor:pointer;padding:0">🔄</button>
+        </form>
       </div>
     </div>
 
@@ -1237,7 +1246,7 @@
           </div>
         {% endfor %}
       {% else %}
-        <p style="color:var(--muted);font-size:.85rem">No activities yet. <a href="/?sync=1">Sync from Strava</a></p>
+        <p style="color:var(--muted);font-size:.85rem">No activities yet. <form method="POST" action="/sync" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="background:none;border:none;cursor:pointer;color:var(--accent);padding:0;font-size:.85rem">Sync from Strava</button></form></p>
       {% endif %}
     </div>
 
@@ -2020,7 +2029,16 @@ function toggleSection(id) {
 
 <script>
 function syncStrava() {
-  window.location.href = '/?sync=1';
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/sync';
+  const csrf = document.createElement('input');
+  csrf.type = 'hidden';
+  csrf.name = 'csrf_token';
+  csrf.value = '{{ csrf_token() }}';
+  form.appendChild(csrf);
+  document.body.appendChild(form);
+  form.submit();
 }
 </script>
 </body>

@@ -242,7 +242,10 @@
         <a href="/settings" title="Settings" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;">⚙️</a>
         <a href="/connect/strava" title="Connect Strava" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;">🔗</a>
       </nav>
-      <a href="/logout" title="Sign Out" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;text-decoration:none;margin-bottom:8px;">↩</a>
+      <form method="POST" action="/logout" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" title="Sign Out" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--text-muted);font-size:18px;background:none;border:none;cursor:pointer;margin-bottom:8px;">↩</button>
+      </form>
     </aside>
 
     <main class="main">
@@ -324,7 +327,10 @@
         </div>
 
         <div class="unlock-cta-row">
-          <a class="btn-sync" href="/?sync=1">🔄 Sync Latest Runs</a>
+          <form method="POST" action="/sync" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-sync">🔄 Sync Latest Runs</button>
+          </form>
         </div>
       </div>
 
@@ -398,7 +404,10 @@
       <div class="card" style="padding:32px;text-align:center;color:var(--text-muted);">
         <div style="font-size:2rem;margin-bottom:12px;">🏃</div>
         <div style="font-size:.9rem;margin-bottom:16px;">No runs logged yet. Connect Strava to import your training history.</div>
-        <a class="btn-sync" href="/?sync=1">🔄 Sync Strava Now</a>
+        <form method="POST" action="/sync" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn-sync">🔄 Sync Strava Now</button>
+        </form>
       </div>
       {% endif %}
 
